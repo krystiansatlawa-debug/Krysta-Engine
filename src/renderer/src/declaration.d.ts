@@ -203,6 +203,7 @@ declare global {
     krystaFpsSetPosition: (position:"tl"|"tr"|"bl"|"br") => Promise<"tl"|"tr"|"bl"|"br">;
     krystaCloudAuto: (enabled:boolean) => Promise<{provider:string;folder?:string;autoBackup?:boolean}>;
     krystaCloudAutoStatus: (shop:string,id:string) => Promise<{state:"saved"|"skipped"|"error";at:string;message?:string}|null>;
+    krystaCloudCompare: (shop:string,id:string) => Promise<{state:"same"|"different"|"no-backup"|"unavailable";version?:string;createdAt?:string;localFiles:number;cloudFiles:number}>;
     krystaCloudConfig: () => Promise<{provider:string;folder?:string;autoBackup?:boolean}>;
     krystaCloudProvider: (provider:string) => Promise<{provider:string;folder?:string;autoBackup?:boolean}>;
     krystaCloudFolder: () => Promise<{provider:string;folder?:string;autoBackup?:boolean}>;
