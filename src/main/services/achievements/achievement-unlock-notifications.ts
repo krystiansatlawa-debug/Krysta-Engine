@@ -8,6 +8,7 @@ import { WindowManager } from "../window-manager";
 import { publishNewAchievementNotification } from "../notifications";
 import { achievementsLogger } from "../logger";
 import { achievementNotificationPresenter } from "../achievement-notification-presenter-electron";
+import { recordAchievementClip } from "../krysta-recordings";
 
 const RARE_ACHIEVEMENT_MAX_UNLOCK_PERCENTAGE = 10;
 
@@ -48,6 +49,9 @@ export const publishAchievementUnlockNotifications = ({
   totalAchievementCount,
   userPreferences,
 }: AchievementUnlockNotificationOptions) => {
+  if (achievements.length) {
+    void recordAchievementClip(game, achievements.map(a => a.displayName));
+  }
   if (
     !achievements.length ||
     userPreferences?.achievementNotificationsEnabled === false

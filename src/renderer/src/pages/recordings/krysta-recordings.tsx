@@ -1,0 +1,35 @@
+import {useEffect,useState,useCallback} from "react";
+import {useTranslation} from "react-i18next";
+import {Film,FolderOpen,Play,Trash2,Square} from "lucide-react";
+import "./krysta-recordings.scss";
+type State=Awaited<ReturnType<typeof window.electron.krystaRecordingsState>>;
+export default function KrystaRecordings(){
+ const {i18n}=useTranslation();const pl=i18n.language.startsWith("pl");
+ const [state,setState]=useState<State|null>(null),[error,setError]=useState(""),[search,setSearch]=useState(""),[busy,setBusy]=useState(false),[deleteId,setDeleteId]=useState("");
+ const refresh=useCallback(async()=>{try{setState(await window.electron.krystaRecordingsState());}catch(e){setError(String(e));}},[]);
+ useEffect(()=>{void refresh();const timer=setInterval(()=>{if(!document.hidden)void refresh();},3000);return()=>clearInterval(timer);},[refresh]);
+ const action=async(fn:()=>Promise<void>)=>{setError("");setBusy(true);try{await fn();await refresh();}catch(e){setError(String(e));}finally{setBusy(false);}};
+ const change=(patch:Partial<State["settings"]>)=>{if(state)void action(()=>window.electron.krystaRecordingsSettings({...state.settings,...patch}));};
+ const clips=state?.clips.filter(c=>(c.game+" "+c.achievement).toLocaleLowerCase().includes(search.toLocaleLowerCase()))??[];
+ return <main className="krysta-recordings">
+  <header><Film size={25}/><h1>{pl?"Nagrania":"Recordings"}</h1><button onClick={()=>void action(window.electron.krystaRecordingsFolder)} disabled={busy}><FolderOpen size={16}/>{pl?"Otwórz folder":"Open folder"}</button></header>
+  <section className="krysta-recordings__settings">
+   <h2>{pl?"Nagrywanie osiągnięć":"Achievement recording"}</h2>
+   <label><input type="checkbox" checked={state?.settings.enabled??false} disabled={!state?.supported||busy} onChange={e=>change({enabled:e.target.checked})}/>{pl?"Automatycznie nagrywaj po zdobyciu osiągnięcia":"Automatically record after an achievement unlock"}</label>
+   <label>{pl?"Długość klipu":"Clip duration"} <select value={state?.settings.seconds??15} disabled={!state?.supported||busy} onChange={e=>change({seconds:Number(e.target.value)})}>{[5,10,15,30,45,60].map(n=><option key={n} value={n}>{n} s</option>)}</select></label>
+   <label><input type="checkbox" checked={state?.settings.audio??false} disabled={!state?.supported||busy} onChange={e=>change({audio:e.target.checked})}/>{pl?"Nagrywaj dźwięk systemowy":"Record system audio"}</label>
+   <p>{pl?"Nagrywanie rozpoczyna się po wykryciu osiągnięcia, tylko w aktywnym oknie rozpoznanej gry. Zatrzymuje się przy zmianie aktywnego okna. Dźwięk systemowy może zawierać dźwięki innych aplikacji; mikrofon nie jest nagrywany. Klipy są lokalne (WebM).":"Recording starts after detection of an achievement, only in the identified foreground game window, and stops on focus change. System audio may include other applications; the microphone is not recorded. Clips are local (WebM)."}</p>
+   {state&&!state.supported&&<p>{pl?"Nagrywanie dostępne tylko na Windows.":"Recording is available on Windows only."}</p>}
+   {state?.recording&&<div role="status" className="krysta-recordings__status"><span>{pl?"Nagrywanie…":"Recording…"}</span><button onClick={()=>void action(window.electron.krystaRecordingStop)}><Square size={14}/>{pl?"Zatrzymaj":"Stop"}</button></div>}
+   {(error||state?.lastError)&&<p role="alert">{error||state?.lastError}</p>}
+  </section>
+  <section><h2>{pl?"Moje nagrania":"My recordings"} ({state?.clips.length??0})</h2>
+   <input className="krysta-recordings__search" aria-label={pl?"Szukaj nagrań":"Search recordings"} placeholder={pl?"Szukaj gry lub osiągnięcia…":"Search games or achievements…"} value={search} onChange={e=>setSearch(e.target.value)}/>
+   {!state?<p>{pl?"Wczytywanie…":"Loading…"}</p>:clips.length===0?<p>{pl?"Brak nagrań do wyświetlenia.":"No recordings to show."}</p>:<div className="krysta-recordings__grid">{clips.map(c=><article key={c.id}>
+    <div className="krysta-recordings__preview"><Film size={32}/><span>{c.duration}s · {Math.round(c.size/1024/1024*10)/10} MB</span></div>
+    <strong>{c.game}</strong><span>{c.achievement}</span><small>{new Date(c.createdAt).toLocaleString(i18n.language)} · {c.audio?(pl?"Z dźwiękiem":"With audio"):(pl?"Bez dźwięku":"No audio")}</small>
+    {deleteId===c.id?<div><button disabled={busy} onClick={()=>{setDeleteId("");void action(()=>window.electron.krystaRecordingDelete(c.id));}}>{pl?"Potwierdź usunięcie":"Confirm deletion"}</button><button onClick={()=>setDeleteId("")}>{pl?"Anuluj":"Cancel"}</button></div>:<div><button disabled={busy} onClick={()=>void action(()=>window.electron.krystaRecordingOpen(c.id))}><Play size={15}/>{pl?"Odtwórz":"Play"}</button><button disabled={busy} onClick={()=>setDeleteId(c.id)}><Trash2 size={15}/>{pl?"Usuń":"Delete"}</button></div>}
+   </article>)}</div>}
+  </section>
+ </main>;
+}

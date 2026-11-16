@@ -40,6 +40,7 @@ import "./krysta-ubisoft-account";
 import "./krysta-game-news";
 import "./krysta-game-update-watch";
 import "./krysta-fps";
+import "./krysta-recordings";
 import "./krysta-cloud";
 import "./krysta-updates";
 import "./krysta-cloud-accounts";

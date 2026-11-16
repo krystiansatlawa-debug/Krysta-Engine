@@ -177,6 +177,12 @@ const invokeGameArtifactExport = async (
 };
 
 contextBridge.exposeInMainWorld("electron", {
+  krystaRecordingsState: () => ipcRenderer.invoke("krysta:recordings-state"),
+  krystaRecordingsSettings: (value: { enabled:boolean; seconds:number; audio:boolean }) => ipcRenderer.invoke("krysta:recordings-settings",value),
+  krystaRecordingOpen: (id:string) => ipcRenderer.invoke("krysta:recording-open",id),
+  krystaRecordingDelete: (id:string) => ipcRenderer.invoke("krysta:recording-delete",id),
+  krystaRecordingsFolder: () => ipcRenderer.invoke("krysta:recordings-folder"),
+  krystaRecordingStop: () => ipcRenderer.invoke("krysta:recording-stop"),
   scanRockstar: () => ipcRenderer.invoke("krysta:rockstar-scan"),
   importRockstar: () => ipcRenderer.invoke("krysta:rockstar-import"),
   openRockstarLauncher: () => ipcRenderer.invoke("krysta:rockstar-open"),

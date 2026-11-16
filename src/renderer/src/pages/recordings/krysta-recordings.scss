@@ -1,0 +1,18 @@
+.krysta-recordings {
+ display:flex;flex-direction:column;gap:24px;padding:24px;min-width:0;overflow:auto;height:100%;
+ h1,h2{margin:0} h2{font-size:17px;margin-bottom:12px}
+ header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;h1{font-size:23px;flex:1}}
+ section{min-width:0}
+ button,select,input[type="text"],&__search{font:inherit;color:inherit;background:#252525;border:1px solid #555;border-radius:5px;padding:8px 12px}
+ button{display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+ button:disabled{opacity:.45;cursor:default}
+ &__settings{display:flex;flex-direction:column;gap:12px;background:rgba(128,128,128,.08);border:1px solid rgba(128,128,128,.25);border-radius:8px;padding:18px}
+ label{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+ p,small{opacity:.78;overflow-wrap:anywhere}
+ &__status{display:flex;gap:10px;align-items:center;color:#ff8585}
+ &__search{width:min(100%,420px);margin-bottom:16px}
+ &__grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+ article{display:flex;flex-direction:column;gap:9px;overflow-wrap:anywhere;border:1px solid rgba(128,128,128,.3);border-radius:8px;padding:12px;min-width:0}
+ article>div:last-child{display:flex;gap:7px;flex-wrap:wrap;margin-top:auto}
+ &__preview{min-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#191919;border-radius:5px;color:#ddd}
+}

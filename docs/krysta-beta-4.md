@@ -1,5 +1,7 @@
 # Krysta Launcher 1.0.0 Beta 4
 
+- Zakładka Nagrania: opcjonalne klipy WebM po zdobyciu osiągnięcia (Windows), wybór 5–60 sekund, opcjonalny dźwięk systemowy, lokalna lista z odtwarzaniem w systemowym odtwarzaczu i usuwaniem. Nagrywanie wymaga włączenia opcji, aktywnego rozpoznanego okna gry i kończy się po utracie fokusu. Brak nagrywania przed osiągnięciem w tej wersji; wymagane testy Windows.
+
 - Wersja lokalna gry odczytywana jest automatycznie po otwarciu zakładki aktualizacji i zmianie ścieżki EXE; informacje o patchach odświeżają się bez ręcznego klikania. Gdy brak numeru wersji, wyświetlany jest rozpoznany identyfikator kompilacji platformy (Build ID), o ile dostępny.
 
 - Do instalatora i wersji portable Windows dołączono zweryfikowany PresentMon 2.3.1 (x64). Licznik FPS automatycznie wykrywa dołączone narzędzie; ręczny wybór pozostaje opcjonalny. Pomiar wymaga zgodności z konfiguracją Windows i grą.
