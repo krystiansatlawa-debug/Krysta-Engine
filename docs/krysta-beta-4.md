@@ -1,7 +1,7 @@
 # Krysta Launcher 1.0.0 Beta 4
 
 - Ustawienia nagrywania znajdują się w sekcji Zrzuty ekranu; osobna zakładka Nagrania na górnym pasku służy do przeglądania i zarządzania klipami.
-- Zakładka Nagrania: opcjonalne klipy WebM po zdobyciu osiągnięcia (Windows), wybór 5–60 sekund, opcjonalny dźwięk systemowy, lokalna lista z odtwarzaniem w systemowym odtwarzaczu i usuwaniem. Nagrywanie wymaga włączenia opcji, aktywnego rozpoznanego okna gry i kończy się po utracie fokusu. Brak nagrywania przed osiągnięciem w tej wersji; wymagane testy Windows.
+- Nagrania Windows: opt-in, bufor w pamięci do 30 s przed osiągnięciem, 5–60 s po nim, ręczny skrót, 720p/1080p/1440p i 30/60 FPS jako maksymalne parametry, opcjonalny dźwięk systemowy, limit miejsca bez automatycznego usuwania, wybór folderu, filtrowanie po grze, miniatury i odtwarzacz w aplikacji. Bufor używa do dwóch nakładających się nagrań WebM; faktyczny czas przed zdarzeniem zależy od gotowości bufora. Nagrywanie zatrzymuje się przy utracie fokusu. Brak gwarancji akceleracji sprzętowej, przycinanie nie jest jeszcze dostępne; wymagane testy Windows.
 
 - Wersja lokalna gry odczytywana jest automatycznie po otwarciu zakładki aktualizacji i zmianie ścieżki EXE; informacje o patchach odświeżają się bez ręcznego klikania. Gdy brak numeru wersji, wyświetlany jest rozpoznany identyfikator kompilacji platformy (Build ID), o ile dostępny.
 

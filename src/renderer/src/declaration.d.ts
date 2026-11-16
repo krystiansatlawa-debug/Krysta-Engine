@@ -196,8 +196,10 @@ declare global {
     connectUbisoftAccount: () => Promise<UbisoftAccountState>;
     syncUbisoftAccount: () => Promise<UbisoftAccountState>;
     disconnectUbisoftAccount: () => Promise<UbisoftAccountState>;
-    krystaRecordingsState: () => Promise<{supported:boolean;settings:{enabled:boolean;seconds:number;audio:boolean};recording:boolean;lastError:string;clips:{id:string;game:string;achievement:string;createdAt:string;duration:number;audio:boolean;size:number}[]}>;
-    krystaRecordingsSettings: (value:{enabled:boolean;seconds:number;audio:boolean}) => Promise<void>;
+    krystaRecordingsState: () => Promise<{supported:boolean;settings:{enabled:boolean;seconds:number;audio:boolean;preSeconds:number;quality:number;fps:number;limitGb:number;hotkey:string;folder?:string};folder:string;recording:boolean;buffering:boolean;shortcutError:boolean;usedBytes:number;lastError:string;clips:{id:string;game:string;achievement:string;createdAt:string;duration:number;audio:boolean;size:number;thumbnail?:string;before?:number}[]}>;
+    krystaRecordingsSettings: (value:{enabled:boolean;seconds:number;audio:boolean;preSeconds:number;quality:number;fps:number;limitGb:number;hotkey:string;folder?:string}) => Promise<void>;
+    krystaRecordingRead: (id:string) => Promise<string>;
+    krystaRecordingsChooseFolder: (reset?:boolean) => Promise<void>;
     krystaRecordingOpen: (id:string) => Promise<void>;
     krystaRecordingDelete: (id:string) => Promise<void>;
     krystaRecordingsFolder: () => Promise<void>;
