@@ -1,3 +1,4 @@
+import { runKrystaSettingsRepair } from "./events/krysta-settings-repair";
 import {
   app,
   BrowserWindow,
@@ -201,6 +202,7 @@ const initializeApp = async () => {
     });
   });
 
+  await runKrystaSettingsRepair().catch(() => {});
   await WindowManager.loadWindowDecorationsPreference();
 
   try {
