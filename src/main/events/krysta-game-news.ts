@@ -63,7 +63,7 @@ async function localTranslate(title:string,content:string):Promise<{title:string
  await fs.access(python);await fs.access(helper);
  const models=path.join(app.getPath("userData"),"translation-models");
  return new Promise((resolve,reject)=>{
-  const child=spawn(python,["-I",helper,models],{windowsHide:true,stdio:["pipe","pipe","pipe"],cwd:root});
+  const child=spawn(python,["-I","-X","utf8",helper,models],{windowsHide:true,stdio:["pipe","pipe","pipe"],cwd:root});
   let output="",done=false;
   const finish=(error?:Error,result?:{title:string;content:string})=>{if(done)return;done=true;clearTimeout(timer);if(error)reject(error);else resolve(result!);};
   const timer=setTimeout(()=>{child.kill();finish(Error("Translation timeout"));},300000);
