@@ -77,6 +77,8 @@ autoUpdater.setFeedURL({
 });
 
 autoUpdater.logger = logger;
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = false;
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) app.quit();
@@ -125,7 +127,7 @@ if (process.defaultApp) {
 
 const initializeApp = async () => {
   refreshPortableShortcutLauncher();
-  electronApp.setAppUserModelId("gg.hydralauncher.hydra");
+  electronApp.setAppUserModelId("com.krystalauncher.app");
 
   logger.info("Crash dumps directory", app.getPath("crashDumps"));
 
