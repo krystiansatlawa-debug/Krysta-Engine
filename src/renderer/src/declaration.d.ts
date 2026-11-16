@@ -198,10 +198,13 @@ declare global {
     nexusDisconnect: () => Promise<void>;
     nexusGames: () => Promise<{name:string;domain:string}[]>;
     nexusMods: (domain:string,sort:string) => Promise<{id:number;name:string;summary:string;version:string;picture:string;author:string}[]>;
-    nexusInstalled: () => Promise<{id:string;name:string;root:string;gameKey?:string;enabled:boolean}[]>;
+    nexusInstalled: () => Promise<{id:string;name:string;root:string;gameKey?:string;enabled:boolean;nexus?:{domain:string;modId:number;fileId:number;version:string}}[]>;
     nexusInstallLocal: (gameKey:string) => Promise<boolean>;
     nexusToggle: (id:string,enabled:boolean) => Promise<boolean>;
     nexusRemove: (id:string) => Promise<boolean>;
+    nexusInstall: (domain:string,mod:number,file:number,gameKey:string) => Promise<boolean>;
+    nexusUpdates: (gameKey:string) => Promise<{updates:{id:string;fileId:number;version:string;name:string}[];failed:number}>;
+    nexusApplyUpdate: (id:string) => Promise<boolean>;
     nexusDownload: (domain:string,id:number,file:number) => Promise<boolean>;
     nexusFiles: (domain:string,id:number) => Promise<{id:number;name:string;version:string}[]>;
     getKrystaGameNews: (id: string, title: string) => Promise<{appId:string|null;items:{id:string;title:string;date:number;contents:string;url:string;author:string}[]}>;
