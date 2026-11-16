@@ -1,3 +1,4 @@
+import { launchUbisoft } from "../krysta-ubisoft";
 import { registerEvent } from "../register-event";
 import { GameShop } from "@types";
 import { launchGame } from "@main/helpers";
@@ -19,6 +20,10 @@ const openGame = async (
     assertTrustedEpicSender(event, true);
     if (shop !== "epic") throw new Error("epic-launch-invalid-store");
     objectId = parseEpicManagedObjectId(objectId);
+  }
+  if (shop === "custom" && /^ubisoft-\d+$/.test(objectId)) {
+    await launchUbisoft(objectId.slice(8));
+    return;
   }
   await launchGame({
     shop,
