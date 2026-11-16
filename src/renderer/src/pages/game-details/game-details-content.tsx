@@ -119,6 +119,8 @@ export function GameDetailsContent() {
     return t("no_shop_details");
   }, [shopDetails, t, game?.shop]);
 
+  const [detailTab, setDetailTab] = useState("description");
+  useEffect(() => { setDetailTab("description"); }, [objectId]);
   const [backdropOpacity, setBackdropOpacity] = useState(1);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [isDescriptionOverflowing, setIsDescriptionOverflowing] =
@@ -497,7 +499,15 @@ export function GameDetailsContent() {
           </div>
         </div>
 
-        <div className="game-details__description-container">
+        <nav className="krysta-game-tabs" aria-label="Game details">
+          { [["description","Opis","Description"],["updates","Aktualizacje","Updates"],["mods","Mody","Mods"],["screenshots","Zrzuty ekranu","Screenshots"]].map(([id,pl,en]) => (
+            <button type="button" key={id} aria-pressed={detailTab === id} onClick={() => setDetailTab(id)}>{document.documentElement.lang.startsWith("pl") ? pl : en}</button>
+          ))}
+        </nav>
+        {detailTab === "screenshots" && <div className="krysta-game-extra"><GallerySlider /></div>}
+        {detailTab === "updates" && <div className="krysta-game-extra"><h2>Aktualizacje / Updates</h2>{shop === "steam" && /^\d+$/.test(String(objectId)) ? <a href={`https://store.steampowered.com/news/app/${objectId}`} target="_blank" rel="noreferrer">Steam — historia aktualizacji / Patch notes</a> : <p>Brak dostępnego źródła aktualizacji / No update source available.</p>}</div>}
+        {detailTab === "mods" && <div className="krysta-game-extra"><h2>Mody / Mods</h2><a href={`https://www.nexusmods.com/search/?gsearch=${encodeURIComponent(game?.title ?? shopDetails?.name ?? "")}&gsearchtype=games`} target="_blank" rel="noreferrer">Nexus Mods — przeglądaj mody / Browse mods</a></div>}
+        <div className="game-details__description-container" style={detailTab !== "description" ? {display:"none"} : undefined}>
           <div className="game-details__description-content">
             <DescriptionHeader />
 
@@ -509,7 +519,6 @@ export function GameDetailsContent() {
               />
             )}
 
-            <GallerySlider />
 
             {shopDetails?.about_the_game && (
               <h2 className="game-details__description-title">
