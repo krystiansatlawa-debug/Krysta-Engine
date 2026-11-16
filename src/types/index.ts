@@ -975,7 +975,11 @@ export type LocalNotificationType =
   | "DOWNLOAD_COMPLETE"
   | "UPDATE_AVAILABLE"
   | "ACHIEVEMENT_UNLOCKED"
-  | "SCAN_GAMES_COMPLETE";
+  | "SCAN_GAMES_COMPLETE"
+  | "KRYSTA_PATCH"
+  | "KRYSTA_UPDATE"
+  | "KRYSTA_CLOUD"
+  | "KRYSTA_ERROR";
 
 export interface Notification {
   id: string;
