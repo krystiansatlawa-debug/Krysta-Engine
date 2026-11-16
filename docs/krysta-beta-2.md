@@ -23,3 +23,11 @@ Beta 1 wymaga jednorazowego ręcznego przejścia na Beta 2. Test aktualizacji mi
 - W przypadku braku poprawnej kopii uszkodzone ustawienia modułu są odtwarzane z bezpiecznych wartości domyślnych.
 - Ręczne sprawdzanie i raport w Ustawienia > Ogólne > Naprawa ustawień Krysty.
 - Mechanizm nie naprawia całej bazy LevelDB, nie usuwa biblioteki, historii aktualizacji, tokenów kont ani zapisów gier. Dodano testy regresji uruchamiane przed publikacją Windows.
+
+## Synchronizacja bazowa Hydry w aplikacji
+
+- Ustawienia aktualizacji pokazują oddzielnie numer pakietu bazowego Hydry i najnowsze stabilne wydanie bazowe. Numer pakietu jest informacją kompilacji, a nie dowodem pełnej zgodności kodu.
+- Status przygotowania integracji jest pobierany przez publiczne API GitHub; jeśli status workflow nie jest dostępny, aplikacja pozostaje w stanie oczekiwania zamiast zgadywać wynik.
+- GitHub sprawdza nowe wydania bazowe co sześć godzin. Kompilacja testowa kandydata obejmuje testy odzyskiwania ustawień i środowisko tłumaczeń Krysty.
+- Klient nie zawiera tokenu zapisu GitHuba i nie instaluje binariów Hydry. Po sprawdzeniu, zatwierdzeniu zmian i publikacji nowego wydania Krysty użytkownik otrzymuje aktualizację w aplikacji.
+- Konflikty integracji i publikacja wymagają weryfikacji projektu. Nie ma automatycznego scalania do main ani automatycznej publikacji niesprawdzonej Hydry.
