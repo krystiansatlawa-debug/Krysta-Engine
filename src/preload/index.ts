@@ -178,6 +178,10 @@ const invokeGameArtifactExport = async (
 
 contextBridge.exposeInMainWorld("electron", {
   importUbisoft: (): Promise<number> => ipcRenderer.invoke("krysta:ubisoft-import"),
+  getUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-state"),
+  connectUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-connect"),
+  syncUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-sync"),
+  disconnectUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-disconnect"),
   scanUbisoft: () => ipcRenderer.invoke("krysta:ubisoft-scan"),
   launchUbisoft: (id: string) => ipcRenderer.invoke("krysta:ubisoft-launch", id),
   onCloudSaveAutomaticSyncModeChanged: (
