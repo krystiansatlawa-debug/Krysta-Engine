@@ -37,7 +37,6 @@ import "./epic";
 import "./krysta-ubisoft";
 import "./krysta-ubisoft-account";
 import "./krysta-game-news";
-import "./krysta-mods";
 import "./krysta-fps";
 import "./krysta-cloud";
 import "./krysta-updates";
