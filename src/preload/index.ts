@@ -188,6 +188,8 @@ contextBridge.exposeInMainWorld("electron", {
   nexusGames: () => ipcRenderer.invoke("krysta:mods-games"),
   nexusMods: (domain:string,sort:string) => ipcRenderer.invoke("krysta:mods-list",domain,sort),
   nexusInstalled: () => ipcRenderer.invoke("krysta:mods-installed"),
+  krystaFpsPosition: () => ipcRenderer.invoke("krysta:fps-position"),
+  krystaFpsSetPosition: (position:"tl"|"tr"|"bl"|"br") => ipcRenderer.invoke("krysta:fps-set-position",position),
   krystaFpsStatus: () => ipcRenderer.invoke("krysta:fps-status"),
   krystaFpsSelectTool: () => ipcRenderer.invoke("krysta:fps-select-tool"),
   krystaFpsPreference: () => ipcRenderer.invoke("krysta:fps-preference"),
