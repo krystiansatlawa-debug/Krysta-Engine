@@ -30,6 +30,8 @@ export function KrystaGameUpdates({appId,title}:{appId:string;title:string}) {
   const [failed,setFailed]=useState(false);
   const [expanded,setExpanded]=useState<string|null>(null);
   const [retry,setRetry]=useState(0);
+  const [filter,setFilter]=useState<"patch"|"news"|"all">("patch");
+  const filtered=items.filter(item=>filter==="all"||item.category===filter);
   useEffect(()=>{
     let active=true;
     setLoading(true);setFailed(false);setItems([]);setResolved(null);setExpanded(null);
@@ -40,9 +42,10 @@ export function KrystaGameUpdates({appId,title}:{appId:string;title:string}) {
   },[appId,title,retry]);
   return <section className="krysta-updates">
     <header className="krysta-updates__header"><h2>{pl?"Aktualizacje i lista zmian":"Updates and patch notes"}</h2>{resolved&&<span>Steam</span>}</header>
-    {loading?<p role="status">{pl?"Pobieranie aktualizacji...":"Loading updates..."}</p>:failed?<div><p>{pl?"Nie udało się pobrać aktualizacji.":"Could not fetch updates."}</p><button type="button" onClick={()=>setRetry(n=>n+1)}>{pl?"Spróbuj ponownie":"Retry"}</button></div>:items.length===0?<p>{pl?"Nie znaleziono aktualności dla tej gry.":"No announcements found for this game."}</p>:items.map(item=>{
+    <nav className="krysta-game-tabs" aria-label={pl?"Typ wpisów":"Entry type"}>{(["patch","news","all"] as const).map(type=><button key={type} type="button" aria-pressed={filter===type} onClick={()=>{setFilter(type);setExpanded(null);}}>{type==="patch"?(pl?"Aktualizacje gry":"Game updates"):type==="news"?(pl?"Aktualności":"News"):(pl?"Wszystkie":"All")} ({type==="all"?items.length:items.filter(item=>item.category===type).length})</button>)}</nav>
+    {loading?<p role="status">{pl?"Pobieranie aktualizacji...":"Loading updates..."}</p>:failed?<div><p>{pl?"Nie udało się pobrać aktualizacji.":"Could not fetch updates."}</p><button type="button" onClick={()=>setRetry(n=>n+1)}>{pl?"Spróbuj ponownie":"Retry"}</button></div>:filtered.length===0?<p>{filter==="patch"?(pl?"Nie znaleziono patchy w pobranych wpisach Steam.":"No patches found in the retrieved Steam posts."):(pl?"Brak wpisów w tej kategorii.":"No posts in this category.")}</p>:filtered.map(item=>{
       const {image,content}=parseContent(item.contents);
-      const isPatch=/patch|hotfix|update|changelog|fixes|aktualizac|lista zmian/i.test(item.title);
+      const isPatch=item.category==="patch";
       return <article key={item.id} className="krysta-updates__article">
         <div className="krysta-updates__date">{item.date?new Date(item.date*1000).toLocaleDateString(pl?"pl-PL":"en-US",{day:"numeric",month:"long",year:"numeric"}):""}</div>
         <button type="button" className="krysta-updates__card" aria-expanded={expanded===item.id} onClick={()=>setExpanded(expanded===item.id?null:item.id)}>
