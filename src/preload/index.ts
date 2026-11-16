@@ -187,6 +187,7 @@ contextBridge.exposeInMainWorld("electron", {
   krystaFpsPosition: () => ipcRenderer.invoke("krysta:fps-position"),
   krystaFpsSetPosition: (position:"tl"|"tr"|"bl"|"br") => ipcRenderer.invoke("krysta:fps-set-position",position),
   krystaCloudAuto: (enabled:boolean) => ipcRenderer.invoke("krysta:cloud-auto",enabled),
+  krystaCloudSyncBeforeLaunch: (enabled:boolean) => ipcRenderer.invoke("krysta:cloud-sync-before-launch",enabled),
   krystaCloudAutoStatus: (shop:string,id:string) => ipcRenderer.invoke("krysta:cloud-auto-status",shop,id),
   krystaCloudCompare: (shop:string,id:string) => ipcRenderer.invoke("krysta:cloud-compare",shop,id),
   krystaCloudAccountStatus: () => ipcRenderer.invoke("krysta:cloud-account-status"),
