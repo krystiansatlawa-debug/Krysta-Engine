@@ -1,0 +1,36 @@
+name: Krysta Test Build
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.21.0'
+          cache: yarn
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        run: yarn --frozen-lockfile
+      - name: Build Windows without publishing
+        run: yarn build:win --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          MAIN_VITE_API_URL: ${{ vars.MAIN_VITE_API_URL }}
+          MAIN_VITE_AUTH_URL: ${{ vars.MAIN_VITE_AUTH_URL }}
+          MAIN_VITE_CHECKOUT_URL: ${{ vars.MAIN_VITE_CHECKOUT_URL }}
+          MAIN_VITE_NIMBUS_API_URL: ${{ vars.MAIN_VITE_NIMBUS_API_URL }}
+          MAIN_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL }}
+          RENDERER_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Krysta-test-windows
+          path: dist/*.exe
+          if-no-files-found: error
+          retention-days: 7
