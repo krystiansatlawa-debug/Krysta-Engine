@@ -30,6 +30,7 @@ import { SettingsScreenshotsHotkey } from "./settings-screenshots-hotkey";
 import { SettingsScreenshotsGamepad } from "./settings-screenshots-gamepad";
 
 import "./settings-context-screenshots.scss";
+import { SettingsAchievementRecordings } from "./settings-achievement-recordings";
 
 const isScreenshotVisibility = (value: string): value is ProfileVisibility =>
   SCREENSHOT_VISIBILITY_OPTIONS.includes(value as ProfileVisibility);
@@ -250,6 +251,8 @@ export function SettingsContextScreenshots() {
           }
         />
       </div>
+
+      <SettingsAchievementRecordings />
 
       <div className="settings-context-panel__group">
         <h3>{t("screenshots_upload_group")}</h3>
