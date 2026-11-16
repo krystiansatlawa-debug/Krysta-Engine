@@ -205,6 +205,8 @@ contextBridge.exposeInMainWorld("electron", {
   krystaGameWatchScan: () => ipcRenderer.invoke("krysta:game-watch-scan"),
   krystaGameWatchCheck: (shop:string,id:string) => ipcRenderer.invoke("krysta:game-watch-check",shop,id),
   krystaGameWatchOpenClient: (shop:string,id:string) => ipcRenderer.invoke("krysta:game-watch-open-client",shop,id),
+  krystaSettingsRepair: () => ipcRenderer.invoke("krysta:settings-repair"),
+  krystaSettingsRepairStatus: () => ipcRenderer.invoke("krysta:settings-repair-status"),
   krystaUpdatesStatus: () => ipcRenderer.invoke("krysta:updates-status"),
   krystaUpdatesInstall: () => ipcRenderer.invoke("krysta:updates-install"),
   krystaUpdatesCheck: () => ipcRenderer.invoke("krysta:updates-check"),
