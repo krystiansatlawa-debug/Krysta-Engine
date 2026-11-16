@@ -4,7 +4,7 @@ import "./krysta-game-mods.scss";
 type Mod = Awaited<ReturnType<typeof window.electron.nexusMods>>[number];
 type File = Awaited<ReturnType<typeof window.electron.nexusFiles>>[number];
 const normalize=(s:string)=>s.toLowerCase().replace(/[^a-z0-9]/g,"");
-export function KrystaGameMods({title}:{title:string}){
+export function KrystaGameMods({title,gameKey}:{title:string;gameKey:string}){
  const {i18n}=useTranslation(); const pl=i18n.language.startsWith("pl");
  const [connected,setConnected]=useState(false);
  const [key,setKey]=useState("");
@@ -18,6 +18,7 @@ export function KrystaGameMods({title}:{title:string}){
  const [selected,setSelected]=useState<number|null>(null);
  const [files,setFiles]=useState<File[]>([]);
  const [installed,setInstalled]=useState<Awaited<ReturnType<typeof window.electron.nexusInstalled>>>([]);
+ const scoped=installed.filter(m=>m.gameKey===gameKey);
  const [working,setWorking]=useState(false);
  const reloadInstalled=async()=>setInstalled(await window.electron.nexusInstalled());
  useEffect(()=>{void reloadInstalled().catch(()=>{});},[]);
@@ -28,8 +29,8 @@ export function KrystaGameMods({title}:{title:string}){
  useEffect(()=>{setFiles([]);if(selected===null||!domain)return;let active=true;void window.electron.nexusFiles(domain,selected).then(result=>{if(active)setFiles(result);}).catch(()=>{if(active)setNotice(pl?"Nie udało się pobrać plików.":"Unable to load files.");});return()=>{active=false;};},[domain,selected,pl]);
  const connect=async()=>{setBusy(true);setNotice("");try{await window.electron.nexusConnect(key.trim());setConnected(true);setKey("");}catch{setNotice(pl?"Nie udało się połączyć. Sprawdź klucz API.":"Connection failed. Check API key.");}finally{setBusy(false);}};
  return <section className="krysta-mods"><header><h2>Nexus Mods — {title}</h2>{connected&&<button type="button" onClick={async()=>{try{await window.electron.nexusDisconnect();setConnected(false);setMods([]);}catch{setNotice("Disconnect failed");}}}>{pl?"Rozłącz":"Disconnect"}</button>}</header>
- <div className="krysta-mods__toolbar"><button type="button" disabled={working} onClick={()=>void operate(()=>window.electron.nexusInstallLocal())}>{pl?"Zainstaluj z archiwum":"Install from archive"}</button></div>
- <details><summary>{pl?"Zainstalowane mody (wszystkie foldery)":"Installed mods (all folders)"} ({installed.length})</summary>{installed.map(m=><article key={m.id} className="krysta-mods__card"><div><h3>{m.name}</h3><p>{m.root}</p><button type="button" disabled={working} onClick={()=>void operate(()=>window.electron.nexusRemove(m.id))}>{pl?"Usuń":"Remove"}</button></div></article>)}</details>
+ <div className="krysta-mods__toolbar"><button type="button" disabled={working} onClick={()=>void operate(()=>window.electron.nexusInstallLocal(gameKey))}>{pl?"Zainstaluj z archiwum":"Install from archive"}</button></div>
+ <details><summary>{pl?"Zainstalowane mody":"Installed mods"} ({scoped.length})</summary>{scoped.map(m=><article key={m.id} className="krysta-mods__card"><div><h3>{m.name}</h3><p>{m.root} · {m.enabled?(pl?"Włączony":"Enabled"):(pl?"Wyłączony":"Disabled")}</p><button type="button" disabled={working} onClick={()=>void operate(()=>window.electron.nexusToggle(m.id,!m.enabled))}>{m.enabled?(pl?"Wyłącz":"Disable"):(pl?"Włącz":"Enable")}</button><button type="button" disabled={working} onClick={()=>void operate(()=>window.electron.nexusRemove(m.id))}>{pl?"Usuń":"Remove"}</button></div></article>)}</details>
  {!connected?<div className="krysta-mods__login"><p>{pl?"Połącz konto Nexus Mods za pomocą osobistego klucza API.":"Connect your Nexus Mods account using a personal API key."}</p><button type="button" onClick={()=>void window.electron.openExternal("https://www.nexusmods.com/users/myaccount?tab=api")}>{pl?"Pobierz klucz API":"Get API key"}</button><input type="password" autoComplete="off" value={key} onChange={e=>setKey(e.target.value)} placeholder="Nexus API key"/><button type="button" disabled={!key.trim()||busy} onClick={()=>void connect()}>{pl?"Połącz":"Connect"}</button></div>:<>
  <div className="krysta-mods__toolbar"><select aria-label="Game" value={domain} onChange={e=>setDomain(e.target.value)}><option value="">{pl?"Wybierz grę":"Choose game"}</option>{games.map(g=><option key={g.domain} value={g.domain}>{g.name}</option>)}</select><input placeholder={pl?"Filtruj wyświetlane mody":"Filter displayed mods"} value={query} onChange={e=>setQuery(e.target.value)}/><select value={sort} onChange={e=>setSort(e.target.value)}><option value="trending">{pl?"Popularne":"Trending"}</option><option value="latest">{pl?"Najnowsze":"Latest"}</option><option value="updated">{pl?"Zaktualizowane":"Updated"}</option></select></div>
  {busy&&<p>{pl?"Pobieranie modów...":"Loading mods..."}</p>}
