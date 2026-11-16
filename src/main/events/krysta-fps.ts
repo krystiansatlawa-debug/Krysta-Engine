@@ -1,3 +1,4 @@
+import { readKrystaSettings, writeKrystaSettings } from "@main/services/krysta-settings-recovery";
 import { ipcMain, app, BrowserWindow, screen, dialog, globalShortcut } from "electron";
 import { promises as fs } from "node:fs";
 import { join, basename, extname } from "node:path";
@@ -10,12 +11,8 @@ type Position="tl"|"tr"|"bl"|"br";
 type Preference={enabled:boolean;tool?:string;position?:Position;hotkey?:string};
 function normalizePosition(value:unknown):Position{return value==="tr"||value==="bl"||value==="br"?value:"tl";}
 function placement(bounds:Electron.Rectangle,position:Position){return {x:bounds.x+(position.endsWith("r")?bounds.width-116:16),y:bounds.y+(position.startsWith("b")?bounds.height-42:16)};}
-const preferencePath=()=>join(app.getPath("userData"),"krysta-fps.json");
-async function readPreference():Promise<Preference>{
- try{return JSON.parse(await fs.readFile(preferencePath(),"utf8"));}
- catch(error){if((error as NodeJS.ErrnoException).code==="ENOENT")return {enabled:false};throw error;}
-}
-async function savePreference(value:Preference){const path=preferencePath();await fs.writeFile(path+".tmp",JSON.stringify(value),{mode:0o600});await fs.rename(path+".tmp",path);}
+async function readPreference():Promise<Preference>{return readKrystaSettings<Preference>(app.getPath("userData"),"fps");}
+async function savePreference(value:Preference){await writeKrystaSettings(app.getPath("userData"),"fps",value);}
 async function findTool(p:Preference){
  for(const path of [p.tool,join(process.resourcesPath,"PresentMon.exe"),join(app.getPath("userData"),"PresentMon.exe")]){
   if(path&&await fs.stat(path).then(s=>s.isFile()).catch(()=>false))return path;
