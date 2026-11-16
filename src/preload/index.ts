@@ -187,6 +187,7 @@ contextBridge.exposeInMainWorld("electron", {
   nexusDisconnect: () => ipcRenderer.invoke("krysta:mods-disconnect"),
   nexusGames: () => ipcRenderer.invoke("krysta:mods-games"),
   nexusMods: (domain:string,sort:string) => ipcRenderer.invoke("krysta:mods-list",domain,sort),
+  nexusDownload: (domain:string,id:number,file:number) => ipcRenderer.invoke("krysta:mods-download",domain,id,file),
   nexusFiles: (domain:string,id:number) => ipcRenderer.invoke("krysta:mods-files",domain,id),
   getKrystaGameNews: (id: string, title: string) => ipcRenderer.invoke("krysta:game-news", id, title),
   scanUbisoft: () => ipcRenderer.invoke("krysta:ubisoft-scan"),
