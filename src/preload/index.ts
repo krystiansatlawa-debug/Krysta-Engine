@@ -218,6 +218,7 @@ contextBridge.exposeInMainWorld("electron", {
   krystaFpsSelectTool: () => ipcRenderer.invoke("krysta:fps-select-tool"),
   krystaFpsPreference: () => ipcRenderer.invoke("krysta:fps-preference"),
   krystaSetFpsPreference: (enabled:boolean) => ipcRenderer.invoke("krysta:fps-set-preference",enabled),
+  translateKrystaNews: (title:string, content:string) => ipcRenderer.invoke("krysta:news-translate",title,content),
   getKrystaGameNews: (id: string, title: string) => ipcRenderer.invoke("krysta:game-news", id, title),
   scanUbisoft: () => ipcRenderer.invoke("krysta:ubisoft-scan"),
   launchUbisoft: (id: string) => ipcRenderer.invoke("krysta:ubisoft-launch", id),
