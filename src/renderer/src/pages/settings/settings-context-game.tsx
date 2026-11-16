@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { KrystaGameUpdateSettings } from "./krysta-game-update-settings";
 import { CheckboxField } from "@renderer/components";
 
 export function SettingsContextGame() {
@@ -53,6 +54,7 @@ export function SettingsContextGame() {
     finally {setBusy(false);}
   };
   return <div className="settings-context-panel">
+    <KrystaGameUpdateSettings/>
     <div className="settings-context-panel__group">
       <h3>{pl?"Monitor wydajności":"Performance monitor"}</h3>
       <CheckboxField label={pl?"Włącz licznik FPS w grach":"Enable in-game FPS counter"} checked={enabled} disabled={!ready||busy||window.electron.platform!=="win32"} onChange={()=>void toggle()}/>
