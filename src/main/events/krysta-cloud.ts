@@ -6,7 +6,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { gamesSublevel, levelKeys } from "@main/level";
 import { Ludusavi } from "@main/services/ludusavi";
 import { gamesPlaytime, onTrackedGamesRunningChange, isTrackedGameKeyRunning } from "@main/services/game-running-state";
-import { directCloudIdentity, uploadCloudSnapshot } from "./krysta-cloud-accounts";
+import { directCloudIdentity, uploadCloudSnapshot, listRemoteCloudSnapshots, downloadCloudSnapshot } from "./krysta-cloud-accounts";
 import type { GameShop } from "@types";
 
 type Provider="google"|"synology"|"local"|"hydra";
@@ -48,8 +48,9 @@ ipcMain.handle("krysta:cloud-config",config);
 ipcMain.handle("krysta:cloud-provider",async(_e,p:unknown)=>{if(p!=="google"&&p!=="synology"&&p!=="local"&&p!=="hydra")throw Error("Invalid provider");return save({provider:p,autoBackup:false});});
 ipcMain.handle("krysta:cloud-folder",async()=>{const c=await config();if(c.provider!=="local")return c;const result=await dialog.showOpenDialog({properties:["openDirectory","createDirectory"]});if(result.canceled||!result.filePaths[0])return c;return save({...c,folder:await fs.realpath(result.filePaths[0])});});
 ipcMain.handle("krysta:cloud-list",async(_e,shop:GameShop,id:string)=>{
- const {base,root}=await gameContext(shop,id);await safeDirectory(root,base);
+ const {base,root,provider,identity,remoteKey}=await gameContext(shop,id);await safeDirectory(root,base);
  const list:Entry[]=[];for(const name of await fs.readdir(base)){if(!/^[0-9a-f-]{36}$/.test(name))continue;try{const dir=await fs.realpath(path.join(base,name));if(dir!==path.join(base,name))continue;const m=JSON.parse(await fs.readFile(path.join(dir,"manifest.json"),"utf8"));if(m.id===name&&Array.isArray(m.files)&&typeof m.createdAt==="string")list.push({id:name,createdAt:m.createdAt,files:m.files.length});}catch{continue;}}
+ if(provider){const remote=await listRemoteCloudSnapshots(provider,identity!,remoteKey);for(const m of remote){if(!list.some(e=>e.id===m.id))list.push({id:m.id,createdAt:m.createdAt,files:m.files.length});}}
  return list.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
 });
 async function backupGame(shop:GameShop,id:string,automatic=false,expected?:Config){
@@ -60,7 +61,8 @@ async function backupGame(shop:GameShop,id:string,automatic=false,expected?:Conf
  if(files.length>5000)throw Error("Too many save files");
  if(files.some(p=>within(root,p)))throw Error("Save files overlap cloud folder");
  const comparison=await compareSaves(base,root,files);
- if(automatic&&comparison.state==="same")return false;
+ if(automatic&&comparison.state==="same"&&!provider)return false;
+ if(provider&&automatic){const remote=await listRemoteCloudSnapshots(provider,identity!,remoteKey);if(comparison.state==="same"&&remote[0]?.id===comparison.version)return false;}
  if(automatic&&!provider&&(comparison.state==="different"||comparison.state==="unavailable"))throw Error("SAVE_CONFLICT: Local and cloud saves differ or cannot be verified. Open Cloud saves to choose a version.");
  if(!automatic){const answer=await dialog.showMessageBox({type:"question",buttons:["Cancel","Create backup"],defaultId:0,cancelId:0,message:comparison.state==="different"?"Local and cloud saves differ. Keep local saves as a new backup without deleting previous versions? / Zapisy różnią się. Zachować lokalne jako nową kopię?":"Create a copy of "+files.length+" detected save files in your selected cloud folder?"});if(answer.response!==1)return false;}
  if(isTrackedGameKeyRunning(key))throw Error("Game started before backup");
@@ -74,11 +76,15 @@ ipcMain.handle("krysta:cloud-backup",(_e,shop:GameShop,id:string)=>backupGame(sh
  * The remote manifest is never trusted to choose a writable destination. */
 ipcMain.handle("krysta:cloud-restore",async(_e,shop:GameShop,id:string,version:unknown)=>{
  if(typeof version!=="string"||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(version))throw Error("Invalid backup version");
- const {key,base,root}=await gameContext(shop,id);
+ const {key,base,root,provider,identity,remoteKey}=await gameContext(shop,id);
  return locked(key,async()=>{
   if(isTrackedGameKeyRunning(key))throw Error("Close the game before restoring");
   await safeDirectory(root,base);
   const dir=path.join(base,version);
+  if(provider&&!(await fs.lstat(dir).catch(()=>null))){
+   const temp=path.join(base,".pending-"+randomUUID());await fs.mkdir(temp);
+   try{await downloadCloudSnapshot(provider,identity!,remoteKey,version,temp);await fs.rename(temp,dir);}catch(e){await fs.rm(temp,{recursive:true,force:true});throw e;}
+  }
   if(await fs.realpath(dir)!==dir)throw Error("Unsafe backup directory");
   const manifestPath=path.join(dir,"manifest.json");
   const manifestStat=await fs.lstat(manifestPath);
