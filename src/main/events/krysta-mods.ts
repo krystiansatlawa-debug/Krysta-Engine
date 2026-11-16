@@ -1,7 +1,7 @@
 import { ipcMain, net, safeStorage, app, dialog } from "electron";
 import { readFileSync, writeFileSync, rmSync } from "node:fs";
 import { SevenZip } from "@main/services/7zip";
-import { createWriteStream, renameSync, promises as fs } from "node:fs";
+import { constants, createWriteStream, renameSync, promises as fs } from "node:fs";
 import { randomUUID, createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -58,7 +58,7 @@ ipcMain.handle("krysta:mods-download",async(_event,d:unknown,m:unknown,f:unknown
  return true;
 });
 
-type Installed = {id:string;name:string;root:string;files:{path:string;hash:string}[]};
+type Installed = {id:string;name:string;root:string;gameKey?:string;enabled?:boolean;files:{path:string;hash:string}[]};
 const manifest=()=>join(app.getPath("userData"),"krysta-installed-mods.json");
 function records():Installed[]{try{return JSON.parse(readFileSync(manifest(),"utf8"));}catch(e){if((e as NodeJS.ErrnoException).code==="ENOENT")return [];throw e;}}
 function save(entries:Installed[]){const target=manifest(),temp=target+".tmp";writeFileSync(temp,JSON.stringify(entries),{mode:0o600});renameSync(temp,target);}
@@ -68,8 +68,8 @@ async function exists(path:string){try{await fs.lstat(path);return true;}catch(e
 const hash=(buffer:Buffer)=>createHash("sha256").update(buffer).digest("hex");
 let modifying=false;
 async function exclusive<T>(work:()=>Promise<T>){if(modifying)throw new Error("Another mod operation is active");modifying=true;try{return await work();}finally{modifying=false;}}
-ipcMain.handle("krysta:mods-installed",()=>records().map(({id,name,root})=>({id,name,root})));
-ipcMain.handle("krysta:mods-install-local",()=>exclusive(async()=>{
+ipcMain.handle("krysta:mods-installed",()=>records().map(({id,name,root,gameKey,enabled})=>({id,name,root,gameKey,enabled:enabled!==false})));
+ipcMain.handle("krysta:mods-install-local",(_event,gameKey:unknown)=>exclusive(async()=>{
  const archive=await dialog.showOpenDialog({properties:["openFile"],filters:[{name:"Mod archive",extensions:["zip","7z","rar"]}]});if(archive.canceled)return false;
  const folder=await dialog.showOpenDialog({title:"Select game installation directory",properties:["openDirectory"]});if(folder.canceled)return false;
  const root=await fs.realpath(folder.filePaths[0]), source=archive.filePaths[0];
@@ -78,7 +78,7 @@ ipcMain.handle("krysta:mods-install-local",()=>exclusive(async()=>{
  const seen=new Set<string>();
  for(const entry of entries){const name=parts(entry.name).join("/").toLowerCase();if(seen.has(name))throw new Error("Duplicate archive path");seen.add(name);if(await exists(await target(root,entry.name)))throw new Error("Conflict: "+entry.name);}
  const confirm=await dialog.showMessageBox({type:"warning",buttons:["Cancel","Install"],defaultId:0,cancelId:0,message:"Install "+entries.length+" files into "+root+"?",detail:"Only simple archives with paths relative to the game folder are supported. Mods can contain executable code. Install only trusted files."});if(confirm.response!==1)return false;
- const record:Installed={id:randomUUID(),name:basename(source),root,files:[]};
+ const record:Installed={id:randomUUID(),name:basename(source),root,gameKey:typeof gameKey==="string"?gameKey.slice(0,250):undefined,enabled:true,files:[]};
  try{
   for(const entry of entries){const buffer=await SevenZip.readEntry(source,entry.name,Math.max(1,entry.size+1));if(buffer.length!==entry.size)throw new Error("Archive size mismatch");const dest=await target(root,entry.name,true);await fs.writeFile(dest,buffer,{flag:"wx"});record.files.push({path:entry.name,hash:hash(buffer)});}
   save([...records(),record]);
@@ -87,9 +87,41 @@ ipcMain.handle("krysta:mods-install-local",()=>exclusive(async()=>{
 }));
 ipcMain.handle("krysta:mods-remove",(_event,id:unknown)=>exclusive(async()=>{
  const entries=records(),record=entries.find(e=>e.id===id);if(!record)throw new Error("Unknown mod");
+ if(record.enabled===false){await fs.rm(join(app.getPath("userData"),"krysta-disabled-mods",record.id),{recursive:true,force:true});save(entries.filter(e=>e.id!==id));return true;}
  const root=await fs.realpath(record.root);if(root!==record.root)throw new Error("Game directory changed");
  for(const file of record.files){const dest=await target(root,file.path);if(await exists(dest)){const stat=await fs.lstat(dest);if(!stat.isFile()||stat.isSymbolicLink()||hash(await fs.readFile(dest))!==file.hash)throw new Error("Modified file: "+file.path);}}
  const confirm=await dialog.showMessageBox({type:"warning",buttons:["Cancel","Remove"],defaultId:0,cancelId:0,message:"Remove "+record.name+"?"});if(confirm.response!==1)return false;
  for(const file of record.files){const dest=await target(root,file.path);if(await exists(dest))await fs.unlink(dest);}
  save(entries.filter(e=>e.id!==id));return true;
+}));
+
+ipcMain.handle("krysta:mods-toggle",(_event,id:unknown,enabled:unknown)=>exclusive(async()=>{
+ if(typeof id!=="string"||typeof enabled!=="boolean")throw new Error("Invalid mod state");
+ const entries=records(),record=entries.find(e=>e.id===id);
+ if(!record||!/^[0-9a-f-]{36}$/i.test(record.id))throw new Error("Unknown mod");
+ if((record.enabled!==false)===enabled)return true;
+ const root=await fs.realpath(record.root);if(root!==record.root)throw new Error("Game directory changed");
+ const backup=join(app.getPath("userData"),"krysta-disabled-mods",record.id);
+ await fs.mkdir(backup,{recursive:true});
+ const moved:{from:string;to:string}[]=[];
+ for(const file of record.files){
+  const source=await target(enabled?backup:root,file.path);
+  const destination=await target(enabled?root:backup,file.path);
+  const stat=await fs.lstat(source);
+  if(!stat.isFile()||stat.isSymbolicLink()||hash(await fs.readFile(source))!==file.hash||await exists(destination))throw new Error("File conflict: "+file.path);
+ }
+ try{
+  for(const file of record.files){
+   const from=await target(enabled?backup:root,file.path);
+   const to=await target(enabled?root:backup,file.path,true);
+   await fs.copyFile(from,to,constants.COPYFILE_EXCL);
+   try{await fs.unlink(from);}catch(e){await fs.unlink(to);throw e;}
+   moved.push({from,to});
+  }
+  save(entries.map(e=>e.id===id?{...e,enabled}:e));
+ }catch(e){
+  for(const {from,to} of moved.reverse()){await fs.copyFile(to,from,constants.COPYFILE_EXCL);await fs.unlink(to);}
+  throw e;
+ }
+ return true;
 }));
