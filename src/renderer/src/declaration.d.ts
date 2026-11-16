@@ -205,7 +205,7 @@ declare global {
     krystaCloudSynologyConnect: (url:string,username:string,password:string) => Promise<boolean>;
     krystaCloudAccountDisconnect: (provider:string) => Promise<boolean>;
     installUbisoftGame: (id:string) => Promise<"client"|"launched">;
-    krystaGameWatchBadges: () => Promise<{shop:string;id:string;title:string;kind?:"required"|"patch"}[]>;
+    krystaGameWatchBadges: () => Promise<{shop:string;id:string;title:string;kind?:"required"|"patch";gameTitle?:string;downloadPercent?:number|null}[]>;
     krystaGameWatchDismiss: (shop:string,id:string) => Promise<void>;
     krystaGameWatchGet: (shop:string,id:string) => Promise<{enabled:boolean;override?:"inherit"|"on"|"off";installedVersion:string;versionSource?:"product"|"file";pendingPatch?:string;steamBuildId?:string;updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string;latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}|null>;
     krystaGameWatchSet: (shop:string,id:string,override:"inherit"|"on"|"off") => Promise<{enabled:boolean;override?:"inherit"|"on"|"off";installedVersion:string;versionSource?:"product"|"file";pendingPatch?:string;steamBuildId?:string;updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string;latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}>;
