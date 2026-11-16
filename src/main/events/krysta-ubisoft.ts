@@ -2,11 +2,11 @@ import { gamesSublevel, gamesShopAssetsSublevel, levelKeys } from "@main/level";
 import { ipcMain, shell } from "electron";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { win32 } from "node:path";
 
 const exec = promisify(execFile);
-async function scan() {
+export async function scanUbisoft() {
   if (process.platform !== "win32") return { supported: false, installed: false, games: [] };
   const query = async (key: string, args: string[] = []) => {
     try { return (await exec("reg.exe", ["query", key, ...args], { windowsHide: true, timeout: 10000 })).stdout; }
@@ -28,17 +28,17 @@ async function scan() {
   const installed = Boolean((await query("HKCR\\uplay\\shell\\open\\command")).trim());
   return { supported:true, installed, games: [...games.values()].sort((a,b)=>a.title.localeCompare(b.title)) };
 }
-ipcMain.handle("krysta:ubisoft-scan", scan);
+ipcMain.handle("krysta:ubisoft-scan", scanUbisoft);
 export async function launchUbisoft(id: unknown) {
   if (process.platform !== "win32" || typeof id !== "string" || !/^\d{1,12}$/.test(id)) throw new Error("Invalid Ubisoft game");
-  const result = await scan();
+  const result = await scanUbisoft();
   if (!result.installed || !result.games.some(game=>game.id===id)) throw new Error("Ubisoft game not installed");
   await shell.openExternal("uplay://launch/" + id + "/0");
 }
 ipcMain.handle("krysta:ubisoft-launch", (_event, id: unknown) => launchUbisoft(id));
 
 ipcMain.handle("krysta:ubisoft-import", async () => {
-  const result = await scan();
+  const result = await scanUbisoft();
   let imported = 0;
   for (const item of result.games) {
     const objectId = "ubisoft-" + item.id;
@@ -62,4 +62,27 @@ ipcMain.handle("krysta:ubisoft-import", async () => {
     imported++;
   }
   return imported;
+});
+
+export function findUbisoftExecutable(folder:string,title:string):string|null{
+ try{
+ const normal=(s:string)=>s.toLowerCase().replace(/[^a-z0-9]/g,"");
+ const files=[folder,...["bin","bin64","Binaries\\Win64"].map(s=>win32.join(folder,s))].flatMap(dir=>{try{return readdirSync(dir,{withFileTypes:true}).filter(e=>e.isFile()&&/\.exe$/i.test(e.name)&&!/unins|setup|install|crash|report|redist|benchmark|launcher|updater|anticheat/i.test(e.name)).map(e=>win32.join(dir,e.name));}catch{return [];}});
+ const exact=files.filter(f=>normal(win32.basename(f,".exe"))===normal(title));
+ return exact.length===1?exact[0]:files.length===1?files[0]:null;
+ }catch{return null;}
+}
+export async function ubisoftLocalMatch(title:string){
+ const norm=(s:string)=>s.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]/g,"");
+ const result=await scanUbisoft();const matches=result.games.filter(g=>norm(g.title)===norm(title));
+ return matches.length===1?matches[0]:null;
+}
+ipcMain.handle("krysta:ubisoft-install",async(_e,objectId:unknown)=>{
+ if(typeof objectId!=="string"||!(/^(?:ubi-owned-[a-f0-9]{32}|ubisoft-\d+)$/.test(objectId)))throw Error("Invalid Ubisoft game");
+ const game=await gamesSublevel.get(levelKeys.game("custom",objectId));if(!game||game.isDeleted)throw Error("Game not found");
+ const result=await scanUbisoft();if(!result.installed)throw Error("Install Ubisoft Connect first");
+ // Numeric locally verified ID only; account GraphQL IDs are not necessarily launcher IDs.
+ const match=await ubisoftLocalMatch(game.title);
+ if(match){await shell.openExternal("uplay://launch/"+match.id+"/0");return "launched";}
+ await shell.openExternal("uplay://");return "client";
 });
