@@ -287,7 +287,16 @@ export const readSteamUpdateState = async (appId:string, libraryFolders:string[]
   if(raw===null||!/^\d+$/.test(raw))continue;
   const flags=Number(raw);
   // UpdateRequired is bit 2 in Steam's local app state.
-  return {buildId:readManifestValue(content,"buildid"),updateRequired:(flags&2)!==0};
+  const counter=(key:string)=>{
+   const value=readManifestValue(content,key);
+   if(value===null||!/^\d+$/.test(value))return null;
+   const n=Number(value);
+   return Number.isSafeInteger(n)?n:null;
+  };
+  const total=counter("BytesToDownload"),done=counter("BytesDownloaded");
+  const updateRequired=(flags&2)!==0;
+  const downloadPercent=updateRequired&&total!==null&&total>0&&done!==null&&done<=total?Math.floor(done/total*100):null;
+  return {buildId:readManifestValue(content,"buildid"),updateRequired,downloadPercent};
  }
  return null;
 };
