@@ -65,7 +65,7 @@ export const LibraryGameCard = memo(function LibraryGameCard({
   const hideClassicsBadges =
     userPreferences?.hideLibraryClassicsBadges ?? false;
   const importSources = getLibraryPresentationImportSources(game);
-  const showUbisoftBadge = game.shop === "custom" && /^(ubi-owned-|ubisoft-)/.test(game.objectId);
+  const showUbisoftBadge = ("members" in game && Array.isArray(game.members) ? game.members as LibraryGame[] : [game]).some(member=>member.shop==="custom" && /^(ubi-owned-|ubisoft-)/.test(member.objectId));
   const showEpicLibraryBadge =
     importSources.epic && !userPreferences?.hideEpicLibraryBadges;
   const showSteamLibraryBadge =
@@ -297,7 +297,7 @@ export const LibraryGameCard = memo(function LibraryGameCard({
             showPlatformBadge ||
             showReadyBadge) && (
             <div className="library-game-card__top-right">
-              {(showSteamLibraryBadge || showEpicLibraryBadge) && (
+              {(showUbisoftBadge || showSteamLibraryBadge || showEpicLibraryBadge) && (
                 <div className="library-game-card__import-badges">
                   {showUbisoftBadge && <SteamLibraryBadge source="ubisoft" />}
                   {showSteamLibraryBadge && (
