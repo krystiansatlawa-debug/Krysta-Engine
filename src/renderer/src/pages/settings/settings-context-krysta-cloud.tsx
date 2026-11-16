@@ -51,6 +51,9 @@ export function SettingsContextKrystaCloud(){
  <Button theme="outline" disabled={busy||!accounts||!nasUrl||!nasUser||!nasPassword} onClick={()=>void accountAction(()=>window.electron.krystaCloudSynologyConnect(nasUrl,nasUser,nasPassword))}>{pl?"Połącz i sprawdź dostęp":"Connect and test access"}</Button>
  </>}
  </>}</>}
+ <h3>{pl?"Lokalne kopie przed aktualizacjami":"Local pre-update backups"}</h3>
+ <p>{pl?"Kopie przed aktualizacją gry są zapisywane na tym komputerze niezależnie od połączenia Google Drive lub Synology.":"Pre-update game save backups are stored on this computer independently of Google Drive or Synology."}</p>
+ <Button theme="outline" disabled={busy} onClick={()=>{setAccountError("");void window.electron.krystaCloudOpenPreUpdateFolder().catch(e=>setAccountError(String(e)));}}>{pl?"Otwórz folder kopii lokalnych":"Open local backup folder"}</Button>
  {accountError&&<p role="alert">{accountError}</p>}
  {error&&<p role="alert">{pl?"Nie udało się zapisać ustawień.":"Unable to save settings."}</p>}
  </div></div>;
