@@ -194,6 +194,8 @@ contextBridge.exposeInMainWorld("electron", {
   krystaCloudSynologyConnect: (url:string,username:string,password:string) => ipcRenderer.invoke("krysta:cloud-synology-connect",url,username,password),
   krystaCloudAccountDisconnect: (provider:string) => ipcRenderer.invoke("krysta:cloud-account-disconnect",provider),
   installUbisoftGame: (id:string) => ipcRenderer.invoke("krysta:ubisoft-install",id),
+  krystaGameWatchBadges: () => ipcRenderer.invoke("krysta:game-watch-badges"),
+  krystaGameWatchDismiss: (shop:string,id:string) => ipcRenderer.invoke("krysta:game-watch-dismiss",shop,id),
   krystaGameWatchGet: (shop:string,id:string) => ipcRenderer.invoke("krysta:game-watch-get",shop,id),
   krystaGameWatchSet: (shop:string,id:string,enabled:boolean) => ipcRenderer.invoke("krysta:game-watch-set",shop,id,enabled),
   krystaGameWatchCheck: (shop:string,id:string) => ipcRenderer.invoke("krysta:game-watch-check",shop,id),
