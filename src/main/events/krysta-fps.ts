@@ -44,9 +44,9 @@ async function reconcile(){
  if(activeKey===target.key&&child)return;
  stop();activeKey=target.key;status="starting";
  const display=screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
- const w=new BrowserWindow({x:display.bounds.x+16,y:display.bounds.y+16,width:155,height:45,transparent:true,frame:false,focusable:false,skipTaskbar:true,alwaysOnTop:true,resizable:false,show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});
+ const w=new BrowserWindow({x:display.bounds.x+16,y:display.bounds.y+16,width:100,height:26,transparent:true,frame:false,focusable:false,skipTaskbar:true,alwaysOnTop:true,resizable:false,show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});
  overlay=w;w.setIgnoreMouseEvents(true);
- const html='<html><body style="margin:0;background:transparent"><div id="fps" style="display:inline-block;color:#a6ff65;background:#000b;border-radius:5px;padding:7px 11px;font: bold 21px monospace">FPS: --</div></body></html>';
+ const html='<html><body style="margin:0;background:transparent"><div id="fps" style="display:inline-block;color:#d7d7d7;background:rgba(40,40,40,.78);border:1px solid rgba(255,255,255,.10);border-radius:3px;padding:3px 6px;font: 12px Arial,sans-serif;font-weight:500">FPS: --</div></body></html>';
  await w.loadURL("data:text/html;charset=utf-8,"+encodeURIComponent(html)).catch(()=>{});
  if(generation!==revision||overlay!==w||w.isDestroyed()){if(overlay===w)stop();return;}
  w.showInactive();
