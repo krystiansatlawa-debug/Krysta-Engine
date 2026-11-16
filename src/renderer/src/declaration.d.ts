@@ -219,6 +219,8 @@ declare global {
     krystaGameWatchOpenClient: (shop:string,id:string) => Promise<void>;
     krystaSettingsRepair: () => Promise<Array<{name:"cloud"|"fps"|"updates"|"game-updates";state:"valid"|"missing"|"restored"|"defaults"|"error"}>>;
     krystaSettingsRepairStatus: () => Promise<Array<{name:"cloud"|"fps"|"updates"|"game-updates";state:"valid"|"missing"|"restored"|"defaults"|"error"}>|null>;
+    krystaUpdatesSyncStatus: () => Promise<{base:string|null;upstream:string|null;phase:"integrated"|"pending"|"running"|"review"|"failed"|"unknown";checkedAt:string}>;
+    krystaUpdatesSyncRefresh: () => Promise<{base:string|null;upstream:string|null;phase:"integrated"|"pending"|"running"|"review"|"failed"|"unknown";checkedAt:string}>;
     krystaUpdatesStatus: () => Promise<{phase:"idle"|"checking"|"downloading"|"ready"|"manual"|"error";version:string;received:number;total:number;error?:string}>;
     krystaUpdatesInstall: () => Promise<void>;
     krystaUpdatesCheck: () => Promise<{version:string;hydra:{tag:string;body:string;publishedAt:string}|null;krysta:{tag:string;body:string;publishedAt:string}|null;hydraNew:boolean|null;krystaNew:boolean|null;checkedAt:string}>;
