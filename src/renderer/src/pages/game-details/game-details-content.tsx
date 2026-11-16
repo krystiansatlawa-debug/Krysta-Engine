@@ -510,10 +510,10 @@ export function GameDetailsContent() {
         {detailTab === "cloud" && (game && shop && objectId ? <KrystaGameCloud key={`${shop}:${objectId}`} shop={shop} objectId={String(objectId)} /> : <div className="krysta-game-extra">Dodaj grę do biblioteki / Add game to library</div>)}
         <div className="game-details__description-container" style={detailTab !== "description" ? {display:"none"} : undefined}>
           <div className="game-details__description-content">
+            <DescriptionHeader />
             {detailTab === "description" && !hasNSFWContentBlocked && (
               <GallerySlider key={`${shop}:${objectId}`} />
             )}
-            <DescriptionHeader />
 
             {(showPrompt || isPromptPending) && (
               <ReviewPromptBanner
