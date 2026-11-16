@@ -40,6 +40,7 @@ import {
 import { DiscSelectionModal } from "../modals/disc-selection-modal";
 import { EpicCloudSaveConflictModal } from "../modals/epic-cloud-save-conflict-modal";
 
+import { useKrystaPendingPatches } from "../../library/krysta-patch-badge";
 import "./hero-panel-actions.scss";
 import { useEffect } from "react";
 import {
@@ -127,7 +128,19 @@ export function HeroPanelActions() {
     discPath: string | undefined;
   } | null>(null);
 
-  const { t } = useTranslation("game_details");
+  const { t, i18n } = useTranslation("game_details");
+  const patchBadges = useKrystaPendingPatches();
+  const krystaPatch = game ? patchBadges.find(p=>p.shop===game.shop&&p.id===game.objectId) : undefined;
+  const [krystaUpdating,setKrystaUpdating] = useState(false);
+  const pl = i18n.language.startsWith("pl");
+  const openPatch = () => window.dispatchEvent(new Event("krysta:open-game-updates"));
+  const openSteamUpdate = async () => {
+    if (!krystaPatch || krystaUpdating) return;
+    setKrystaUpdating(true);
+    try { await window.electron.krystaGameWatchOpenClient(krystaPatch.shop,krystaPatch.id); }
+    catch(error) { showErrorToast(pl?"Nie można otworzyć aktualizacji": "Could not open update",String(error)); }
+    finally { setKrystaUpdating(false); }
+  };
   // The game files are being written while a PS4 PKG is extracted or applied.
   const isPs4PkgJobRunning = useAppSelector((state) => {
     const job = state.ps4PkgJob.job;
@@ -775,7 +788,9 @@ export function HeroPanelActions() {
             )}
           </div>
         </Modal>
+        {krystaPatch && krystaPatch.kind==="required" && game.shop==="steam" && !isGameRunning && !isTransferring && <Button theme="outline" className="hero-panel-actions__action krysta-hero-update" disabled={krystaUpdating||deleting} onClick={()=>void openSteamUpdate()} title={pl?"Otwórz kolejkę aktualizacji Steam":"Open Steam downloads"}><DownloadIcon/>{pl?"Aktualizuj":"Update"} (Steam)</Button>}
         {gameActionButton()}
+        {krystaPatch&&<Button theme="outline" className="hero-panel-actions__action krysta-hero-patch" onClick={openPatch} title={krystaPatch.title}><DownloadIcon/>{krystaPatch.kind==="required"?(pl?"Wymagana aktualizacja":"Update required"):(pl?"Nowy patch":"New patch")}</Button>}
         <div className="hero-panel-actions__separator" />
         <Button
           onClick={toggleGameFavorite}
