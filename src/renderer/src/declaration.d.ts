@@ -205,6 +205,7 @@ declare global {
     nexusInstall: (domain:string,mod:number,file:number,gameKey:string) => Promise<boolean>;
     nexusUpdates: (gameKey:string) => Promise<{updates:{id:string;fileId:number;version:string;name:string}[];failed:number}>;
     nexusApplyUpdate: (id:string) => Promise<boolean>;
+    nexusRequirements: (domain:string,mod:number,gameKey:string) => Promise<{complete:boolean;items:{name:string;notes:string;url:string;modId:number;status:"installed"|"disabled"|"missing"|"manual"}[]}>;
     nexusDownload: (domain:string,id:number,file:number) => Promise<boolean>;
     nexusFiles: (domain:string,id:number) => Promise<{id:number;name:string;version:string}[]>;
     getKrystaGameNews: (id: string, title: string) => Promise<{appId:string|null;items:{id:string;title:string;date:number;contents:string;url:string;author:string}[]}>;
