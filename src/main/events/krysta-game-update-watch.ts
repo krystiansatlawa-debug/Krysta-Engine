@@ -192,7 +192,7 @@ async function perform(key:string,force=false){
  const detected=await detectVersion(game);
  const smart=await smartState(game);
  try{
- const result=await getGameNews(game.catalogueGame?.shop==="steam"?game.catalogueGame.objectId:snapshot.shop==="steam"?snapshot.id:snapshot.steamId??"",game.title);
+ const result=await getGameNews(game.catalogueGame?.shop==="steam"?game.catalogueGame.objectId:snapshot.shop==="steam"?snapshot.id:snapshot.steamId??"",game.title,true);
  if(!result.appId)throw Error("No verified Steam match");
  const patches=result.items.filter(x=>x.category==="patch").sort((a,b)=>b.date-a.date);
  const latest=patches[0];
@@ -278,6 +278,7 @@ ipcMain.handle("krysta:game-integrity",async(_e,shop:unknown,id:unknown,action:u
 ipcMain.handle("krysta:game-watch-badges",()=>serial(async()=>{
  const all=await read(),settings=await readSettings();
  const badges=[];
+ let steamFolders:Awaited<ReturnType<typeof getSteamLibraryFolders>>|undefined;
  for(const w of Object.values(all)){
   if(!effective(w,settings)||(!w.pendingPatch&&w.updateState!=="required"))continue;
   const game=await gamesSublevel.get(keyFor(w.shop,w.id));
@@ -286,7 +287,8 @@ ipcMain.handle("krysta:game-watch-badges",()=>serial(async()=>{
   let required=w.updateState==="required";
   if(required&&game.shop==="steam"){
    try{
-    const live=await readSteamUpdateState(game.objectId,await getSteamLibraryFolders(),game.executablePath);
+    steamFolders??=await getSteamLibraryFolders();
+    const live=await readSteamUpdateState(game.objectId,steamFolders,game.executablePath);
     if(live){required=live.updateRequired;downloadPercent=live.downloadPercent;}
    }catch{/* retain last checked status when local state cannot be read */}
   }
@@ -372,9 +374,10 @@ async function scan(){
  if((await serial(readSettings)).pauseDuringPlay&&hasTrackedGamesRunning())return;
  if(scanning)return;scanning=true;lastScan=Date.now();lastError=null;
  try{
-  const entries=await gamesSublevel.iterator().all();
   const all=await serial(read);
-  for(const [key,game] of entries){
+  const initialSettings=await serial(readSettings);
+  if(!initialSettings.enabled&&!Object.values(all).some(w=>effective(w,initialSettings)))return;
+  for await(const [key,game] of gamesSublevel.iterator()){
    const settings=await serial(readSettings);
    if(settings.pauseDuringPlay&&hasTrackedGamesRunning()){lastScan=0;return;}
    if(game.isDeleted||game.shop==="launchbox"||!effective(all[key],settings))continue;
