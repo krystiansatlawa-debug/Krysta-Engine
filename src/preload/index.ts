@@ -177,6 +177,8 @@ const invokeGameArtifactExport = async (
 };
 
 contextBridge.exposeInMainWorld("electron", {
+  scanUbisoft: () => ipcRenderer.invoke("krysta:ubisoft-scan"),
+  launchUbisoft: (id: string) => ipcRenderer.invoke("krysta:ubisoft-launch", id),
   onCloudSaveAutomaticSyncModeChanged: (
     callback: (event: CloudSaveAutomaticSyncModeChangedEvent) => void
   ) => {
