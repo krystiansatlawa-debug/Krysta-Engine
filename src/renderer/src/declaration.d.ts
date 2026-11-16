@@ -192,6 +192,7 @@ declare global {
     importRockstar: () => Promise<{added:number;linked:number;existing:number;skipped:number;lastSync:string;detected:number}>;
     openRockstarLauncher: () => Promise<void>;
     importUbisoft: () => Promise<number>;
+    getUbisoftAchievements: (objectId:string,force?:boolean) => Promise<{items:{id:string;title:string;description:string;icon:string|null;unlocked:boolean;completionDate:string|null}[];total:number;completed:number;updatedAt:string}>;
     getUbisoftAccount: () => Promise<UbisoftAccountState>;
     connectUbisoftAccount: () => Promise<UbisoftAccountState>;
     syncUbisoftAccount: () => Promise<UbisoftAccountState>;

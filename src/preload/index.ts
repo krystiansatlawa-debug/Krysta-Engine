@@ -190,6 +190,7 @@ contextBridge.exposeInMainWorld("electron", {
   importRockstar: () => ipcRenderer.invoke("krysta:rockstar-import"),
   openRockstarLauncher: () => ipcRenderer.invoke("krysta:rockstar-open"),
   importUbisoft: (): Promise<number> => ipcRenderer.invoke("krysta:ubisoft-import"),
+  getUbisoftAchievements: (objectId:string,force=false) => ipcRenderer.invoke("krysta:ubi-achievements",objectId,force),
   getUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-state"),
   connectUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-connect"),
   syncUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-sync"),

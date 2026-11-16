@@ -1,5 +1,7 @@
 # Krysta Launcher 1.0.0 Beta 4
 
+- Ubisoft Connect: eksperymentalny odczyt własnych zdobytych i zablokowanych osiągnięć przez połączone konto, osobna zakładka w szczegółach gry, automatyczne odświeżanie widocznej zakładki. Niepubliczny interfejs może odmówić dostępu; brak testu na realnym koncie. Osiągnięcia pozostają oddzielone od Steam i nie są wysyłane do Hydra Cloud.
+
 - Ustawienia nagrywania znajdują się w sekcji Zrzuty ekranu; osobna zakładka Nagrania na górnym pasku służy do przeglądania i zarządzania klipami.
 - Nagrania Windows: opt-in, bufor w pamięci do 30 s przed osiągnięciem, 5–60 s po nim, ręczny skrót, 720p/1080p/1440p i 30/60 FPS jako maksymalne parametry, opcjonalny dźwięk systemowy, limit miejsca bez automatycznego usuwania, wybór folderu, filtrowanie po grze, miniatury i odtwarzacz w aplikacji. Bufor używa do dwóch nakładających się nagrań WebM; faktyczny czas przed zdarzeniem zależy od gotowości bufora. Nagrywanie zatrzymuje się przy utracie fokusu. Automatyczny wybór zgłaszanego energooszczędnego enkodera (jeśli obsługiwany), sprawdzanie wolnego miejsca przed nagrywaniem, przycinanie z zapisem osobnej kopii oraz odczyt plików binarnych bez Base64. Brak gwarancji akceleracji sprzętowej; wymagane testy nagrywania, eksportu i dźwięku na Windows.
 
