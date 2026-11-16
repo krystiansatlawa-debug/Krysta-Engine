@@ -18,6 +18,22 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install dependencies
         run: yarn --frozen-lockfile
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prepare offline translation runtime
+        shell: pwsh
+        run: |
+          $runtime = Join-Path $PWD 'krysta-translate'
+          New-Item -ItemType Directory -Force $runtime | Out-Null
+          Invoke-WebRequest 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip' -OutFile "$env:RUNNER_TEMP/python-embed.zip"
+          Expand-Archive "$env:RUNNER_TEMP/python-embed.zip" $runtime -Force
+          Add-Content (Join-Path $runtime 'python311._pth') 'Lib/site-packages'
+          python -m pip install --only-binary=:all: --target "$runtime/Lib/site-packages" 'argostranslate==1.11.1'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item scripts/krysta-translate.py $runtime
+          '{"title":"Game update","content":"Fixed a crash."}' | & "$runtime/python.exe" -I "$runtime/krysta-translate.py" "$env:RUNNER_TEMP/krysta-model-test"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build Windows without publishing
         run: yarn build:win --publish never
         env:
