@@ -193,6 +193,7 @@ contextBridge.exposeInMainWorld("electron", {
   krystaCloudAccountStatus: () => ipcRenderer.invoke("krysta:cloud-account-status"),
   krystaCloudGoogleConnect: () => ipcRenderer.invoke("krysta:cloud-google-connect"),
   krystaCloudGoogleConnectJson: () => ipcRenderer.invoke("krysta:cloud-google-connect-json"),
+  krystaCloudOpenPreUpdateFolder: () => ipcRenderer.invoke("krysta:cloud-open-pre-update-folder"),
   krystaCloudSynologyConnect: (url:string,username:string,password:string) => ipcRenderer.invoke("krysta:cloud-synology-connect",url,username,password),
   krystaCloudAccountDisconnect: (provider:string) => ipcRenderer.invoke("krysta:cloud-account-disconnect",provider),
   installUbisoftGame: (id:string) => ipcRenderer.invoke("krysta:ubisoft-install",id),
