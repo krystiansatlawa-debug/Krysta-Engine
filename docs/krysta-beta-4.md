@@ -1,5 +1,7 @@
 # Krysta Launcher 1.0.0 Beta 4
 
+- Osiągnięcia Ubisoft Connect mogą automatycznie uruchamiać zapis klipu: odczyt co około 10 s tylko podczas rozpoznanej aktywnej rozgrywki i przy włączonym nagrywaniu. Pierwszy odczyt, zmiana konta/gry i odczyt po błędzie są ciche. Wymagany test żywego konta; opóźnienie usługi może przekroczyć długość bufora.
+
 - Ubisoft Connect: eksperymentalny odczyt własnych zdobytych i zablokowanych osiągnięć przez połączone konto, osobna zakładka w szczegółach gry, automatyczne odświeżanie widocznej zakładki. Niepubliczny interfejs może odmówić dostępu; brak testu na realnym koncie. Osiągnięcia pozostają oddzielone od Steam i nie są wysyłane do Hydra Cloud.
 
 - Ustawienia nagrywania znajdują się w sekcji Zrzuty ekranu; osobna zakładka Nagrania na górnym pasku służy do przeglądania i zarządzania klipami.

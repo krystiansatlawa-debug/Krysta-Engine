@@ -244,6 +244,7 @@ async function trigger(expected:string|null,names:string[]){
   triggering=false;pendingNames=null;pendingKey=null;
  }
 }
+export async function isAchievementRecordingEnabled(){return process.platform==="win32"&&(await settings()).enabled;}
 export async function recordAchievementClip(game:Game,achievementNames:string[]){
  if(achievementNames.length)await trigger(levelKeys.game(game.shop,game.objectId),achievementNames);
 }

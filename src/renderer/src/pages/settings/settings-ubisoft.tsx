@@ -44,6 +44,7 @@ export function SettingsUbisoft() {
       <div className="settings-integration-card__account"><span className="settings-integration-card__username">{state.username}</span><SettingsIntegrationLastSynced lastSyncedAt={state.lastSync}/></div>
     </div> : <p className="settings-integration-card__description">{pl ? "Połącz konto Ubisoft, aby pobrać bibliotekę gier i odczytywać własne osiągnięcia." : "Connect your Ubisoft account to retrieve owned games and read your achievements."}</p>}
     <small>{pl?"Osiągnięcia Ubisoft są odczytywane w szczegółach gry z niepublicznego interfejsu Ubisoft Connect. Funkcja może przestać działać po zmianach usługi; nie modyfikuje osiągnięć.":"Ubisoft achievements are read in game details using a non-public Ubisoft Connect interface. Service changes may break this feature; it never modifies achievements."}</small>
+    <small>{pl?"Jeśli włączysz nagrywanie osiągnięć w ustawieniach zrzutów ekranu, Krysta podczas aktywnej rozgrywki sprawdza osiągnięcia Ubisoft co około 10 sekund. Pierwszy odczyt nie zapisuje klipów.":"When achievement recording is enabled in screenshot settings, Krysta checks Ubisoft achievements roughly every 10 seconds during active gameplay. The first read does not save clips."}</small>
     {busy && <p role="status">{pl ? "Trwa operacja..." : "Working..."}</p>}
     {notice && <p role="status">{notice}</p>}
   </SettingsIntegrationCard>;

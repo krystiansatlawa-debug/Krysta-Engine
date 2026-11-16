@@ -6,6 +6,10 @@ import { getGameAssets } from "./catalogue/get-game-assets";
 import { updateGameRecord } from "@main/services/game-record-updater";
 import { scanUbisoft, findUbisoftExecutable } from "./krysta-ubisoft";
 import { randomUUID, createHash } from "node:crypto";
+import { recordAchievementClip, isAchievementRecordingEnabled } from "@main/services/krysta-recordings";
+import { resolveForegroundGame } from "@main/services/screenshots/foreground-game";
+import { hasTrackedGamesRunning } from "@main/services/game-running-state";
+import { advanceUbisoftRecordingBaseline, type UbisoftRecordingBaseline } from "@main/services/achievements/ubisoft-recording-baseline";
 
 const appId = "f68a4bb5-608a-4ff2-8123-be8ef797e0a6";
 const origin = "https://connect.ubisoft.com";
@@ -20,6 +24,7 @@ let games:OwnedGame[] = [];
 const achievementCache=new Map<string,AchievementSnapshot>();
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 let accountQueue:Promise<unknown>=Promise.resolve();
+let recordingBaseline:UbisoftRecordingBaseline|null=null;
 function serialized<T>(fn:()=>Promise<T>):Promise<T>{
  const task=accountQueue.then(fn,fn);accountQueue=task.catch(()=>{});return task;
 }
@@ -65,7 +70,7 @@ async function graphRequest(operationName:string,query:string) {
       ...(current.rememberMeTicket ? {body:JSON.stringify({rememberMe:true})} : {})
     });
     if (!refreshed.ok) {
-      if (account === current && (refreshed.status === 401 || refreshed.status === 403)) { rmSync(sessionPath(),{force:true}); account=null; lastSync=null; games=[]; achievementCache.clear(); }
+      if (account === current && (refreshed.status === 401 || refreshed.status === 403)) { rmSync(sessionPath(),{force:true}); account=null; lastSync=null; games=[]; achievementCache.clear(); recordingBaseline=null; }
       throw new Error("Ubisoft session could not refresh");
     }
     const next = await refreshed.json();
@@ -172,7 +177,7 @@ async function getUbisoftAchievementsInternal(objectId:unknown,force:boolean){
 ipcMain.handle("krysta:ubi-achievements",(_e,id:unknown,force:unknown)=>serialized(()=>getUbisoftAchievementsInternal(id,force===true)));
 ipcMain.handle("krysta:ubi-account-state", () => {restore(); return state();});
 ipcMain.handle("krysta:ubi-account-sync", sync);
-ipcMain.handle("krysta:ubi-account-disconnect", () => { if(pending) throw new Error("Login in progress"); restored=true; rmSync(sessionPath(),{force:true}); account=null; games=[]; lastSync=null; achievementCache.clear(); return state(); });
+ipcMain.handle("krysta:ubi-account-disconnect", () => { if(pending) throw new Error("Login in progress"); restored=true; rmSync(sessionPath(),{force:true}); account=null; games=[]; lastSync=null; achievementCache.clear(); recordingBaseline=null; return state(); });
 ipcMain.handle("krysta:ubi-account-connect", async () => {
   if (pending) throw new Error("Login in progress");
   restore();
@@ -199,8 +204,8 @@ ipcMain.handle("krysta:ubi-account-connect", async () => {
       },700);
       void win.loadURL(origin+"/login?appId="+appId+"&genomeId=954e66a0-be1b-4aa0-9690-fb75201e4e9e&lang=en-US&nextUrl=https%3A%2F%2Fconnect.ubisoft.com%2F").catch(reject);
     });
-    return await serialized(async()=>{ account=data;games=[];achievementCache.clear();
-      try { return await syncInternal(); } catch { account=null; games=[]; lastSync=null; achievementCache.clear(); throw new Error("Could not verify Ubisoft account"); }
+    return await serialized(async()=>{ account=data;games=[];achievementCache.clear();recordingBaseline=null;
+      try { return await syncInternal(); } catch { account=null; games=[]; lastSync=null; achievementCache.clear(); recordingBaseline=null; throw new Error("Could not verify Ubisoft account"); }
     });
   } finally {
     if(timer) clearInterval(timer);
@@ -210,3 +215,43 @@ ipcMain.handle("krysta:ubi-account-connect", async () => {
     pending=false;
   }
 });
+
+/** Read only the current, verified Ubisoft game while achievement recording is enabled.
+ * A first successful read is a silent baseline. Never infer unlocks from missing data.
+ */
+let recordingPoll:ReturnType<typeof setInterval>|undefined;
+let recordingPollBusy=false,recordingPollStopped=false;
+async function pollUbisoftRecording(){
+ if(recordingPollBusy||recordingPollStopped)return;
+ recordingPollBusy=true;
+ try{
+  restore();
+  const owner=account;
+  if(!owner||pending||!hasTrackedGamesRunning()||!await isAchievementRecordingEnabled()){recordingBaseline=null;return;}
+  const match=await resolveForegroundGame("deeplink");
+  const game=match.status==="resolved"?match.game:null;
+  if(!game||game.shop!=="custom"||!(/^(?:ubi-owned-[a-f0-9]{32}|ubisoft-\d+)$/.test(game.objectId))){recordingBaseline=null;return;}
+  const gameKey=levelKeys.game(game.shop,game.objectId);
+  const scope=owner.userId+":"+gameKey;
+  if(recordingBaseline?.scope!==scope)recordingBaseline=null;
+  const snapshot=await serialized(async()=>{
+   if(account!==owner||pending||recordingPollStopped)return null;
+   return getUbisoftAchievementsInternal(game.objectId,true);
+  });
+  if(!snapshot||account!==owner||recordingPollStopped||!await isAchievementRecordingEnabled()){recordingBaseline=null;return;}
+  const confirmed=await resolveForegroundGame("deeplink");
+  if(confirmed.status!=="resolved"||confirmed.target.gameKey!==gameKey||account!==owner){recordingBaseline=null;return;}
+  const result=advanceUbisoftRecordingBaseline(recordingBaseline,scope,snapshot.items,Date.now());
+  recordingBaseline=result.baseline;
+  if(result.newTitles.length)void recordAchievementClip(game,result.newTitles);
+ }catch{
+  // Errors must not turn an old achievement into a new notification.
+  recordingBaseline=null;
+ }finally{recordingPollBusy=false;}
+}
+void app.whenReady().then(()=>{
+ if(process.platform!=="win32")return;
+ recordingPoll=setInterval(()=>void pollUbisoftRecording(),10000);
+ recordingPoll.unref?.();
+}).catch(()=>{});
+app.on("before-quit",()=>{recordingPollStopped=true;recordingBaseline=null;if(recordingPoll)clearInterval(recordingPoll);});
