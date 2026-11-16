@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import { readKrystaSettings, writeKrystaSettings, repairKrystaSettings } from "./krysta-settings-recovery";
+import { readKrystaSettings, writeKrystaSettings, repairKrystaSettings } from "./krysta-settings-recovery.ts";
 
 test("settings recovery never modifies unrelated application data", async t=>{
  const root=await fs.mkdtemp(path.join(os.tmpdir(),"krysta-repair-"));
