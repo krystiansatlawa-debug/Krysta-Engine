@@ -1,3 +1,4 @@
+import { readKrystaSettings, writeKrystaSettings } from "@main/services/krysta-settings-recovery";
 import { app, dialog, ipcMain } from "electron";
 import fs from "node:fs/promises";
 import { createReadStream } from "node:fs";
@@ -13,9 +14,8 @@ import type { GameShop } from "@types";
 type Provider="google"|"synology"|"local"|"hydra";
 type Config={provider:Provider;folder?:string;autoBackup?:boolean;syncBeforeLaunch?:boolean};
 type Entry={id:string;createdAt:string;files:number};
-const cfgPath=()=>path.join(app.getPath("userData"),"krysta-cloud.json");
-async function config():Promise<Config>{try{return JSON.parse(await fs.readFile(cfgPath(),"utf8"));}catch(e){if((e as NodeJS.ErrnoException).code==="ENOENT")return {provider:"hydra"};throw e;}}
-async function save(c:Config){const file=cfgPath();await fs.writeFile(file+".tmp",JSON.stringify(c),{mode:0o600});await fs.rename(file+".tmp",file);return c;}
+async function config():Promise<Config>{return readKrystaSettings<Config>(app.getPath("userData"),"cloud");}
+async function save(c:Config){return writeKrystaSettings(app.getPath("userData"),"cloud",c);}
 function digest(s:string){return createHash("sha256").update(s).digest("hex");}
 function within(root:string,p:string){const rel=path.relative(root,p);return rel===""||(!rel.startsWith(".."+path.sep)&&rel!==".."&&!path.isAbsolute(rel));}
 async function gameContext(shop:GameShop,id:string){
