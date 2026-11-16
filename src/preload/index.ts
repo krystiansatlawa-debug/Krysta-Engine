@@ -182,6 +182,7 @@ contextBridge.exposeInMainWorld("electron", {
   connectUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-connect"),
   syncUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-sync"),
   disconnectUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-disconnect"),
+  getKrystaGameNews: (id: string, title: string) => ipcRenderer.invoke("krysta:game-news", id, title),
   scanUbisoft: () => ipcRenderer.invoke("krysta:ubisoft-scan"),
   launchUbisoft: (id: string) => ipcRenderer.invoke("krysta:ubisoft-launch", id),
   onCloudSaveAutomaticSyncModeChanged: (
