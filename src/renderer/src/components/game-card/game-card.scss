@@ -104,7 +104,3 @@
     transform: translateY(0px);
   }
 }
-
-.game-card { border-radius: 9px; box-shadow: 0 6px 16px #080b1480; transition: box-shadow .2s ease, border-color .2s ease; }
-.game-card:hover { border-color: #9285f5; box-shadow: 0 6px 20px #080b14b0, 0 0 0 1px #9285f580; }
-.game-card__backdrop { background: linear-gradient(0deg, #101326ed 0%, #10132666 40%, transparent 85%); }
