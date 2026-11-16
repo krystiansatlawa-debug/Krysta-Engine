@@ -234,7 +234,7 @@ ipcMain.handle("krysta:game-watch-open-client",async(_e,shop:unknown,id:unknown)
  if((await serial(readSettings)).pauseDuringPlay&&hasTrackedGamesRunning())throw Error("Zamknij uruchomione gry przed przejściem do aktualizacji / Close running games before opening updates");
  if(game.shop==="steam"&&/^\d+$/.test(game.objectId)){
   const state=await smartState(game);
-  if(state.updateState==="required")return shell.openExternal("steam://open/downloads");
+  if(state.updateState==="required"){await protectUpdate(game,await serial(readSettings));return shell.openExternal("steam://open/downloads");}
   return shell.openExternal("steam://nav/games/details/"+game.objectId);
  }
  if(game.shop==="epic")return shell.openExternal("com.epicgames.launcher://library");
