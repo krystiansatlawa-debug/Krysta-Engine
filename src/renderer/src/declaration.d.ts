@@ -201,7 +201,7 @@ declare global {
     krystaCloudSyncBeforeLaunch: (enabled:boolean) => Promise<{provider:string;folder?:string;autoBackup?:boolean;syncBeforeLaunch?:boolean}>;
     krystaCloudAutoStatus: (shop:string,id:string) => Promise<{state:"saved"|"skipped"|"error";at:string;message?:string}|null>;
     krystaCloudCompare: (shop:string,id:string) => Promise<{state:"same"|"different"|"no-backup"|"unavailable";version?:string;createdAt?:string;localFiles:number;cloudFiles:number}>;
-    krystaCloudAccountStatus: () => Promise<{google:boolean;synology:boolean}>;
+    krystaCloudAccountStatus: () => Promise<{google:boolean;synology:boolean;googleConfigured:boolean}>;
     krystaCloudGoogleConnect: () => Promise<boolean>;
     krystaCloudSynologyConnect: (url:string,username:string,password:string) => Promise<boolean>;
     krystaCloudAccountDisconnect: (provider:string) => Promise<boolean>;
