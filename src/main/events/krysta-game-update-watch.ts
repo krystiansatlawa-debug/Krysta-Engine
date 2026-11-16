@@ -117,7 +117,16 @@ ipcMain.handle("krysta:game-watch-badges",()=>serial(async()=>{
   if(!effective(w,settings)||(!w.pendingPatch&&w.updateState!=="required"))continue;
   const game=await gamesSublevel.get(keyFor(w.shop,w.id));
   if(!game||game.isDeleted)continue;
-  badges.push({shop:w.shop,id:w.id,title:w.updateState==="required"?"Steam: update required":w.pendingPatch!,kind:w.updateState==="required"?"required":"patch"});
+  let downloadPercent:number|null=null;
+  let required=w.updateState==="required";
+  if(required&&game.shop==="steam"&&game.executablePath){
+   try{
+    const live=await readSteamUpdateState(game.objectId,await getSteamLibraryFolders(),game.executablePath);
+    if(live){required=live.updateRequired;downloadPercent=live.downloadPercent;}
+   }catch{/* retain last checked status when local state cannot be read */}
+  }
+  if(!required&&!w.pendingPatch)continue;
+  badges.push({shop:w.shop,id:w.id,gameTitle:game.title,title:required?"Steam: update required":w.pendingPatch!,kind:required?"required":"patch",downloadPercent});
  }
  return badges;
 }));
