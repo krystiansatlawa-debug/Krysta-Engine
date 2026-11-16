@@ -4,6 +4,7 @@ import { createReadStream } from "node:fs";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { gamesSublevel, levelKeys } from "@main/level";
+import { publishKrystaNotification } from "@main/services/notifications/krysta-notifications";
 import { Ludusavi } from "@main/services/ludusavi";
 import { gamesPlaytime, onTrackedGamesRunningChange, isTrackedGameKeyRunning } from "@main/services/game-running-state";
 import { directCloudIdentity, uploadCloudSnapshot, listRemoteCloudSnapshots, downloadCloudSnapshot } from "./krysta-cloud-accounts";
@@ -54,7 +55,7 @@ ipcMain.handle("krysta:cloud-list",async(_e,shop:GameShop,id:string)=>{
  return list.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
 });
 async function backupGame(shop:GameShop,id:string,automatic=false,expected?:Config,beforeUpdate=false){
- const {key,base,root,provider,identity,remoteKey}=await gameContext(shop,id);
+ const {key,game,base,root,provider,identity,remoteKey}=await gameContext(shop,id);
  return locked(key,async()=>{if(isTrackedGameKeyRunning(key))throw Error("Close the game before backing up");
  if(automatic||beforeUpdate){const c=await config();if((automatic&&!c.autoBackup)||c.provider!==expected?.provider||c.folder!==expected?.folder)return false;}
  const files=await discover(shop,id);if(!files.length){if(automatic)return false;throw Error("No save files detected by Ludusavi");}
@@ -67,7 +68,7 @@ async function backupGame(shop:GameShop,id:string,automatic=false,expected?:Conf
  if(!automatic&&!beforeUpdate){const answer=await dialog.showMessageBox({type:"question",buttons:["Cancel","Create backup"],defaultId:0,cancelId:0,message:comparison.state==="different"?"Local and cloud saves differ. Keep local saves as a new backup without deleting previous versions? / Zapisy różnią się. Zachować lokalne jako nową kopię?":"Create a copy of "+files.length+" detected save files in your selected cloud folder?"});if(answer.response!==1)return false;}
  if(isTrackedGameKeyRunning(key))throw Error("Game started before backup");
  await safeDirectory(root,base);const uuid=randomUUID(),temp=path.join(base,".pending-"+uuid);await fs.mkdir(temp);
- try{const entries=[];let total=0;for(const [i,p] of files.entries()){const st=await fs.stat(p);total+=st.size;if(total>5*1024**3)throw Error("Backup exceeds 5 GB");const name=String(i);await copyVerified(p,path.join(temp,name));entries.push({name,original:p,size:st.size});}if(isTrackedGameKeyRunning(key))throw Error("Game started during backup");await fs.writeFile(path.join(temp,"manifest.json"),JSON.stringify({id:uuid,createdAt:new Date().toISOString(),kind:beforeUpdate?"pre-update":automatic?"automatic":"manual",files:entries}));if(provider){const current=await config();if(current.provider!==provider||await directCloudIdentity(provider)!==identity)throw Error("Cloud provider changed");await uploadCloudSnapshot(provider,identity!,remoteKey,uuid,temp,entries.map(e=>e.name));}await fs.rename(temp,path.join(base,uuid));return true;}catch(e){await fs.rm(temp,{recursive:true,force:true});throw e;}
+ try{const entries=[];let total=0;for(const [i,p] of files.entries()){const st=await fs.stat(p);total+=st.size;if(total>5*1024**3)throw Error("Backup exceeds 5 GB");const name=String(i);await copyVerified(p,path.join(temp,name));entries.push({name,original:p,size:st.size});}if(isTrackedGameKeyRunning(key))throw Error("Game started during backup");await fs.writeFile(path.join(temp,"manifest.json"),JSON.stringify({id:uuid,createdAt:new Date().toISOString(),kind:beforeUpdate?"pre-update":automatic?"automatic":"manual",files:entries}));if(provider){const current=await config();if(current.provider!==provider||await directCloudIdentity(provider)!==identity)throw Error("Cloud provider changed");await uploadCloudSnapshot(provider,identity!,remoteKey,uuid,temp,entries.map(e=>e.name));}await fs.rename(temp,path.join(base,uuid));await publishKrystaNotification("KRYSTA_CLOUD",game.title,beforeUpdate?"Kopia zapisów przed aktualizacją / Pre-update save backup": "Kopia zapisów wykonana / Save backup completed");return true;}catch(e){await fs.rm(temp,{recursive:true,force:true});throw e;}
  });
 }
 export async function backupBeforeGameUpdate(shop:GameShop,id:string){
@@ -177,7 +178,7 @@ onTrackedGamesRunningChange(()=>{
    const game=await gamesSublevel.get(key);if(!game)return;
    const done=await backupGame(game.shop,game.objectId,true,c);
    autoResults.set(key,{state:done?"saved":"skipped",at:new Date().toISOString()});
-  })().catch(e=>{autoResults.set(key,{state:"error",at:new Date().toISOString(),message:String(e)});});},15000);
+  })().catch(e=>{autoResults.set(key,{state:"error",at:new Date().toISOString(),message:String(e)});void gamesSublevel.get(key).then(game=>publishKrystaNotification("KRYSTA_ERROR",game?.title??"Krysta Cloud","Automatyczna kopia zapisów nie powiodła się / Automatic save backup failed")).catch(()=>{});});},15000);
   pendingAuto.set(key,timer);
  }
  previousRunning=now;
