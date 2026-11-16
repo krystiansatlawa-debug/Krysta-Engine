@@ -52,14 +52,19 @@ export function LocalNotificationItem({
     switch (notification.type) {
       case "DOWNLOAD_COMPLETE":
         return <DownloadIcon size={24} />;
+      case "KRYSTA_CLOUD":
       case "EXTRACTION_COMPLETE":
         return <PackageIcon size={24} />;
+      case "KRYSTA_PATCH":
+      case "KRYSTA_UPDATE":
       case "UPDATE_AVAILABLE":
         return <SyncIcon size={24} />;
       case "ACHIEVEMENT_UNLOCKED":
         return <TrophyIcon size={24} />;
       case "SCAN_GAMES_COMPLETE":
         return <SyncIcon size={24} />;
+      case "KRYSTA_ERROR":
+        return <XIcon size={24} />;
       default:
         return <DownloadIcon size={24} />;
     }
