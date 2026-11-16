@@ -22,6 +22,8 @@ jobs:
         run: yarn build:win --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          MAIN_VITE_KRYSTA_GOOGLE_CLIENT_ID: ${{ vars.KRYSTA_GOOGLE_CLIENT_ID }}
+          MAIN_VITE_KRYSTA_GOOGLE_CLIENT_SECRET: ${{ secrets.KRYSTA_GOOGLE_CLIENT_SECRET }}
           MAIN_VITE_API_URL: ${{ vars.MAIN_VITE_API_URL || 'https://hydra-api-us-east-1.losbroxas.org' }}
           MAIN_VITE_AUTH_URL: ${{ vars.MAIN_VITE_AUTH_URL || 'https://auth.hydra.losbroxas.org' }}
           MAIN_VITE_CHECKOUT_URL: ${{ vars.MAIN_VITE_CHECKOUT_URL || 'https://checkout.hydralauncher.gg' }}
