@@ -20,6 +20,11 @@ export function KrystaGameWatch({shop,id}:{shop:string;id:string}){
  <p>{pl?"Wersja z ogłoszenia o patchu":"Version from patch announcement"}: {watch?.latestVersion??"—"}</p>
  {watch?.pendingPatch&&<div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><strong>{pl?"Nowy patch":"New patch"}: {watch.pendingPatch}</strong><button type="button" disabled={busy} onClick={()=>{void window.electron.krystaGameWatchDismiss(shop,id).then(()=>{setWatch(w=>w?{...w,pendingPatch:undefined}:w);window.dispatchEvent(new Event("krysta:patch-badges"));}).catch(e=>setNotice(String(e)));}}>{pl?"Oznacz jako przeczytany":"Mark as read"}</button></div>}
  {watch?.latestTitle&&<p>{watch.latestTitle}</p>}
+ <details>
+ <summary>{pl?"Historia wykrytych zmian wersji Steam":"Detected Steam build history"} ({watch?.buildHistory?.length??0})</summary>
+ {watch?.buildHistory?.length?<ul>{watch.buildHistory.map((item,index)=><li key={item.detectedAt+":"+index}>{item.from} → {item.to} — {new Date(item.detectedAt).toLocaleString(i18n.language)}</li>)}</ul>:<p>{pl?"Brak zarejestrowanych zmian.":"No recorded changes."}</p>}
+ <small>{pl?"Data wykrycia zmiany Build ID, nie dokładny czas instalacji; zmiana może również oznaczać cofnięcie wersji.":"Detection date, not exact install time; a build change may also indicate a rollback."}</small>
+ </details>
  {watch?.lastChecked&&<p>{pl?"Ostatnie sprawdzenie":"Last checked"}: {new Date(watch.lastChecked).toLocaleString(i18n.language)}</p>}
  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button type="button" disabled={!ready||busy} onClick={()=>void act(false)}>{pl?"Zapisz ustawienia":"Save settings"}</button><button type="button" disabled={!ready||busy} onClick={()=>void act(true)}>{pl?"Sprawdź teraz":"Check now"}</button>
  {official&&<button type="button" onClick={()=>void window.electron.krystaGameWatchOpenClient(shop,id).catch(e=>setNotice(String(e)))}>{shop==="steam"&&watch?.updateState==="required"?(pl?"Przejdź do aktualizacji Steam":"Go to Steam downloads"):(pl?"Otwórz oficjalny klient":"Open official client")}</button>}</div>
