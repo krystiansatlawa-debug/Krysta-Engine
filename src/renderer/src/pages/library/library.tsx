@@ -118,10 +118,12 @@ import {
   hasDismissedClassicsOnboarding,
 } from "@renderer/components/classics-onboarding-modal/classics-onboarding-modal";
 import "./library.scss";
+import {useKrystaPendingPatches,findKrystaPendingPatch} from "./krysta-patch-badge";
 
 const FAVORITES_COLLECTION_ID = "__favorites__";
 const HIDDEN_COLLECTION_ID = "__hidden__";
 const UNCATEGORIZED_COLLECTION_ID = "__uncategorized__";
+const UPDATES_COLLECTION_ID = "__krysta_updates__";
 const EMPTY_HIDDEN_GAMES: LibraryGame[] = [];
 const GAP = 16;
 const LARGE_CARD_ESTIMATED_HEIGHT = 300;
@@ -408,6 +410,7 @@ export default function Library() {
   const { t } = useTranslation(["library", "sidebar"]);
 
   const selectedCollectionId = searchParams.get("collection");
+  const pendingPatches=useKrystaPendingPatches();
 
   const handleCollectionSelect = useCallback(
     (collectionId: string | null) => {
@@ -538,7 +541,7 @@ export default function Library() {
 
   useEffect(() => {
     if (!selectedCollectionId) return;
-    if (selectedCollectionId === FAVORITES_COLLECTION_ID || selectedCollectionId === UNCATEGORIZED_COLLECTION_ID) return;
+    if (selectedCollectionId === FAVORITES_COLLECTION_ID || selectedCollectionId === UNCATEGORIZED_COLLECTION_ID || selectedCollectionId === UPDATES_COLLECTION_ID) return;
     if (selectedCollectionId === HIDDEN_COLLECTION_ID) {
       if (!userDetails) handleCollectionSelect(null);
       return;
@@ -583,7 +586,8 @@ export default function Library() {
     selectedCollectionId &&
     selectedCollectionId !== FAVORITES_COLLECTION_ID &&
     selectedCollectionId !== HIDDEN_COLLECTION_ID &&
-    selectedCollectionId !== UNCATEGORIZED_COLLECTION_ID
+    selectedCollectionId !== UNCATEGORIZED_COLLECTION_ID &&
+    selectedCollectionId !== UPDATES_COLLECTION_ID
       ? selectedCollectionId
       : null;
   const collectionGames = useMemo(
@@ -805,6 +809,8 @@ export default function Library() {
     if (selectedCollectionId) {
       if (selectedCollectionId === FAVORITES_COLLECTION_ID) {
         filtered = filtered.filter((game) => game.favorite);
+      } else if (selectedCollectionId === UPDATES_COLLECTION_ID) {
+        filtered=filtered.filter(game=>Boolean(findKrystaPendingPatch(game,pendingPatches)));
       } else if (selectedCollectionId === UNCATEGORIZED_COLLECTION_ID) {
         filtered = filtered.filter((game) => getGameCollectionIds(game).length === 0);
       } else if (selectedCollectionId === HIDDEN_COLLECTION_ID) {
@@ -849,6 +855,7 @@ export default function Library() {
   }, [
     sortedLibrary,
     sortedHiddenGames,
+    pendingPatches,
     userDetails,
     deferredSearchQuery,
     selectedCollectionId,
@@ -895,6 +902,11 @@ export default function Library() {
           ]
         : []),
       {
+        id: UPDATES_COLLECTION_ID,
+        name: document.documentElement.lang.startsWith("pl") ? "Gry z nowymi patchami" : "Games with new patches",
+        gamesCount: groupedLibrary.filter(game=>Boolean(findKrystaPendingPatch(game,pendingPatches))).length,
+      },
+      {
         id: UNCATEGORIZED_COLLECTION_ID,
         name: document.documentElement.lang.startsWith("pl") ? "Gry bez kategorii" : "Uncategorized games",
         gamesCount: groupedLibrary.filter((game) => getGameCollectionIds(game).length === 0).length,
@@ -910,6 +922,7 @@ export default function Library() {
     collections,
     groupedLibrary,
     favoritesCount,
+    pendingPatches,
     groupedHiddenGames,
     selectedCollectionId,
     t,
@@ -921,7 +934,7 @@ export default function Library() {
     [containerWidth, viewMode]
   );
 
-  const isCustomOrder = sortBy === "custom";
+  const isCustomOrder = sortBy === "custom" && selectedCollectionId !== UPDATES_COLLECTION_ID;
   const gridRef = useRef<HTMLDivElement>(null);
   const pendingSettleRef = useRef<{ key: string; fromRect: DOMRect } | null>(
     null
@@ -1264,6 +1277,7 @@ export default function Library() {
                 favoritesCollectionId={FAVORITES_COLLECTION_ID}
                 hiddenCollectionId={HIDDEN_COLLECTION_ID}
                 uncategorizedCollectionId={UNCATEGORIZED_COLLECTION_ID}
+                updatesCollectionId={UPDATES_COLLECTION_ID}
                 onCollectionSelect={handleCollectionSelect}
                 onCollectionCreate={handleCreateCollectionButtonClick}
                 onCollectionContextMenu={openCollectionContextMenu}
