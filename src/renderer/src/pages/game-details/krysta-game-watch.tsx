@@ -14,8 +14,8 @@ export function KrystaGameWatch({shop,id}:{shop:string;id:string}){
   setBusy(true);setNotice("");
   try{
    const cfg=await window.electron.krystaCloudConfig();
-   if(cfg.provider==="hydra"||!cfg.folder){
-    setNotice(pl?"Najpierw wybierz prywatny folder kopii w Ustawienia → Krysta Cloud.":"First select a private backup folder in Settings → Krysta Cloud.");
+   if(cfg.provider==="hydra"||(cfg.provider==="local"&&!cfg.folder)){
+    setNotice(pl?"Najpierw skonfiguruj miejsce kopii w Ustawienia → Krysta Cloud.":"First configure a backup destination in Settings → Krysta Cloud.");
     return;
    }
    const saved=await window.electron.krystaCloudBackup(shop,id);
