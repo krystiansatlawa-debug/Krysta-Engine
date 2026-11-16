@@ -26,6 +26,7 @@ interface LibraryFiltersMenuProps {
   selectedCollectionId: string | null;
   favoritesCollectionId: string;
   hiddenCollectionId: string;
+  uncategorizedCollectionId?: string;
   onCollectionSelect: (collectionId: string | null) => void;
   onCollectionCreate: () => void;
   onCollectionContextMenu: (
@@ -68,6 +69,7 @@ export function LibraryFiltersMenu({
   selectedCollectionId,
   favoritesCollectionId,
   hiddenCollectionId,
+  uncategorizedCollectionId,
   onCollectionSelect,
   onCollectionCreate,
   onCollectionContextMenu,
@@ -173,7 +175,7 @@ export function LibraryFiltersMenu({
                   value={collection.id}
                   onSelect={keepOpen}
                   onContextMenu={
-                    isFavorites || isHidden
+                    isFavorites || isHidden || collection.id === uncategorizedCollectionId
                       ? undefined
                       : (event) => onCollectionContextMenu(event, collection)
                   }
