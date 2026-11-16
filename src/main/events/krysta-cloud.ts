@@ -1,5 +1,5 @@
 import { readKrystaSettings, writeKrystaSettings } from "@main/services/krysta-settings-recovery";
-import { app, dialog, ipcMain } from "electron";
+import { app, dialog, ipcMain, shell } from "electron";
 import fs from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import path from "node:path";
@@ -18,10 +18,18 @@ async function config():Promise<Config>{return readKrystaSettings<Config>(app.ge
 async function save(c:Config){return writeKrystaSettings(app.getPath("userData"),"cloud",c);}
 function digest(s:string){return createHash("sha256").update(s).digest("hex");}
 function within(root:string,p:string){const rel=path.relative(root,p);return rel===""||(!rel.startsWith(".."+path.sep)&&rel!==".."&&!path.isAbsolute(rel));}
-async function gameContext(shop:GameShop,id:string){
+async function gameContext(shop:GameShop,id:string,preUpdateLocal=false){
  if(typeof shop!=="string"||typeof id!=="string"||!id||id.length>200)throw Error("Invalid game");
  const key=levelKeys.game(shop,id);const game=await gamesSublevel.get(key);
  if(!game||game.isDeleted)throw Error("Game not in library");
+ if(preUpdateLocal){
+  const folder=path.join(app.getPath("userData"),"krysta-pre-update-backups");
+  await fs.mkdir(folder,{recursive:true,mode:0o700});
+  const info=await fs.lstat(folder);
+  if(!info.isDirectory()||info.isSymbolicLink())throw Error("Unsafe local backup folder");
+  const root=await fs.realpath(folder),remoteKey=digest(shop+":"+id);
+  return {key,game,root,base:path.join(root,"Krysta Cloud",remoteKey),provider:null,identity:null,remoteKey};
+ }
  const c=await config();
  if(c.provider==="hydra")throw Error("Select a private cloud provider in settings");
  const provider=c.provider==="google"||c.provider==="synology"?c.provider:null;
@@ -48,33 +56,50 @@ async function copyVerified(src:string,dst:string){const st=await fs.lstat(src);
 ipcMain.handle("krysta:cloud-config",config);
 ipcMain.handle("krysta:cloud-provider",async(_e,p:unknown)=>{if(p!=="google"&&p!=="synology"&&p!=="local"&&p!=="hydra")throw Error("Invalid provider");return save({provider:p,autoBackup:false});});
 ipcMain.handle("krysta:cloud-folder",async()=>{const c=await config();if(c.provider!=="local")return c;const result=await dialog.showOpenDialog({properties:["openDirectory","createDirectory"]});if(result.canceled||!result.filePaths[0])return c;return save({...c,folder:await fs.realpath(result.filePaths[0])});});
+async function localEntries(base:string,root:string):Promise<Entry[]>{
+ await safeDirectory(root,base);
+ const list:Entry[]=[];
+ for(const name of await fs.readdir(base)){
+  if(!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(name))continue;
+  try{const dir=await fs.realpath(path.join(base,name));if(dir!==path.join(base,name))continue;const mp=path.join(dir,"manifest.json"),st=await fs.lstat(mp);if(!st.isFile()||st.isSymbolicLink()||st.size>8*1024**2)continue;const m=JSON.parse(await fs.readFile(mp,"utf8"));if(m.id===name&&Array.isArray(m.files)&&typeof m.createdAt==="string")list.push({id:name,createdAt:m.createdAt,files:m.files.length});}catch{continue;}
+ }
+ return list;
+}
 ipcMain.handle("krysta:cloud-list",async(_e,shop:GameShop,id:string)=>{
- const {base,root,provider,identity,remoteKey}=await gameContext(shop,id);await safeDirectory(root,base);
- const list:Entry[]=[];for(const name of await fs.readdir(base)){if(!/^[0-9a-f-]{36}$/.test(name))continue;try{const dir=await fs.realpath(path.join(base,name));if(dir!==path.join(base,name))continue;const m=JSON.parse(await fs.readFile(path.join(dir,"manifest.json"),"utf8"));if(m.id===name&&Array.isArray(m.files)&&typeof m.createdAt==="string")list.push({id:name,createdAt:m.createdAt,files:m.files.length});}catch{continue;}}
- if(provider){const remote=await listRemoteCloudSnapshots(provider,identity!,remoteKey);for(const m of remote){if(!list.some(e=>e.id===m.id))list.push({id:m.id,createdAt:m.createdAt,files:m.files.length});}}
+ const local=await gameContext(shop,id,true),list=await localEntries(local.base,local.root);
+ // Offline pre-update copies remain available even when a remote provider cannot authenticate.
+ try{
+  const {base,root,provider,identity,remoteKey}=await gameContext(shop,id);
+  for(const e of await localEntries(base,root))if(!list.some(existing=>existing.id===e.id))list.push(e);
+  if(provider){const remote=await listRemoteCloudSnapshots(provider,identity!,remoteKey);for(const m of remote){if(!list.some(e=>e.id===m.id))list.push({id:m.id,createdAt:m.createdAt,files:m.files.length});}}
+ }catch(e){if(!list.length)throw e;}
  return list.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
 });
+ipcMain.handle("krysta:cloud-open-pre-update-folder",async()=>{
+ const folder=path.join(app.getPath("userData"),"krysta-pre-update-backups");
+ await fs.mkdir(folder,{recursive:true,mode:0o700});
+ const st=await fs.lstat(folder);if(!st.isDirectory()||st.isSymbolicLink())throw Error("Unsafe local backup folder");
+ const error=await shell.openPath(folder);if(error)throw Error("Cannot open backup folder");
+});
 async function backupGame(shop:GameShop,id:string,automatic=false,expected?:Config,beforeUpdate=false){
- const {key,game,base,root,provider,identity,remoteKey}=await gameContext(shop,id);
+ const {key,game,base,root,provider,identity,remoteKey}=await gameContext(shop,id,beforeUpdate);
  return locked(key,async()=>{if(isTrackedGameKeyRunning(key))throw Error("Close the game before backing up");
- if(automatic||beforeUpdate){const c=await config();if((automatic&&!c.autoBackup)||c.provider!==expected?.provider||c.folder!==expected?.folder)return false;}
- const files=await discover(shop,id);if(!files.length){if(automatic)return false;throw Error("No save files detected by Ludusavi");}
+ if(automatic){const c=await config();if((automatic&&!c.autoBackup)||c.provider!==expected?.provider||c.folder!==expected?.folder)return false;}
+ const files=await discover(shop,id);if(!files.length){if(automatic)return false;throw Error("KRYSTA_NO_SAVE_FILES: Ludusavi nie wykrył plików zapisów / No save files detected");}
  if(files.length>5000)throw Error("Too many save files");
  if(files.some(p=>within(root,p)))throw Error("Save files overlap cloud folder");
- const comparison=await compareSaves(base,root,files);
+ const comparison=beforeUpdate?{state:"no-backup",version:undefined}:await compareSaves(base,root,files);
  if(automatic&&comparison.state==="same"&&!provider)return false;
  if(provider&&automatic){const remote=await listRemoteCloudSnapshots(provider,identity!,remoteKey);if(comparison.state==="same"&&remote[0]?.id===comparison.version)return false;}
  if(automatic&&!provider&&(comparison.state==="different"||comparison.state==="unavailable"))throw Error("SAVE_CONFLICT: Local and cloud saves differ or cannot be verified. Open Cloud saves to choose a version.");
  if(!automatic&&!beforeUpdate){const answer=await dialog.showMessageBox({type:"question",buttons:["Cancel","Create backup"],defaultId:0,cancelId:0,message:comparison.state==="different"?"Local and cloud saves differ. Keep local saves as a new backup without deleting previous versions? / Zapisy różnią się. Zachować lokalne jako nową kopię?":"Create a copy of "+files.length+" detected save files in your selected cloud folder?"});if(answer.response!==1)return false;}
  if(isTrackedGameKeyRunning(key))throw Error("Game started before backup");
  await safeDirectory(root,base);const uuid=randomUUID(),temp=path.join(base,".pending-"+uuid);await fs.mkdir(temp);
- try{const entries=[];let total=0;for(const [i,p] of files.entries()){const st=await fs.stat(p);total+=st.size;if(total>5*1024**3)throw Error("Backup exceeds 5 GB");const name=String(i);await copyVerified(p,path.join(temp,name));entries.push({name,original:p,size:st.size});}if(isTrackedGameKeyRunning(key))throw Error("Game started during backup");await fs.writeFile(path.join(temp,"manifest.json"),JSON.stringify({id:uuid,createdAt:new Date().toISOString(),kind:beforeUpdate?"pre-update":automatic?"automatic":"manual",files:entries}));if(provider){const current=await config();if(current.provider!==provider||await directCloudIdentity(provider)!==identity)throw Error("Cloud provider changed");await uploadCloudSnapshot(provider,identity!,remoteKey,uuid,temp,entries.map(e=>e.name));}await fs.rename(temp,path.join(base,uuid));await publishKrystaNotification("KRYSTA_CLOUD",game.title,beforeUpdate?"Kopia zapisów przed aktualizacją / Pre-update save backup": "Kopia zapisów wykonana / Save backup completed");return true;}catch(e){await fs.rm(temp,{recursive:true,force:true});throw e;}
+ try{const entries=[];let total=0;for(const [i,p] of files.entries()){const st=await fs.stat(p);total+=st.size;if(total>5*1024**3)throw Error("Backup exceeds 5 GB");const name=String(i);await copyVerified(p,path.join(temp,name));entries.push({name,original:p,size:st.size});}if(isTrackedGameKeyRunning(key))throw Error("Game started during backup");await fs.writeFile(path.join(temp,"manifest.json"),JSON.stringify({id:uuid,createdAt:new Date().toISOString(),kind:beforeUpdate?"pre-update":automatic?"automatic":"manual",files:entries}));if(provider){const current=await config();if(current.provider!==provider||await directCloudIdentity(provider)!==identity)throw Error("Cloud provider changed");await uploadCloudSnapshot(provider,identity!,remoteKey,uuid,temp,entries.map(e=>e.name));}await fs.rename(temp,path.join(base,uuid));await publishKrystaNotification("KRYSTA_CLOUD",game.title,beforeUpdate?"Lokalna kopia zapisów przed aktualizacją / Local pre-update save backup": "Kopia zapisów wykonana / Save backup completed").catch(()=>{});return true;}catch(e){await fs.rm(temp,{recursive:true,force:true});throw e;}
  });
 }
 export async function backupBeforeGameUpdate(shop:GameShop,id:string){
- const expected=await config();
- if(expected.provider==="hydra"||(expected.provider==="local"&&!expected.folder))throw Error("Configure Krysta Cloud backup destination first");
- return backupGame(shop,id,false,expected,true);
+ return backupGame(shop,id,false,undefined,true);
 }
 ipcMain.handle("krysta:cloud-backup",(_e,shop:GameShop,id:string)=>backupGame(shop,id));
 
@@ -82,7 +107,9 @@ ipcMain.handle("krysta:cloud-backup",(_e,shop:GameShop,id:string)=>backupGame(sh
  * The remote manifest is never trusted to choose a writable destination. */
 async function restoreGame(shop:GameShop,id:string,version:unknown){
  if(typeof version!=="string"||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(version))throw Error("Invalid backup version");
- const {key,base,root,provider,identity,remoteKey}=await gameContext(shop,id);
+ const local=await gameContext(shop,id,true);
+ const foundLocal=await fs.lstat(path.join(local.base,version)).then(()=>true).catch(e=>{if((e as NodeJS.ErrnoException).code==="ENOENT")return false;throw e;});
+ const {key,base,root,provider,identity,remoteKey}=foundLocal?local:await gameContext(shop,id);
  return locked(key,async()=>{
   if(isTrackedGameKeyRunning(key))throw Error("Close the game before restoring");
   await safeDirectory(root,base);
