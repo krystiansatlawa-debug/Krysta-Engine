@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import "./krysta-game-updates.scss";
 type Watch=Awaited<ReturnType<typeof window.electron.krystaGameWatchGet>>;
 export function KrystaGameWatch({shop,id}:{shop:string;id:string}){
  const {i18n}=useTranslation();const pl=i18n.language.startsWith("pl");
@@ -25,15 +26,14 @@ export function KrystaGameWatch({shop,id}:{shop:string;id:string}){
   }catch(e){setNotice(String(e));}
   finally{setBusy(false);}
  };
- return <section style={{padding:16,border:"1px solid #444",borderRadius:8,display:"flex",flexDirection:"column",gap:10}}>
+ return <section className="krysta-watch">
  <h3>{pl?"Monitor aktualizacji gry":"Game update monitor"}</h3>
  <label>{pl?"Monitorowanie tej gry":"Monitor this game"} <select value={override} disabled={!ready||busy} onChange={e=>setOverride(e.target.value as "inherit"|"on"|"off")} style={{background:"#202020",color:"inherit",padding:6,border:"1px solid #555",borderRadius:4}}><option value="inherit">{pl?"Ustawienia globalne":"Global settings"}</option><option value="on">{pl?"Zawsze włączone":"Always enabled"}</option><option value="off">{pl?"Wyłączone":"Disabled"}</option></select></label>
  <small>{watch?.enabled?(pl?"Monitorowanie aktywne":"Monitoring enabled"):(pl?"Monitorowanie nieaktywne":"Monitoring disabled")}</small>
- <p>{pl?"Zainstalowana wersja (automatycznie)":"Installed version (automatic)"}: {watch?.installedVersion||(pl?"Nie wykryto":"Not detected")}</p>
+ <div className="krysta-watch__versions"><div><small>{pl?"Zainstalowana wersja EXE":"Installed EXE version"}</small><strong>{watch?.installedVersion||(pl?"Brak metadanych":"No metadata")}</strong></div><div><small>Steam Build ID</small><strong>{watch?.steamBuildId??"—"}</strong></div><div><small>{pl?"Wersja ogłoszonego patcha":"Announced patch version"}</small><strong>{watch?.latestVersion??"—"}</strong></div></div>
  {watch?.versionSource&&<small>{pl?"Źródło: metadane EXE":"Source: EXE metadata"} ({watch.versionSource==="product"?"ProductVersion":"FileVersion"})</small>}
  <p>{pl?"Stan aktualizacji (Steam)":"Update state (Steam)"}: <strong>{watch?.updateState==="required"?(pl?"Aktualizacja wymagana":"Update required"):watch?.updateState==="not-reported"?(pl?"Steam nie zgłasza aktualizacji":"Steam reports no update"):(pl?"Niepotwierdzony":"Unconfirmed")}</strong></p>
- {watch?.steamBuildId&&<small>Steam Build ID: {watch.steamBuildId}</small>}
- <p>{pl?"Wersja z ogłoszenia o patchu":"Version from patch announcement"}: {watch?.latestVersion??"—"}</p>
+ {ready&&!watch?.installedVersion&&<p className="krysta-watch__warning">{watch?.steamBuildId?(pl?"Instalacja Steam wykryta. Plik EXE nie udostępnia numeru wersji lub nie został wskazany.":"Steam installation detected. EXE version metadata is unavailable or the executable is not configured."):(pl?"Nie udało się odczytać lokalnej wersji. Sprawdź ścieżkę pliku uruchamiania gry w jej ustawieniach.":"Local version unavailable. Check the game executable path in game settings.")}</p>}
  {watch?.pendingPatch&&<div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><strong>{pl?"Nowy patch":"New patch"}: {watch.pendingPatch}</strong><button type="button" disabled={busy} onClick={()=>{void window.electron.krystaGameWatchDismiss(shop,id).then(()=>{setWatch(w=>w?{...w,pendingPatch:undefined}:w);window.dispatchEvent(new Event("krysta:patch-badges"));}).catch(e=>setNotice(String(e)));}}>{pl?"Oznacz jako przeczytany":"Mark as read"}</button></div>}
  {watch?.latestTitle&&<p>{watch.latestTitle}</p>}
  <details>
