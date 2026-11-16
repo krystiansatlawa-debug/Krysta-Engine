@@ -13,7 +13,6 @@ import { useSearchParams } from "react-router-dom";
 import { HeroPanel } from "./hero";
 import { KrystaGameUpdates } from "./krysta-game-updates";
 import { KrystaGameCloud } from "./krysta-game-cloud";
-import { KrystaGameMods } from "./krysta-game-mods";
 import { DescriptionHeader } from "./description-header/description-header";
 import { GallerySlider } from "./gallery-slider/gallery-slider";
 import { Sidebar } from "./sidebar/sidebar";
@@ -503,12 +502,11 @@ export function GameDetailsContent() {
         </div>
 
         <nav className="krysta-game-tabs" aria-label="Game details">
-          { [["description","Opis","Description"],["updates","Aktualizacje","Updates"],["mods","Mody","Mods"],["cloud","Zapisy w chmurze","Cloud saves"]].map(([id,pl,en]) => (
+          { [["description","Opis","Description"],["updates","Aktualizacje","Updates"],["cloud","Zapisy w chmurze","Cloud saves"]].map(([id,pl,en]) => (
             <button type="button" key={id} aria-pressed={detailTab === id} onClick={() => setDetailTab(id)}>{document.documentElement.lang.startsWith("pl") ? pl : en}</button>
           ))}
         </nav>
         {detailTab === "updates" && <KrystaGameUpdates appId={catalogueGame?.shop === "steam" ? String(catalogueGame.objectId) : shop === "steam" ? String(objectId ?? "") : ""} title={game?.title ?? shopDetails?.name ?? ""} />}
-        {detailTab === "mods" && <KrystaGameMods gameKey={`${shop}:${objectId}`} title={game?.title ?? shopDetails?.name ?? ""} />}
         {detailTab === "cloud" && (game && shop && objectId ? <KrystaGameCloud key={`${shop}:${objectId}`} shop={shop} objectId={String(objectId)} /> : <div className="krysta-game-extra">Dodaj grę do biblioteki / Add game to library</div>)}
         <div className="game-details__description-container" style={detailTab !== "description" ? {display:"none"} : undefined}>
           <div className="game-details__description-content">
