@@ -199,6 +199,8 @@ declare global {
     nexusGames: () => Promise<{name:string;domain:string}[]>;
     nexusMods: (domain:string,sort:string) => Promise<{id:number;name:string;summary:string;version:string;picture:string;author:string}[]>;
     nexusInstalled: () => Promise<{id:string;name:string;root:string;gameKey?:string;enabled:boolean;nexus?:{domain:string;modId:number;fileId:number;version:string}}[]>;
+    krystaFpsPreference: () => Promise<boolean>;
+    krystaSetFpsPreference: (enabled:boolean) => Promise<boolean>;
     nexusGameRoot: (gameKey:string) => Promise<{path:string;source:"library"|"previous"}|null>;
     nexusInstallLocal: (gameKey:string) => Promise<boolean>;
     nexusToggle: (id:string,enabled:boolean) => Promise<boolean>;
