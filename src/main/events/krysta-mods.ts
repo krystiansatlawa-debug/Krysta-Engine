@@ -215,6 +215,7 @@ ipcMain.handle("krysta:mods-install-nexus",(_event,d:unknown,m:unknown,f:unknown
  const folder=await dialog.showOpenDialog({title:"Select game installation directory",properties:["openDirectory"]});
  if(folder.canceled)return false;
  const root=await fs.realpath(folder.filePaths[0]);
+ if(!await confirmRequirements(n.domain,n.modId,gameKey,root))return false;
  const confirm=await dialog.showMessageBox({type:"warning",buttons:["Cancel","Install"],defaultId:0,cancelId:0,message:"Install "+String(info.name||"mod")+" into "+root+"?",detail:"Only install trusted mods. Simple archives relative to the game folder are supported."});
  if(confirm.response!==1)return false;
  const temp=await fs.mkdtemp(join(app.getPath("temp"),"krysta-mod-"));
@@ -230,6 +231,7 @@ ipcMain.handle("krysta:mods-apply-update",(_event,id:unknown)=>exclusive(async()
  const next=await getUpdate(previous);if(!next)return false;
  const root=await fs.realpath(previous.root);if(root!==previous.root)throw new Error("Game directory changed");
  const confirm=await dialog.showMessageBox({type:"warning",buttons:["Cancel","Update"],defaultId:0,cancelId:0,message:"Update "+previous.name+" to "+next.version+"?",detail:"Close the game before updating. Previous mod files will be backed up."});if(confirm.response!==1)return false;
+ if(!await confirmRequirements(previous.nexus.domain,previous.nexus.modId,previous.gameKey??"",root))return false;
  const n={...previous.nexus,fileId:next.fileId,version:next.version};
  const temp=await fs.mkdtemp(join(app.getPath("temp"),"krysta-mod-"));
  try{
@@ -237,3 +239,46 @@ ipcMain.handle("krysta:mods-apply-update",(_event,id:unknown)=>exclusive(async()
   await deploy({...previous,nexus:n,files},previous,stage);return true;
  }finally{await fs.rm(temp,{recursive:true,force:true});}
 }));
+
+type Requirement = {name:string;notes:string;url:string;modId:number;status:"installed"|"disabled"|"missing"|"manual"};
+async function requirements(d:string,m:number,gameKey:string,root?:string){
+ const game=await api("games/"+domain(d)+".json");
+ const gameId=String(game.id);
+ if(!/^\d+$/.test(gameId))throw new Error("Unknown Nexus game ID");
+ const token=key();if(!token)throw new Error("Nexus account required");
+ const result:Requirement[]=[];
+ let legacy=true, offset=0, total=0;
+ do{
+  const response=await net.fetch("https://api.nexusmods.com/v2/graphql",{method:"POST",redirect:"error",signal:AbortSignal.timeout(20000),headers:{apikey:token,"Content-Type":"application/json","Application-Name":"Krysta Launcher","Application-Version":"1.0"},body:JSON.stringify({query:"query Requirements($game: ID!, $mod: ID!, $offset: Int!) { mod(gameId:$game,modId:$mod) { legacyModRequirementsEnabled modRequirements { nexusRequirements(offset:$offset,count:50) { totalCount nodes { gameId modId modName notes url externalRequirement } } dlcRequirements { notes } } } }",variables:{game:gameId,mod:String(positive(m)),offset}})});
+  if(!response.ok)throw new Error("Nexus requirements unavailable");
+  const data=await response.json(),mod=data?.data?.mod,req=mod?.modRequirements,page=req?.nexusRequirements;
+  if(data.errors?.length||!Array.isArray(page?.nodes)||!Array.isArray(req?.dlcRequirements)||!Number.isSafeInteger(page.totalCount))throw new Error("Invalid dependency response");
+  legacy=mod.legacyModRequirementsEnabled===true;total=page.totalCount;
+  const installed=records().filter(x=>x.gameKey===gameKey&&(!root||x.root===root));
+  for(const item of page.nodes){
+   const id=Number(item.modId),same=!item.externalRequirement&&String(item.gameId)===gameId&&Number.isSafeInteger(id)&&id>0;
+   const found=same?installed.find(x=>x.nexus?.domain===d&&x.nexus.modId===id):undefined;
+   result.push({name:String(item.modName||"Requirement"),notes:String(item.notes||""),url:same?"https://www.nexusmods.com/"+d+"/mods/"+id:String(item.url||""),modId:same?id:0,status:!same?"manual":found?(found.enabled===false?"disabled":"installed"):"missing"});
+  }
+  if(offset===0)for(const dlc of req.dlcRequirements)result.push({name:"DLC / expansion",notes:String(dlc.notes||""),url:"",modId:0,status:"manual"});
+  offset+=page.nodes.length;
+  if(!page.nodes.length&&offset<total)throw new Error("Incomplete requirements");
+ }while(offset<total&&offset<500);
+ return {items:result,complete:legacy&&offset>=total};
+}
+ipcMain.handle("krysta:mods-requirements",(_event,d:unknown,m:unknown,g:unknown)=>{
+ if(typeof g!=="string")throw new Error("Invalid game");
+ return requirements(domain(d),positive(m),g);
+});
+async function confirmRequirements(d:string,m:number,g:string,root:string){
+ let detail:string;
+ try{
+  const result=await requirements(d,m,g,root);
+  const unresolved=result.items.filter(x=>x.status!=="installed");
+  if(!unresolved.length&&result.complete)return true;
+  detail=unresolved.map(x=>x.name+" ("+x.status+") "+x.notes).join("\n").slice(0,6000);
+  if(!result.complete)detail+="\nFile-specific requirements could not be verified.";
+ }catch{detail="Nexus requirements could not be verified. Check the mod author’s instructions.";}
+ const choice=await dialog.showMessageBox({type:"warning",buttons:["Cancel","Continue anyway"],defaultId:0,cancelId:0,message:"Mod dependencies require attention",detail});
+ return choice.response===1;
+}
