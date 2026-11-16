@@ -7,7 +7,7 @@ import { gamesSublevel, levelKeys } from "@main/level";
 import { getGameNews } from "./krysta-game-news";
 import type { GameShop } from "@types";
 
-type Watch={shop:GameShop;id:string;enabled:boolean;installedVersion:string;versionSource?:"product"|"file";seen?:string[];lastChecked?:string;latestTitle?:string;latestVersion?:string;error?:string;steamId?:string};
+type Watch={shop:GameShop;id:string;enabled:boolean;installedVersion:string;versionSource?:"product"|"file";seen?:string[];lastChecked?:string;latestTitle?:string;latestVersion?:string;error?:string;steamId?:string;pendingPatch?:string};
 type Store=Record<string,Watch>;
 const filename=()=>path.join(app.getPath("userData"),"krysta-game-update-watch.json");
 let queue:Promise<unknown>=Promise.resolve();
@@ -47,7 +47,8 @@ async function perform(key:string,force=false){
  const fresh=newItems.filter(x=>!w.seen?.includes(x.id));
  if(fresh.length)new Notification({title:game.title,body:"Nowy patch / New patch: "+fresh[0].title}).show();
  }
- const next={...w,...detected,versionSource:detected.versionSource,steamId:result.appId??undefined,lastChecked:new Date().toISOString(),latestTitle:latest?.title,latestVersion:latest?version(latest.title)??undefined:undefined,seen:[...new Set([...patches.map(x=>x.id),...(w.seen??[])])].slice(0,500),error:undefined};
+ const freshPatch=w.enabled&&snapshot.enabled&&w.seen?newItems.find(x=>!w.seen?.includes(x.id)):undefined;
+ const next={...w,pendingPatch:w.enabled?(freshPatch?.title??w.pendingPatch):undefined,...detected,versionSource:detected.versionSource,steamId:result.appId??undefined,lastChecked:new Date().toISOString(),latestTitle:latest?.title,latestVersion:latest?version(latest.title)??undefined:undefined,seen:[...new Set([...patches.map(x=>x.id),...(w.seen??[])])].slice(0,500),error:undefined};
  all[key]=next;await write(all);return next;
  });
  }catch(e){return serial(async()=>{const all=await read(),w=all[key];if(!w)return null;all[key]={...w,...detected,versionSource:detected.versionSource,error:String(e)};await write(all);return all[key];});}
@@ -59,7 +60,7 @@ ipcMain.handle("krysta:game-watch-set",async(_e,shop:GameShop,id:string,enabled:
  const key=keyFor(shop,id);if(typeof enabled!=="boolean")throw Error("Invalid settings");
  const game=await gamesSublevel.get(key);if(!game||game.isDeleted)throw Error("Add this game to the library first");
  const detected=await detectVersion(game.executablePath);
- const w=await serial(async()=>{const all=await read();const old=all[key];const next:Watch={...old,shop,id,enabled,...detected,versionSource:detected.versionSource,...(!old?.enabled&&enabled?{seen:undefined}:{})};all[key]=next;await write(all);return next;});
+ const w=await serial(async()=>{const all=await read();const old=all[key];const next:Watch={...old,shop,id,enabled,...detected,versionSource:detected.versionSource,...(!old?.enabled&&enabled?{seen:undefined,pendingPatch:undefined}:{}),...(!enabled?{pendingPatch:undefined}:{})};all[key]=next;await write(all);return next;});
  if(w.enabled&&!w.seen) void check(key).catch(()=>{});return w;
 });
 ipcMain.handle("krysta:game-watch-check",(_e,shop:unknown,id:unknown)=>check(keyFor(shop,id),true));
@@ -71,6 +72,14 @@ ipcMain.handle("krysta:game-watch-open-client",async(_e,shop:unknown,id:unknown)
  if(game.shop==="custom"&&/^(ubi-owned-|ubisoft-)/.test(game.objectId))return shell.openExternal("uplay://");
  throw Error("No supported official client");
 });
+ipcMain.handle("krysta:game-watch-badges",()=>serial(async()=>{
+ const all=await read();
+ return Object.values(all).filter(w=>w.enabled&&w.pendingPatch).map(w=>({shop:w.shop,id:w.id,title:w.pendingPatch!}));
+}));
+ipcMain.handle("krysta:game-watch-dismiss",async(_e,shop:unknown,id:unknown)=>serial(async()=>{
+ const key=keyFor(shop,id),all=await read();
+ if(all[key]){all[key]={...all[key],pendingPatch:undefined};await write(all);}
+}));
 let scanning=false;
 async function scan(){if(scanning)return;scanning=true;try{const all=await serial(read);for(const [key,w] of Object.entries(all)){if(w.enabled)await check(key);}}finally{scanning=false;}}
 void app.whenReady().then(()=>{setTimeout(()=>void scan().catch(()=>{}),60000);setInterval(()=>void scan().catch(()=>{}),6*60*60*1000);});
