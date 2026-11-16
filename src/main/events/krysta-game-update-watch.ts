@@ -1,6 +1,8 @@
 import { app, ipcMain, shell, net } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { createReadStream } from "node:fs";
+import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { gamesSublevel, levelKeys } from "@main/level";
@@ -10,7 +12,7 @@ import { publishKrystaNotification } from "@main/services/notifications/krysta-n
 import { backupBeforeGameUpdate } from "./krysta-cloud";
 import { getGameNews } from "./krysta-game-news";
 import { getSteamLibraryFolders } from "@main/services/steam";
-import { readSteamUpdateState } from "@main/services/steam-integration/steam-installation-core";
+import { readSteamUpdateState, findInstalledSteamApp, isPathInsideSteamInstallDirectory } from "@main/services/steam-integration/steam-installation-core";
 import { hasTrackedGamesRunning } from "@main/services/game-running-state";
 import type { GameShop, Game } from "@types";
 
@@ -238,6 +240,40 @@ ipcMain.handle("krysta:game-watch-open-client",async(_e,shop:unknown,id:unknown)
  if(game.shop==="epic")return shell.openExternal("com.epicgames.launcher://library");
  if(game.shop==="custom"&&/^(ubi-owned-|ubisoft-)/.test(game.objectId))return shell.openExternal("uplay://");
  throw Error("No supported official client");
+});
+const integrityLocks=new Set<string>();
+ipcMain.handle("krysta:game-integrity",async(_e,shop:unknown,id:unknown,action:unknown)=>{
+ const key=keyFor(shop,id),game=await gamesSublevel.get(key);
+ if(!game||game.isDeleted||game.shop==="launchbox")throw Error("Game not in library");
+ if(hasTrackedGamesRunning())throw Error("Close running games first");
+ if(integrityLocks.has(key))throw Error("Verification already running");
+ integrityLocks.add(key);
+ try{
+  if(action==="official"){
+   if(game.shop==="steam"){
+    const installed=await findInstalledSteamApp(game.objectId,await getSteamLibraryFolders());
+    if(!installed||game.executablePath&&!isPathInsideSteamInstallDirectory(game.executablePath,installed.installDirectory))throw Error("No matching Steam installation");
+    await shell.openExternal("steam://validate/"+installed.appId);
+    return {mode:"official",provider:"Steam"};
+   }
+   if(game.shop==="epic"){await shell.openExternal("com.epicgames.launcher://library");return {mode:"manual",provider:"Epic Games"};}
+   if(game.shop==="custom"&&/^(ubi-owned-|ubisoft-)/.test(game.objectId)){await shell.openExternal("uplay://");return {mode:"manual",provider:"Ubisoft Connect"};}
+   throw Error("Official verification unavailable");
+  }
+  if(action!=="local")throw Error("Invalid verification action");
+  if(!game.executablePath||!path.isAbsolute(game.executablePath))throw Error("Game executable not configured");
+  const file=await fs.realpath(game.executablePath);
+  const before=await fs.stat(file);
+  if(!before.isFile()||before.size===0||before.size>8*1024**3)throw Error("Invalid executable");
+  const hash=createHash("sha256");
+  for await(const chunk of createReadStream(file)){
+   if(hasTrackedGamesRunning())throw Error("Verification cancelled: game running");
+   hash.update(chunk);
+  }
+  const after=await fs.stat(file);
+  if(before.size!==after.size||before.mtimeMs!==after.mtimeMs||before.ino!==after.ino)throw Error("File changed during verification");
+  return {mode:"local",sha256:hash.digest("hex"),size:after.size};
+ }finally{integrityLocks.delete(key);}
 });
 ipcMain.handle("krysta:game-watch-badges",()=>serial(async()=>{
  const all=await read(),settings=await readSettings();
