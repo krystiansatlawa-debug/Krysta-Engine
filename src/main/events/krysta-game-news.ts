@@ -38,3 +38,36 @@ export async function getGameNews(id: unknown, title: unknown) {
   return {appId,items};
 }
 ipcMain.handle("krysta:game-news",(_event,id:unknown,title:unknown)=>getGameNews(id,title));
+
+ 
+// Optional local Google Cloud Translation key; never included in the installer.
+const translations = new Map<string, {title:string;content:string}>();
+let translationQueue: Promise<unknown> = Promise.resolve();
+ipcMain.handle("krysta:news-translate",(_event,title:unknown,content:unknown)=>{
+ const key=process.env.KRYSTA_TRANSLATION_API_KEY?.trim();
+ if(!key)return null;
+ if(typeof title!=="string"||typeof content!=="string"||title.length>1000||content.length>60000)return null;
+ const cacheKey=JSON.stringify([title,content]);
+ const cached=translations.get(cacheKey);
+ if(cached)return cached;
+ const task=translationQueue.then(async()=>{
+  const previous=translations.get(cacheKey);if(previous)return previous;
+  const chunks=content.match(/[\s\S]{1,3500}/gu)??[];
+  const values=[title,...chunks],out:string[]=[];
+  for(let i=0;i<values.length;i+=4){
+   const q=values.slice(i,i+4);
+   const response=await net.fetch("https://translation.googleapis.com/language/translate/v2",{
+    method:"POST",headers:{"Content-Type":"application/json","X-goog-api-key":key},
+    body:JSON.stringify({q,target:"pl",format:"text"}),signal:AbortSignal.timeout(20000),redirect:"error"
+   });
+   if(!response.ok)throw Error("Translation unavailable");
+   const data=await response.json(),items=data?.data?.translations;
+   if(!Array.isArray(items)||items.length!==q.length||items.some(x=>typeof x?.translatedText!=="string"))throw Error("Invalid translation");
+   out.push(...items.map(x=>x.translatedText));
+  }
+  const result={title:out[0],content:out.slice(1).join("")};
+  if(translations.size>=64)translations.delete(translations.keys().next().value!);
+  translations.set(cacheKey,result);return result;
+ }).catch(()=>null);
+ translationQueue=task;return task;
+});
