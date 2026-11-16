@@ -193,6 +193,8 @@ declare global {
     connectUbisoftAccount: () => Promise<UbisoftAccountState>;
     syncUbisoftAccount: () => Promise<UbisoftAccountState>;
     disconnectUbisoftAccount: () => Promise<UbisoftAccountState>;
+    krystaFpsHotkey: () => Promise<string>;
+    krystaFpsSetHotkey: (value:string) => Promise<string>;
     krystaFpsPosition: () => Promise<"tl"|"tr"|"bl"|"br">;
     krystaFpsSetPosition: (position:"tl"|"tr"|"bl"|"br") => Promise<"tl"|"tr"|"bl"|"br">;
     krystaCloudAuto: (enabled:boolean) => Promise<{provider:string;folder?:string;autoBackup?:boolean}>;
@@ -213,7 +215,7 @@ declare global {
     krystaCloudList: (shop:string,id:string) => Promise<{id:string;createdAt:string;files:number}[]>;
     krystaCloudRestore: (shop:string,id:string,version:string) => Promise<boolean>;
     krystaCloudBackup: (shop:string,id:string) => Promise<boolean>;
-    krystaFpsStatus: () => Promise<{available:boolean;status:string}>;
+    krystaFpsStatus: () => Promise<{available:boolean;status:string;shortcutError:boolean;lastError:string;hidden:boolean}>;
     krystaFpsSelectTool: () => Promise<boolean>;
     krystaFpsPreference: () => Promise<boolean>;
     krystaSetFpsPreference: (enabled:boolean) => Promise<boolean>;
