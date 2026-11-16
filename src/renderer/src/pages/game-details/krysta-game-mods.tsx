@@ -31,6 +31,13 @@ export function KrystaGameMods({title,gameKey}:{title:string;gameKey:string}){
 
  const scoped=installed.filter(m=>m.gameKey===gameKey);
  const [working,setWorking]=useState(false);
+ const [gameRoot,setGameRoot]=useState<Awaited<ReturnType<typeof window.electron.nexusGameRoot>>>(null);
+ const [rootLoading,setRootLoading]=useState(true);
+ useEffect(()=>{
+  let active=true;setGameRoot(null);setRootLoading(true);
+  void window.electron.nexusGameRoot(gameKey).then(root=>{if(active)setGameRoot(root);}).catch(()=>{}).finally(()=>{if(active)setRootLoading(false);});
+  return()=>{active=false;};
+ },[gameKey,installed]);
  const [updates,setUpdates]=useState<Awaited<ReturnType<typeof window.electron.nexusUpdates>>["updates"]>([]);
  const [checking,setChecking]=useState(false);
  const [checkFailed,setCheckFailed]=useState(false);
@@ -52,6 +59,7 @@ export function KrystaGameMods({title,gameKey}:{title:string;gameKey:string}){
  useEffect(()=>{setFiles([]);if(selected===null||!domain)return;let active=true;void window.electron.nexusFiles(domain,selected).then(result=>{if(active)setFiles(result);}).catch(()=>{if(active)setNotice(pl?"Nie udało się pobrać plików.":"Unable to load files.");});return()=>{active=false;};},[domain,selected,pl]);
  const connect=async()=>{setBusy(true);setNotice("");try{await window.electron.nexusConnect(key.trim());setConnected(true);setKey("");}catch{setNotice(pl?"Nie udało się połączyć. Sprawdź klucz API.":"Connection failed. Check API key.");}finally{setBusy(false);}};
  return <section className="krysta-mods"><header><h2>Nexus Mods — {title}</h2>{connected&&<button type="button" onClick={async()=>{try{await window.electron.nexusDisconnect();setConnected(false);setMods([]);}catch{setNotice("Disconnect failed");}}}>{pl?"Rozłącz":"Disconnect"}</button>}</header>
+ <div className="krysta-mods__game-root"><strong>{pl?"Folder instalacyjny gry":"Game installation folder"}</strong><p>{rootLoading?(pl?"Wykrywanie…":"Detecting…"):gameRoot?.path??(pl?"Nie wykryto — wybierz folder podczas instalacji.":"Not detected — choose a folder during installation.")}</p>{gameRoot&&<small>{gameRoot.source==="library"?(pl?"Wykryto na podstawie biblioteki":"Detected from library"):(pl?"Folder poprzedniej instalacji moda":"Previous mod installation folder")}</small>}</div>
  <div className="krysta-mods__toolbar"><button type="button" disabled={working} onClick={()=>void operate(()=>window.electron.nexusInstallLocal(gameKey))}>{pl?"Zainstaluj z archiwum":"Install from archive"}</button></div>
  <div className="krysta-mods__toolbar">{connected&&<button type="button" disabled={checking||working} onClick={()=>setCheckTick(n=>n+1)}>{checking?(pl?"Sprawdzanie…":"Checking…"):(pl?"Sprawdź aktualizacje":"Check updates")} ({updates.length})</button>}{checkFailed&&<small>{pl?"Nie udało się sprawdzić części aktualizacji.":"Some update checks failed."}</small>}</div>
  <details open><summary>{pl?"Zainstalowane mody":"Installed mods"} ({scoped.length})</summary>{scoped.map(m=><article key={m.id} className="krysta-mods__card"><div><h3>{m.name}</h3><p>{m.nexus?.version && ("v"+m.nexus.version+" · ")}{m.root} · {m.enabled?(pl?"Włączony":"Enabled"):(pl?"Wyłączony":"Disabled")}</p>{updates.some(u=>u.id===m.id)&&<><p>{pl?"Dostępna aktualizacja":"Update available"}: {updates.find(u=>u.id===m.id)?.version}</p><button type="button" disabled={working||!m.enabled} onClick={()=>void operate(()=>window.electron.nexusApplyUpdate(m.id))}>{pl?"Aktualizuj":"Update"}</button></>}<button type="button" disabled={working} onClick={()=>void operate(()=>window.electron.nexusToggle(m.id,!m.enabled))}>{m.enabled?(pl?"Wyłącz":"Disable"):(pl?"Włącz":"Enable")}</button><button type="button" disabled={working} onClick={()=>void operate(()=>window.electron.nexusRemove(m.id))}>{pl?"Usuń":"Remove"}</button></div></article>)}</details>
