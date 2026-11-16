@@ -217,6 +217,8 @@ declare global {
     krystaGameWatchSettingsSet: (value:{enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;pauseDuringPlay?:boolean;autoOpenSteamQueue?:boolean;autoDownloadEpic?:boolean;backupBeforeUpdate?:boolean}) => ReturnType<Window["electron"]["krystaGameWatchSettings"]>;
     krystaGameWatchScan: () => ReturnType<Window["electron"]["krystaGameWatchSettings"]>;
     krystaGameWatchOpenClient: (shop:string,id:string) => Promise<void>;
+    krystaSettingsRepair: () => Promise<Array<{name:"cloud"|"fps"|"updates"|"game-updates";state:"valid"|"missing"|"restored"|"defaults"|"error"}>>;
+    krystaSettingsRepairStatus: () => Promise<Array<{name:"cloud"|"fps"|"updates"|"game-updates";state:"valid"|"missing"|"restored"|"defaults"|"error"}>|null>;
     krystaUpdatesStatus: () => Promise<{phase:"idle"|"checking"|"downloading"|"ready"|"manual"|"error";version:string;received:number;total:number;error?:string}>;
     krystaUpdatesInstall: () => Promise<void>;
     krystaUpdatesCheck: () => Promise<{version:string;hydra:{tag:string;body:string;publishedAt:string}|null;krysta:{tag:string;body:string;publishedAt:string}|null;hydraNew:boolean|null;krystaNew:boolean|null;checkedAt:string}>;
