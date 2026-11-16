@@ -40,6 +40,7 @@ import "./krysta-game-news";
 import "./krysta-mods";
 import "./krysta-fps";
 import "./krysta-cloud";
+import "./krysta-cloud-accounts";
 import "./screenshot-input";
 
 ipcMain.handle("ping", () => "pong");
