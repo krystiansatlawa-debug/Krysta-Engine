@@ -197,6 +197,7 @@ contextBridge.exposeInMainWorld("electron", {
   installUbisoftGame: (id:string) => ipcRenderer.invoke("krysta:ubisoft-install",id),
   krystaGameWatchBadges: () => ipcRenderer.invoke("krysta:game-watch-badges"),
   krystaGameWatchDismiss: (shop:string,id:string) => ipcRenderer.invoke("krysta:game-watch-dismiss",shop,id),
+  krystaGameIntegrity: (shop:string,id:string,action:"official"|"local") => ipcRenderer.invoke("krysta:game-integrity",shop,id,action),
   krystaGameWatchGet: (shop:string,id:string) => ipcRenderer.invoke("krysta:game-watch-get",shop,id),
   krystaGameWatchSet: (shop:string,id:string,override:"inherit"|"on"|"off") => ipcRenderer.invoke("krysta:game-watch-set",shop,id,override),
   krystaGameWatchSettings: () => ipcRenderer.invoke("krysta:game-watch-settings"),
