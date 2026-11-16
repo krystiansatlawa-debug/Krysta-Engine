@@ -197,7 +197,8 @@ declare global {
     krystaFpsSetHotkey: (value:string) => Promise<string>;
     krystaFpsPosition: () => Promise<"tl"|"tr"|"bl"|"br">;
     krystaFpsSetPosition: (position:"tl"|"tr"|"bl"|"br") => Promise<"tl"|"tr"|"bl"|"br">;
-    krystaCloudAuto: (enabled:boolean) => Promise<{provider:string;folder?:string;autoBackup?:boolean}>;
+    krystaCloudAuto: (enabled:boolean) => Promise<{provider:string;folder?:string;autoBackup?:boolean;syncBeforeLaunch?:boolean}>;
+    krystaCloudSyncBeforeLaunch: (enabled:boolean) => Promise<{provider:string;folder?:string;autoBackup?:boolean;syncBeforeLaunch?:boolean}>;
     krystaCloudAutoStatus: (shop:string,id:string) => Promise<{state:"saved"|"skipped"|"error";at:string;message?:string}|null>;
     krystaCloudCompare: (shop:string,id:string) => Promise<{state:"same"|"different"|"no-backup"|"unavailable";version?:string;createdAt?:string;localFiles:number;cloudFiles:number}>;
     krystaCloudAccountStatus: () => Promise<{google:boolean;synology:boolean}>;
@@ -218,9 +219,9 @@ declare global {
     krystaUpdatesPrefs: () => Promise<{automatic:boolean;notifications:boolean}>;
     krystaUpdatesSet: (automatic:boolean,notifications:boolean) => Promise<{automatic:boolean;notifications:boolean}>;
     krystaUpdatesOpen: (kind:string) => Promise<void>;
-    krystaCloudConfig: () => Promise<{provider:string;folder?:string;autoBackup?:boolean}>;
-    krystaCloudProvider: (provider:string) => Promise<{provider:string;folder?:string;autoBackup?:boolean}>;
-    krystaCloudFolder: () => Promise<{provider:string;folder?:string;autoBackup?:boolean}>;
+    krystaCloudConfig: () => Promise<{provider:string;folder?:string;autoBackup?:boolean;syncBeforeLaunch?:boolean}>;
+    krystaCloudProvider: (provider:string) => Promise<{provider:string;folder?:string;autoBackup?:boolean;syncBeforeLaunch?:boolean}>;
+    krystaCloudFolder: () => Promise<{provider:string;folder?:string;autoBackup?:boolean;syncBeforeLaunch?:boolean}>;
     krystaCloudList: (shop:string,id:string) => Promise<{id:string;createdAt:string;files:number}[]>;
     krystaCloudRestore: (shop:string,id:string,version:string) => Promise<boolean>;
     krystaCloudBackup: (shop:string,id:string) => Promise<boolean>;
