@@ -3,6 +3,7 @@ import { SettingsDebrid } from "./settings-debrid";
 import { SettingsRetroAchievements } from "./settings-retroachievements";
 import { SettingsSteam } from "./settings-steam";
 import { SettingsUbisoft } from "./settings-ubisoft";
+import { SettingsRockstar } from "./settings-rockstar";
 import { SettingsEpic } from "./settings-epic";
 
 export function SettingsContextIntegrations() {
@@ -14,6 +15,7 @@ export function SettingsContextIntegrations() {
         <SettingsSteam />
         <SettingsEpic />
         <SettingsUbisoft />
+        <SettingsRockstar />
         <SettingsRetroAchievements />
       </div>
 
