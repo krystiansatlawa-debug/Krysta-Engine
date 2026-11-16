@@ -359,8 +359,3 @@
     gap: calc(globals.$spacing-unit);
   }
 }
-
-.sidebar { background: linear-gradient(180deg, #171d30, #101522); }
-.sidebar__menu-item { border-radius: 6px; }
-.sidebar__menu-item:hover { background-color: rgba(113, 125, 232, .16); }
-.sidebar__menu-item--active { background: linear-gradient(90deg, rgba(111, 94, 232, .36), rgba(64, 104, 190, .13)); box-shadow: inset 3px 0 #9b8aff; color: #fff; }
