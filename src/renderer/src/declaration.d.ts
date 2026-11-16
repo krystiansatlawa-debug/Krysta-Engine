@@ -205,9 +205,9 @@ declare global {
     krystaCloudSynologyConnect: (url:string,username:string,password:string) => Promise<boolean>;
     krystaCloudAccountDisconnect: (provider:string) => Promise<boolean>;
     installUbisoftGame: (id:string) => Promise<"client"|"launched">;
-    krystaGameWatchGet: (shop:string,id:string) => Promise<{enabled:boolean;installedVersion:string;latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}|null>;
-    krystaGameWatchSet: (shop:string,id:string,enabled:boolean,installed:string) => Promise<{enabled:boolean;installedVersion:string;latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}>;
-    krystaGameWatchCheck: (shop:string,id:string) => Promise<{enabled:boolean;installedVersion:string;latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}|null>;
+    krystaGameWatchGet: (shop:string,id:string) => Promise<{enabled:boolean;installedVersion:string;versionSource?:"product"|"file";latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}|null>;
+    krystaGameWatchSet: (shop:string,id:string,enabled:boolean) => Promise<{enabled:boolean;installedVersion:string;versionSource?:"product"|"file";latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}>;
+    krystaGameWatchCheck: (shop:string,id:string) => Promise<{enabled:boolean;installedVersion:string;versionSource?:"product"|"file";latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}|null>;
     krystaGameWatchOpenClient: (shop:string,id:string) => Promise<void>;
     krystaUpdatesCheck: () => Promise<{version:string;hydra:{tag:string;body:string;publishedAt:string}|null;krysta:{tag:string;body:string;publishedAt:string}|null;hydraNew:boolean|null;krystaNew:boolean|null;checkedAt:string}>;
     krystaUpdatesPrefs: () => Promise<{automatic:boolean;notifications:boolean}>;
