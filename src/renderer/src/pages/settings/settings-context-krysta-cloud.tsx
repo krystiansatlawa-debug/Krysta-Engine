@@ -5,6 +5,23 @@ export function SettingsContextKrystaCloud(){
  const {i18n}=useTranslation();const pl=i18n.language.startsWith("pl");
  const [cfg,setCfg]=useState<{provider:string;folder?:string;autoBackup?:boolean}|null>(null);
  const [busy,setBusy]=useState(false);const [error,setError]=useState(false);
+ const [accounts,setAccounts]=useState<{google:boolean;synology:boolean}|null>(null);
+ const [nasUrl,setNasUrl]=useState("");
+ const [nasUser,setNasUser]=useState("");
+ const [nasPassword,setNasPassword]=useState("");
+ const [accountError,setAccountError]=useState("");
+ useEffect(()=>{
+   let active=true;
+   void window.electron.krystaCloudAccountStatus().then(value=>{if(active)setAccounts(value);}).catch(e=>{if(active)setAccountError(String(e));});
+   return()=>{active=false;};
+ },[]);
+ const accountAction=async(fn:()=>Promise<boolean>)=>{
+   setBusy(true);setAccountError("");
+   try{await fn();setAccounts(await window.electron.krystaCloudAccountStatus());}
+   catch(e){setAccountError(String(e));}
+   finally{setNasPassword("");setBusy(false);}
+ };
+
  useEffect(()=>{let active=true;void window.electron.krystaCloudConfig().then(c=>{if(active)setCfg(c);}).catch(()=>{if(active)setError(true);});return()=>{active=false;};},[]);
  const run=async(fn:()=>Promise<{provider:string;folder?:string;autoBackup?:boolean}>)=>{setBusy(true);setError(false);try{setCfg(await fn());}catch{setError(true);}finally{setBusy(false);}};
  return <div className="settings-context-panel"><div className="settings-context-panel__group">
@@ -22,13 +39,13 @@ export function SettingsContextKrystaCloud(){
  <p>{pl?"Na tym etapie logowanie i test połączenia są oddzielne od synchronizacji plików. Kopie nadal korzystają z wybranego folderu.":"At this stage account authorization and connectivity tests are separate from file sync. Backups still use the selected folder."}</p>
  <h4>Google Drive</h4>
  <p>{pl?"Wybierz plik JSON klienta OAuth typu aplikacja komputerowa z własnego projektu Google Cloud z włączonym Drive API.":"Select a desktop OAuth client JSON from your own Google Cloud project with Drive API enabled."}</p>
- <Button theme="outline" disabled={busy} onClick={()=>void accountAction(()=>accounts.google?window.electron.krystaCloudAccountDisconnect("google"):window.electron.krystaCloudGoogleConnect())}>{accounts.google?(pl?"Odłącz Google Drive":"Disconnect Google Drive"):(pl?"Połącz konto Google":"Connect Google account")}</Button>
+ <Button theme="outline" disabled={busy||!accounts} onClick={()=>void accountAction(()=>accounts?.google?window.electron.krystaCloudAccountDisconnect("google"):window.electron.krystaCloudGoogleConnect())}>{accounts?.google?(pl?"Odłącz Google Drive":"Disconnect Google Drive"):(pl?"Połącz konto Google":"Connect Google account")}</Button>
  <h4>Synology NAS (WebDAV HTTPS)</h4>
- {accounts.synology?<Button theme="outline" disabled={busy} onClick={()=>void accountAction(()=>window.electron.krystaCloudAccountDisconnect("synology"))}>{pl?"Odłącz Synology":"Disconnect Synology"}</Button>:<>
+ {accounts?.synology?<Button theme="outline" disabled={busy} onClick={()=>void accountAction(()=>window.electron.krystaCloudAccountDisconnect("synology"))}>{pl?"Odłącz Synology":"Disconnect Synology"}</Button>:<>
  <input aria-label="WebDAV HTTPS URL" placeholder="https://nas.example.org:5006/Backups/" value={nasUrl} onChange={e=>setNasUrl(e.target.value)} disabled={busy}/>
  <input aria-label={pl?"Nazwa użytkownika":"Username"} autoComplete="username" placeholder={pl?"Nazwa użytkownika":"Username"} value={nasUser} onChange={e=>setNasUser(e.target.value)} disabled={busy}/>
  <input type="password" aria-label={pl?"Hasło":"Password"} autoComplete="current-password" placeholder={pl?"Hasło":"Password"} value={nasPassword} onChange={e=>setNasPassword(e.target.value)} disabled={busy}/>
- <Button theme="outline" disabled={busy||!nasUrl||!nasUser||!nasPassword} onClick={()=>void accountAction(()=>window.electron.krystaCloudSynologyConnect(nasUrl,nasUser,nasPassword))}>{pl?"Połącz i sprawdź dostęp":"Connect and test access"}</Button>
+ <Button theme="outline" disabled={busy||!accounts||!nasUrl||!nasUser||!nasPassword} onClick={()=>void accountAction(()=>window.electron.krystaCloudSynologyConnect(nasUrl,nasUser,nasPassword))}>{pl?"Połącz i sprawdź dostęp":"Connect and test access"}</Button>
  </>}
  {accountError&&<p role="alert">{accountError}</p>}
  {error&&<p role="alert">{pl?"Nie udało się zapisać ustawień.":"Unable to save settings."}</p>}
