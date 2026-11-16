@@ -118,7 +118,7 @@ import {
   hasDismissedClassicsOnboarding,
 } from "@renderer/components/classics-onboarding-modal/classics-onboarding-modal";
 import "./library.scss";
-import {useKrystaPendingPatches,findKrystaPendingPatch} from "./krysta-patch-badge";
+import {useKrystaPendingPatches,findKrystaPendingPatch,KrystaUpdateCenterActions} from "./krysta-patch-badge";
 
 const FAVORITES_COLLECTION_ID = "__favorites__";
 const HIDDEN_COLLECTION_ID = "__hidden__";
@@ -1347,6 +1347,14 @@ export default function Library() {
         </div>
       </div>
 
+      {selectedCollectionId === UPDATES_COLLECTION_ID && (
+        <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",padding:"12px 16px"}} aria-label="Krysta Update Center">
+          <strong>Krysta Update Center</strong>
+          <span>{document.documentElement.lang.startsWith("pl")?"Wymagane aktualizacje Steam":"Required Steam updates"}: {pendingPatches.filter(p=>p.kind==="required"&&p.shop==="steam"&&library.some(g=>g.shop===p.shop&&g.objectId===p.id)).length}</span>
+          <span>{document.documentElement.lang.startsWith("pl")?"Nowe informacje o patchach":"New patch announcements"}: {pendingPatches.filter(p=>p.kind!=="required"&&library.some(g=>g.shop===p.shop&&g.objectId===p.id)).length}</span>
+          <KrystaUpdateCenterActions patches={pendingPatches.filter(p=>library.some(g=>g.shop===p.shop&&g.objectId===p.id))}/>
+        </div>
+      )}
       {!hasGames && !shouldShowClassicsImporting && !isLibraryLoading && (
         <div className="library__no-games">
           <div className="library__telescope-icon">
