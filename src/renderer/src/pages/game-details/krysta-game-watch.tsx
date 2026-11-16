@@ -7,7 +7,7 @@ export function KrystaGameWatch({shop,id}:{shop:string;id:string}){
  useEffect(()=>{let active=true;setReady(false);setNotice("");setWatch(null);
  void window.electron.krystaGameWatchGet(shop,id).then(w=>{if(active){setWatch(w);setEnabled(w?.enabled??false);setReady(true);}}).catch(e=>{if(active)setNotice(String(e));});
  return()=>{active=false;};},[shop,id]);
- const act=async(check:boolean)=>{setBusy(true);setNotice("");try{const w=await window.electron.krystaGameWatchSet(shop,id,enabled);setWatch(w);if(check)setWatch(await window.electron.krystaGameWatchCheck(shop,id));else setNotice(pl?"Zapisano ustawienia.":"Settings saved.");}catch(e){setNotice(String(e));}finally{setBusy(false);}};
+ const act=async(check:boolean)=>{setBusy(true);setNotice("");try{const w=await window.electron.krystaGameWatchSet(shop,id,enabled);setWatch(w);if(check)setWatch(await window.electron.krystaGameWatchCheck(shop,id));else setNotice(pl?"Zapisano ustawienia.":"Settings saved.");}catch(e){setNotice(String(e));}finally{setBusy(false);window.dispatchEvent(new Event("krysta:patch-badges"));}};
  const official=shop==="steam"||shop==="epic"||(shop==="custom"&&/^(ubi-owned-|ubisoft-)/.test(id));
  return <section style={{padding:16,border:"1px solid #444",borderRadius:8,display:"flex",flexDirection:"column",gap:10}}>
  <h3>{pl?"Monitor aktualizacji gry":"Game update monitor"}</h3>
@@ -15,6 +15,7 @@ export function KrystaGameWatch({shop,id}:{shop:string;id:string}){
  <p>{pl?"Zainstalowana wersja (automatycznie)":"Installed version (automatic)"}: {watch?.installedVersion||(pl?"Nie wykryto":"Not detected")}</p>
  {watch?.versionSource&&<small>{pl?"Źródło: metadane EXE":"Source: EXE metadata"} ({watch.versionSource==="product"?"ProductVersion":"FileVersion"})</small>}
  <p>{pl?"Najnowsza wykryta wersja":"Latest detected version"}: {watch?.latestVersion??"—"}</p>
+ {watch?.pendingPatch&&<div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><strong>{pl?"Nowy patch":"New patch"}: {watch.pendingPatch}</strong><button type="button" disabled={busy} onClick={()=>{void window.electron.krystaGameWatchDismiss(shop,id).then(()=>{setWatch(w=>w?{...w,pendingPatch:undefined}:w);window.dispatchEvent(new Event("krysta:patch-badges"));}).catch(e=>setNotice(String(e)));}}>{pl?"Oznacz jako przeczytany":"Mark as read"}</button></div>}
  {watch?.latestTitle&&<p>{watch.latestTitle}</p>}
  {watch?.lastChecked&&<p>{pl?"Ostatnie sprawdzenie":"Last checked"}: {new Date(watch.lastChecked).toLocaleString(i18n.language)}</p>}
  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button type="button" disabled={!ready||busy} onClick={()=>void act(false)}>{pl?"Zapisz ustawienia":"Save settings"}</button><button type="button" disabled={!ready||busy} onClick={()=>void act(true)}>{pl?"Sprawdź teraz":"Check now"}</button>
