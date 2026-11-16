@@ -101,14 +101,25 @@ ipcMain.handle("krysta:game-watch-check",(_e,shop:unknown,id:unknown)=>check(key
 ipcMain.handle("krysta:game-watch-open-client",async(_e,shop:unknown,id:unknown)=>{
  const key=keyFor(shop,id),game=await gamesSublevel.get(key);
  if(!game||game.isDeleted)throw Error("Game not in library");
- if(game.shop==="steam"&&/^\d+$/.test(game.objectId))return shell.openExternal("steam://nav/games/details/"+game.objectId);
+ if(game.shop==="steam"&&/^\d+$/.test(game.objectId)){
+  const state=await smartState(game);
+  if(state.updateState==="required")return shell.openExternal("steam://open/downloads");
+  return shell.openExternal("steam://nav/games/details/"+game.objectId);
+ }
  if(game.shop==="epic")return shell.openExternal("com.epicgames.launcher://library");
  if(game.shop==="custom"&&/^(ubi-owned-|ubisoft-)/.test(game.objectId))return shell.openExternal("uplay://");
  throw Error("No supported official client");
 });
 ipcMain.handle("krysta:game-watch-badges",()=>serial(async()=>{
  const all=await read(),settings=await readSettings();
- return Object.values(all).filter(w=>effective(w,settings)&&(w.pendingPatch||w.updateState==="required")).map(w=>({shop:w.shop,id:w.id,title:w.updateState==="required"?"Steam: update required":w.pendingPatch!,kind:w.updateState==="required"?"required":"patch"}));
+ const badges=[];
+ for(const w of Object.values(all)){
+  if(!effective(w,settings)||(!w.pendingPatch&&w.updateState!=="required"))continue;
+  const game=await gamesSublevel.get(keyFor(w.shop,w.id));
+  if(!game||game.isDeleted)continue;
+  badges.push({shop:w.shop,id:w.id,title:w.updateState==="required"?"Steam: update required":w.pendingPatch!,kind:w.updateState==="required"?"required":"patch"});
+ }
+ return badges;
 }));
 ipcMain.handle("krysta:game-watch-dismiss",async(_e,shop:unknown,id:unknown)=>serial(async()=>{
  const key=keyFor(shop,id),all=await read();
