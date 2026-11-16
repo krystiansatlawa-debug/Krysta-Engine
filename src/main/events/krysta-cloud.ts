@@ -6,6 +6,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { gamesSublevel, levelKeys } from "@main/level";
 import { Ludusavi } from "@main/services/ludusavi";
 import { gamesPlaytime, onTrackedGamesRunningChange, isTrackedGameKeyRunning } from "@main/services/game-running-state";
+import { directCloudIdentity, uploadCloudSnapshot } from "./krysta-cloud-accounts";
 import type { GameShop } from "@types";
 
 type Provider="google"|"synology"|"local"|"hydra";
@@ -19,11 +20,18 @@ function within(root:string,p:string){const rel=path.relative(root,p);return rel
 async function gameContext(shop:GameShop,id:string){
  if(typeof shop!=="string"||typeof id!=="string"||!id||id.length>200)throw Error("Invalid game");
  const key=levelKeys.game(shop,id);const game=await gamesSublevel.get(key);
- if(!game)throw Error("Game not in library");
- const c=await config();if(c.provider==="hydra"||!c.folder)throw Error("Select a private cloud folder in settings");
- const root=await fs.realpath(c.folder);
- const base=path.join(root,"Krysta Cloud",digest(shop+":"+id));
- return {key,game,base,root};
+ if(!game||game.isDeleted)throw Error("Game not in library");
+ const c=await config();
+ if(c.provider==="hydra")throw Error("Select a private cloud provider in settings");
+ const provider=c.provider==="google"||c.provider==="synology"?c.provider:null;
+ const identity=provider?await directCloudIdentity(provider):null;
+ if(!provider&&!c.folder)throw Error("Select a local backup folder in settings");
+ const cache=provider?path.join(app.getPath("userData"),"krysta-direct-cache",provider,identity!):null;
+ if(cache)await fs.mkdir(cache,{recursive:true});
+ const root=await fs.realpath(cache??c.folder!);
+ const remoteKey=digest(shop+":"+id);
+ const base=path.join(root,"Krysta Cloud",remoteKey);
+ return {key,game,base,root,provider,identity,remoteKey};
 }
 async function safeDirectory(root:string,dir:string){await fs.mkdir(dir,{recursive:true});const actual=await fs.realpath(dir);if(!within(root,actual)||path.relative(root,actual)!==path.relative(root,dir))throw Error("Unsafe cloud directory");return actual;}
 async function discover(shop:GameShop,id:string){
@@ -38,14 +46,14 @@ async function locked<T>(key:string,fn:()=>Promise<T>){if(locks.has(key))throw E
 async function copyVerified(src:string,dst:string){const st=await fs.lstat(src);if(!st.isFile()||st.isSymbolicLink())throw Error("Invalid save file");await fs.copyFile(src,dst,1);const after=await fs.stat(src);if(st.size!==after.size||st.mtimeMs!==after.mtimeMs)throw Error("Save changed during backup");}
 ipcMain.handle("krysta:cloud-config",config);
 ipcMain.handle("krysta:cloud-provider",async(_e,p:unknown)=>{if(p!=="google"&&p!=="synology"&&p!=="local"&&p!=="hydra")throw Error("Invalid provider");return save({provider:p,autoBackup:false});});
-ipcMain.handle("krysta:cloud-folder",async()=>{const c=await config();if(c.provider==="hydra")return c;const result=await dialog.showOpenDialog({properties:["openDirectory","createDirectory"]});if(result.canceled||!result.filePaths[0])return c;return save({...c,folder:await fs.realpath(result.filePaths[0])});});
+ipcMain.handle("krysta:cloud-folder",async()=>{const c=await config();if(c.provider!=="local")return c;const result=await dialog.showOpenDialog({properties:["openDirectory","createDirectory"]});if(result.canceled||!result.filePaths[0])return c;return save({...c,folder:await fs.realpath(result.filePaths[0])});});
 ipcMain.handle("krysta:cloud-list",async(_e,shop:GameShop,id:string)=>{
  const {base,root}=await gameContext(shop,id);await safeDirectory(root,base);
  const list:Entry[]=[];for(const name of await fs.readdir(base)){if(!/^[0-9a-f-]{36}$/.test(name))continue;try{const dir=await fs.realpath(path.join(base,name));if(dir!==path.join(base,name))continue;const m=JSON.parse(await fs.readFile(path.join(dir,"manifest.json"),"utf8"));if(m.id===name&&Array.isArray(m.files)&&typeof m.createdAt==="string")list.push({id:name,createdAt:m.createdAt,files:m.files.length});}catch{continue;}}
  return list.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
 });
 async function backupGame(shop:GameShop,id:string,automatic=false,expected?:Config){
- const {key,base,root}=await gameContext(shop,id);
+ const {key,base,root,provider,identity,remoteKey}=await gameContext(shop,id);
  return locked(key,async()=>{if(isTrackedGameKeyRunning(key))throw Error("Close the game before backing up");
  if(automatic){const c=await config();if(!c.autoBackup||c.provider!==expected?.provider||c.folder!==expected?.folder)return false;}
  const files=await discover(shop,id);if(!files.length){if(automatic)return false;throw Error("No save files detected by Ludusavi");}
@@ -53,11 +61,11 @@ async function backupGame(shop:GameShop,id:string,automatic=false,expected?:Conf
  if(files.some(p=>within(root,p)))throw Error("Save files overlap cloud folder");
  const comparison=await compareSaves(base,root,files);
  if(automatic&&comparison.state==="same")return false;
- if(automatic&&(comparison.state==="different"||comparison.state==="unavailable"))throw Error("SAVE_CONFLICT: Local and cloud saves differ or cannot be verified. Open Cloud saves to choose a version.");
+ if(automatic&&!provider&&(comparison.state==="different"||comparison.state==="unavailable"))throw Error("SAVE_CONFLICT: Local and cloud saves differ or cannot be verified. Open Cloud saves to choose a version.");
  if(!automatic){const answer=await dialog.showMessageBox({type:"question",buttons:["Cancel","Create backup"],defaultId:0,cancelId:0,message:comparison.state==="different"?"Local and cloud saves differ. Keep local saves as a new backup without deleting previous versions? / Zapisy różnią się. Zachować lokalne jako nową kopię?":"Create a copy of "+files.length+" detected save files in your selected cloud folder?"});if(answer.response!==1)return false;}
  if(isTrackedGameKeyRunning(key))throw Error("Game started before backup");
  await safeDirectory(root,base);const uuid=randomUUID(),temp=path.join(base,".pending-"+uuid);await fs.mkdir(temp);
- try{const entries=[];let total=0;for(const [i,p] of files.entries()){const st=await fs.stat(p);total+=st.size;if(total>5*1024**3)throw Error("Backup exceeds 5 GB");const name=String(i);await copyVerified(p,path.join(temp,name));entries.push({name,original:p,size:st.size});}if(isTrackedGameKeyRunning(key))throw Error("Game started during backup");await fs.writeFile(path.join(temp,"manifest.json"),JSON.stringify({id:uuid,createdAt:new Date().toISOString(),kind:automatic?"automatic":"manual",files:entries}));await fs.rename(temp,path.join(base,uuid));return true;}catch(e){await fs.rm(temp,{recursive:true,force:true});throw e;}
+ try{const entries=[];let total=0;for(const [i,p] of files.entries()){const st=await fs.stat(p);total+=st.size;if(total>5*1024**3)throw Error("Backup exceeds 5 GB");const name=String(i);await copyVerified(p,path.join(temp,name));entries.push({name,original:p,size:st.size});}if(isTrackedGameKeyRunning(key))throw Error("Game started during backup");await fs.writeFile(path.join(temp,"manifest.json"),JSON.stringify({id:uuid,createdAt:new Date().toISOString(),kind:automatic?"automatic":"manual",files:entries}));if(provider){const current=await config();if(current.provider!==provider)throw Error("Cloud provider changed");await uploadCloudSnapshot(provider,identity!,remoteKey,uuid,temp,entries.map(e=>e.name));}await fs.rename(temp,path.join(base,uuid));return true;}catch(e){await fs.rm(temp,{recursive:true,force:true});throw e;}
  });
 }
 ipcMain.handle("krysta:cloud-backup",(_e,shop:GameShop,id:string)=>backupGame(shop,id));
@@ -141,7 +149,7 @@ let shuttingDown=false;
 ipcMain.handle("krysta:cloud-auto",async(_e,enabled:unknown)=>{
  if(typeof enabled!=="boolean")throw Error("Invalid automatic backup setting");
  const c=await config();
- if(enabled&&(c.provider==="hydra"||!c.folder))throw Error("Select a private cloud folder first");
+ if(enabled){if(c.provider==="hydra"||(c.provider==="local"&&!c.folder))throw Error("Select a backup destination first");if(c.provider==="google"||c.provider==="synology")await directCloudIdentity(c.provider);}
  if(enabled){const answer=await dialog.showMessageBox({type:"question",buttons:["Anuluj / Cancel","Włącz / Enable"],defaultId:0,cancelId:0,message:"Automatycznie kopiować wykryte zapisy wszystkich obsługiwanych gier do wybranego folderu? / Automatically back up detected saves for all supported games to the selected folder?"});if(answer.response!==1)return c;}
  else{for(const timer of pendingAuto.values())clearTimeout(timer);pendingAuto.clear();}
  return save({...c,autoBackup:enabled});
@@ -153,7 +161,7 @@ onTrackedGamesRunningChange(()=>{
  for(const key of previousRunning){
   if(now.has(key)||shuttingDown||pendingAuto.has(key))continue;
   const timer=setTimeout(()=>{pendingAuto.delete(key);void (async()=>{
-   const c=await config();if(shuttingDown||!c.autoBackup||c.provider==="hydra"||!c.folder||isTrackedGameKeyRunning(key))return;
+   const c=await config();if(shuttingDown||!c.autoBackup||c.provider==="hydra"||(c.provider==="local"&&!c.folder)||isTrackedGameKeyRunning(key))return;
    const game=await gamesSublevel.get(key);if(!game)return;
    const done=await backupGame(game.shop,game.objectId,true,c);
    autoResults.set(key,{state:done?"saved":"skipped",at:new Date().toISOString()});
