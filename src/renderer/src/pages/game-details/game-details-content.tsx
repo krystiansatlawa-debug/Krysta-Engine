@@ -225,7 +225,7 @@ export function GameDetailsContent() {
         video.removeEventListener("error", onMediaLoad);
       });
     };
-  }, [aboutTheGame]);
+  }, [aboutTheGame, detailTab]);
 
   const handleLegacyCloudSaveButtonClick = () => {
     if (!userDetails) {
@@ -502,15 +502,17 @@ export function GameDetailsContent() {
         </div>
 
         <nav className="krysta-game-tabs" aria-label="Game details">
-          { [["description","Opis","Description"],["updates","Aktualizacje","Updates"],["mods","Mody","Mods"],["screenshots","Zrzuty ekranu","Screenshots"]].map(([id,pl,en]) => (
+          { [["description","Opis","Description"],["updates","Aktualizacje","Updates"],["mods","Mody","Mods"]].map(([id,pl,en]) => (
             <button type="button" key={id} aria-pressed={detailTab === id} onClick={() => setDetailTab(id)}>{document.documentElement.lang.startsWith("pl") ? pl : en}</button>
           ))}
         </nav>
-        {detailTab === "screenshots" && <div className="krysta-game-extra"><GallerySlider /></div>}
         {detailTab === "updates" && <KrystaGameUpdates appId={catalogueGame?.shop === "steam" ? String(catalogueGame.objectId) : shop === "steam" ? String(objectId ?? "") : ""} title={game?.title ?? shopDetails?.name ?? ""} />}
         {detailTab === "mods" && <KrystaGameMods gameKey={`${shop}:${objectId}`} title={game?.title ?? shopDetails?.name ?? ""} />}
         <div className="game-details__description-container" style={detailTab !== "description" ? {display:"none"} : undefined}>
           <div className="game-details__description-content">
+            {detailTab === "description" && !hasNSFWContentBlocked && (
+              <GallerySlider key={`${shop}:${objectId}`} />
+            )}
             <DescriptionHeader />
 
             {(showPrompt || isPromptPending) && (
