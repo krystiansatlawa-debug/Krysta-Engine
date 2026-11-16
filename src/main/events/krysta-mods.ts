@@ -58,7 +58,7 @@ ipcMain.handle("krysta:mods-download",async(_event,d:unknown,m:unknown,f:unknown
  return true;
 });
 
-type Installed = {id:string;name:string;root:string;gameKey?:string;enabled?:boolean;files:{path:string;hash:string}[]};
+type Installed = {id:string;name:string;root:string;gameKey?:string;enabled?:boolean;nexus?:{domain:string;modId:number;fileId:number;version:string};files:{path:string;hash:string}[]};
 const manifest=()=>join(app.getPath("userData"),"krysta-installed-mods.json");
 function records():Installed[]{try{return JSON.parse(readFileSync(manifest(),"utf8"));}catch(e){if((e as NodeJS.ErrnoException).code==="ENOENT")return [];throw e;}}
 function save(entries:Installed[]){const target=manifest(),temp=target+".tmp";writeFileSync(temp,JSON.stringify(entries),{mode:0o600});renameSync(temp,target);}
@@ -68,7 +68,7 @@ async function exists(path:string){try{await fs.lstat(path);return true;}catch(e
 const hash=(buffer:Buffer)=>createHash("sha256").update(buffer).digest("hex");
 let modifying=false;
 async function exclusive<T>(work:()=>Promise<T>){if(modifying)throw new Error("Another mod operation is active");modifying=true;try{return await work();}finally{modifying=false;}}
-ipcMain.handle("krysta:mods-installed",()=>records().map(({id,name,root,gameKey,enabled})=>({id,name,root,gameKey,enabled:enabled!==false})));
+ipcMain.handle("krysta:mods-installed",()=>records().map(({id,name,root,gameKey,enabled,nexus})=>({id,name,root,gameKey,enabled:enabled!==false,nexus})));
 ipcMain.handle("krysta:mods-install-local",(_event,gameKey:unknown)=>exclusive(async()=>{
  const archive=await dialog.showOpenDialog({properties:["openFile"],filters:[{name:"Mod archive",extensions:["zip","7z","rar"]}]});if(archive.canceled)return false;
  const folder=await dialog.showOpenDialog({title:"Select game installation directory",properties:["openDirectory"]});if(folder.canceled)return false;
@@ -124,4 +124,116 @@ ipcMain.handle("krysta:mods-toggle",(_event,id:unknown,enabled:unknown)=>exclusi
   throw e;
  }
  return true;
+}));
+
+type NexusFile = {file_id:number;version?:string;name?:string;category_id?:number};
+type NexusIdentity = NonNullable<Installed["nexus"]>;
+async function fileInfo(d:string,m:number,f:number):Promise<NexusFile>{
+ const data=await api("games/"+d+"/mods/"+m+"/files.json");
+ const file=(Array.isArray(data.files)?data.files:[]).find((x:NexusFile)=>x.file_id===f);
+ if(!file)throw new Error("Nexus file unavailable");
+ return file;
+}
+async function getUpdate(record:Installed){
+ const n=record.nexus;if(!n)return null;
+ const data=await api("games/"+domain(n.domain)+"/mods/"+positive(n.modId)+"/files.json");
+ let id=n.fileId;const seen=new Set<number>();
+ while(!seen.has(id)){
+  seen.add(id);
+  const next=(Array.isArray(data.file_updates)?data.file_updates:[]).filter((x:{old_file_id:number;new_file_id:number})=>x.old_file_id===id);
+  if(!next.length)break;
+  const candidates=[...new Set<number>(next.map((x:{new_file_id:number})=>positive(x.new_file_id)))];
+  if(candidates.length!==1||seen.has(candidates[0]))return null;
+  id=candidates[0];
+ }
+ const file=(Array.isArray(data.files)?data.files:[]).find((x:NexusFile)=>x.file_id===id);
+ return id!==n.fileId&&file&&file.category_id!==6&&file.category_id!==7?{id:record.id,fileId:id,version:String(file.version||""),name:String(file.name||record.name)}:null;
+}
+ipcMain.handle("krysta:mods-updates",async(_event,gameKey:unknown)=>{
+ if(typeof gameKey!=="string")throw new Error("Invalid game");
+ const results=await Promise.allSettled(records().filter(m=>m.gameKey===gameKey&&m.nexus).map(getUpdate));
+ return {updates:results.flatMap(r=>r.status==="fulfilled"&&r.value?[r.value]:[]),failed:results.filter(r=>r.status==="rejected").length};
+});
+async function downloadArchive(n:NexusIdentity,folder:string){
+ const data=await api("games/"+n.domain+"/mods/"+n.modId+"/files/"+n.fileId+"/download_link.json");
+ const url=new URL(data?.[0]?.URI||"");
+ if(url.protocol!=="https:")throw new Error("Invalid download URL");
+ const response=await net.fetch(url.href,{signal:AbortSignal.timeout(300000)});
+ if(!response.ok||!response.body)throw new Error("Download failed");
+ const path=join(folder,"mod.archive");
+ await pipeline(Readable.fromWeb(response.body as import("node:stream/web").ReadableStream),createWriteStream(path,{flags:"wx"}));
+ return path;
+}
+async function stageArchive(source:string,stage:string){
+ await fs.mkdir(stage,{recursive:true});
+ const entries=await SevenZip.listEntries(source);
+ if(!entries.length||entries.length>2000||entries.some(e=>e.encrypted||e.size>128*1024*1024)||entries.reduce((n,e)=>n+e.size,0)>1024*1024*1024)throw new Error("Unsupported archive");
+ const seen=new Set<string>();const files:Installed["files"]=[];
+ for(const entry of entries){
+  const name=parts(entry.name).join("/"),lower=name.toLowerCase();
+  if(seen.has(lower))throw new Error("Duplicate archive path");seen.add(lower);
+  const buffer=await SevenZip.readEntry(source,entry.name,Math.max(1,entry.size+1));
+  if(buffer.length!==entry.size)throw new Error("Archive size mismatch");
+  await fs.writeFile(await target(stage,name,true),buffer,{flag:"wx"});
+  files.push({path:name,hash:hash(buffer)});
+ }
+ return files;
+}
+async function deploy(record:Installed,previous:Installed|undefined,stage:string){
+ const all=records(), root=record.root;
+ const old=previous?.files??[];
+ const oldNames=new Set(old.map(f=>parts(f.path).join("/").toLowerCase()));
+ if(previous?.enabled===false)throw new Error("Enable mod before updating");
+ for(const file of old){
+  const dest=await target(root,file.path);const stat=await fs.lstat(dest);
+  if(!stat.isFile()||stat.isSymbolicLink()||hash(await fs.readFile(dest))!==file.hash)throw new Error("Modified file: "+file.path);
+ }
+ for(const file of record.files){
+  const dest=await target(root,file.path);
+  if(await exists(dest)&&!oldNames.has(file.path.toLowerCase()))throw new Error("Conflict: "+file.path);
+ }
+ const backup=join(app.getPath("userData"),"krysta-mod-backups",record.id,randomUUID());
+ await fs.mkdir(backup,{recursive:true});
+ for(const file of old)await fs.copyFile(await target(root,file.path),await target(backup,file.path,true),constants.COPYFILE_EXCL);
+ if(previous)await fs.writeFile(join(backup,".krysta-previous.json"),JSON.stringify(previous),{flag:"wx"});
+ const removed:Installed["files"]=[],written:Installed["files"]=[];
+ try{
+  for(const file of old){await fs.unlink(await target(root,file.path));removed.push(file);}
+  for(const file of record.files){await fs.copyFile(await target(stage,file.path),await target(root,file.path,true),constants.COPYFILE_EXCL);written.push(file);}
+  save([...all.filter(m=>m.id!==record.id),record]);
+ }catch(error){
+  for(const file of written){const dest=await target(root,file.path);if(hash(await fs.readFile(dest))===file.hash)await fs.unlink(dest);}
+  for(const file of removed)await fs.copyFile(await target(backup,file.path),await target(root,file.path,true),constants.COPYFILE_EXCL);
+  throw error;
+ }
+}
+ipcMain.handle("krysta:mods-install-nexus",(_event,d:unknown,m:unknown,f:unknown,gameKey:unknown)=>exclusive(async()=>{
+ if(typeof gameKey!=="string"||gameKey.length>250)throw new Error("Invalid game");
+ const n={domain:domain(d),modId:positive(m),fileId:positive(f),version:""};
+ const info=await fileInfo(n.domain,n.modId,n.fileId);n.version=String(info.version||"");
+ if(records().some(x=>x.gameKey===gameKey&&x.nexus?.domain===n.domain&&x.nexus?.modId===n.modId))throw new Error("Mod already installed; use update");
+ const folder=await dialog.showOpenDialog({title:"Select game installation directory",properties:["openDirectory"]});
+ if(folder.canceled)return false;
+ const root=await fs.realpath(folder.filePaths[0]);
+ const confirm=await dialog.showMessageBox({type:"warning",buttons:["Cancel","Install"],defaultId:0,cancelId:0,message:"Install "+String(info.name||"mod")+" into "+root+"?",detail:"Only install trusted mods. Simple archives relative to the game folder are supported."});
+ if(confirm.response!==1)return false;
+ const temp=await fs.mkdtemp(join(app.getPath("temp"),"krysta-mod-"));
+ try{
+  const stage=join(temp,"stage"),files=await stageArchive(await downloadArchive(n,temp),stage);
+  await deploy({id:randomUUID(),name:String(info.name||"Nexus mod"),root,gameKey,enabled:true,nexus:n,files},undefined,stage);
+  return true;
+ }finally{await fs.rm(temp,{recursive:true,force:true});}
+}));
+ipcMain.handle("krysta:mods-apply-update",(_event,id:unknown)=>exclusive(async()=>{
+ const previous=records().find(m=>m.id===id);
+ if(!previous?.nexus||previous.enabled===false)throw new Error("Enable a Nexus-installed mod first");
+ const next=await getUpdate(previous);if(!next)return false;
+ const root=await fs.realpath(previous.root);if(root!==previous.root)throw new Error("Game directory changed");
+ const confirm=await dialog.showMessageBox({type:"warning",buttons:["Cancel","Update"],defaultId:0,cancelId:0,message:"Update "+previous.name+" to "+next.version+"?",detail:"Close the game before updating. Previous mod files will be backed up."});if(confirm.response!==1)return false;
+ const n={...previous.nexus,fileId:next.fileId,version:next.version};
+ const temp=await fs.mkdtemp(join(app.getPath("temp"),"krysta-mod-"));
+ try{
+  const stage=join(temp,"stage"),files=await stageArchive(await downloadArchive(n,temp),stage);
+  await deploy({...previous,nexus:n,files},previous,stage);return true;
+ }finally{await fs.rm(temp,{recursive:true,force:true});}
 }));
