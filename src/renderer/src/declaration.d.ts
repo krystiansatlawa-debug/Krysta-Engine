@@ -198,8 +198,9 @@ declare global {
     nexusDisconnect: () => Promise<void>;
     nexusGames: () => Promise<{name:string;domain:string}[]>;
     nexusMods: (domain:string,sort:string) => Promise<{id:number;name:string;summary:string;version:string;picture:string;author:string}[]>;
-    nexusInstalled: () => Promise<{id:string;name:string;root:string}[]>;
-    nexusInstallLocal: () => Promise<boolean>;
+    nexusInstalled: () => Promise<{id:string;name:string;root:string;gameKey?:string;enabled:boolean}[]>;
+    nexusInstallLocal: (gameKey:string) => Promise<boolean>;
+    nexusToggle: (id:string,enabled:boolean) => Promise<boolean>;
     nexusRemove: (id:string) => Promise<boolean>;
     nexusDownload: (domain:string,id:number,file:number) => Promise<boolean>;
     nexusFiles: (domain:string,id:number) => Promise<{id:number;name:string;version:string}[]>;
