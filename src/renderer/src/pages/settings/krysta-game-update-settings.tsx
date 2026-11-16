@@ -7,6 +7,8 @@ export function KrystaGameUpdateSettings(){
  const [cfg,setCfg]=useState<Settings|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
  useEffect(()=>{let active=true;const refresh=()=>void window.electron.krystaGameWatchSettings().then(v=>{if(active)setCfg(v);}).catch(e=>{if(active)setError(String(e));});refresh();const timer=setInterval(refresh,3000);return()=>{active=false;clearInterval(timer);};},[]);
  const change=async(patch:Partial<Settings>)=>{if(!cfg)return;setBusy(true);setError("");try{setCfg(await window.electron.krystaGameWatchSettingsSet({...cfg,...patch}));window.dispatchEvent(new Event("krysta:patch-badges"));}catch(e){setError(String(e));}finally{setBusy(false);}};
+ const [history,setHistory]=useState<Awaited<ReturnType<typeof window.electron.krystaGameWatchHistory>>>([]),[historyOpen,setHistoryOpen]=useState(false),[search,setSearch]=useState("");
+ useEffect(()=>{if(!historyOpen)return;let active=true;const refresh=()=>void window.electron.krystaGameWatchHistory().then(v=>{if(active)setHistory(v);}).catch(e=>{if(active)setError(String(e));});refresh();const timer=setInterval(refresh,5000);return()=>{active=false;clearInterval(timer);};},[historyOpen]);
  const scan=async()=>{setBusy(true);setError("");try{setCfg(await window.electron.krystaGameWatchScan());}catch(e){setError(String(e));}finally{setBusy(false);}};
  return <div className="settings-context-panel__group">
  <h3>{pl?"Aktualizacje gier":"Game updates"}</h3>
@@ -27,6 +29,8 @@ export function KrystaGameUpdateSettings(){
  <Button theme="outline" disabled={!cfg||busy||cfg.scanning||(cfg.pauseDuringPlay&&cfg.pausedDuringPlay)} onClick={()=>void scan()}>{cfg?.scanning?(pl?"Sprawdzanie…":"Checking…"):(pl?"Sprawdź teraz":"Check now")}</Button>
  {cfg?.lastFinished&&<p>{pl?"Ostatni skan":"Last scan"}: {new Date(cfg.lastFinished).toLocaleString(i18n.language)}</p>}
  <small>{pl?"Dotyczy gier PC. Indywidualne ustawienia gry mają pierwszeństwo. Pierwsze sprawdzenie zapisuje punkt odniesienia; powiadomienia dotyczą kolejnych patchy. Launcher musi działać.":"PC games only. Individual game settings take precedence. First check establishes a baseline; subsequent patches trigger notifications. Launcher must be running."}</small>
+ <Button theme="outline" onClick={()=>setHistoryOpen(v=>!v)}>{pl?"Historia zainstalowanych wersji":"Installed version history"}</Button>
+ {historyOpen&&<section><input aria-label={pl?"Szukaj gry":"Search game"} placeholder={pl?"Szukaj gry…":"Search game…"} value={search} onChange={e=>setSearch(e.target.value)}/><small>{pl?"Daty wykrycia zmian, nie daty instalacji. Możliwe cofnięcie wersji.":"Detection dates, not installation dates. Rollbacks are possible."}</small>{history.length===0?<p>{pl?"Brak wykrytych zmian wersji.":"No detected version changes."}</p>:<div style={{maxHeight:420,overflowY:"auto"}}>{history.filter(v=>v.title.toLowerCase().includes(search.toLowerCase())).map((v,i)=><div key={v.shop+v.id+v.source+v.detectedAt+i} style={{padding:"8px 0",borderBottom:"1px solid #555"}}><strong>{v.title}</strong><p>{v.from} → {v.to}</p><small>{v.source==="local"?(pl?"Metadane lokalne":"Local metadata"):v.source.toUpperCase()} · {new Date(v.detectedAt).toLocaleString(i18n.language)}</small></div>)}</div>}</section>}
  {(error||cfg?.lastError)&&<p role="alert">{error||cfg?.lastError}</p>}
  </div>;
 }
