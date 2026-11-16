@@ -10,6 +10,16 @@ export function KrystaGameWatch({shop,id}:{shop:string;id:string}){
  return()=>{active=false;};},[shop,id]);
  const act=async(check:boolean)=>{setBusy(true);setNotice("");try{const w=await window.electron.krystaGameWatchSet(shop,id,override);setWatch(w);if(check)setWatch(await window.electron.krystaGameWatchCheck(shop,id));else setNotice(pl?"Zapisano ustawienia.":"Settings saved.");}catch(e){setNotice(String(e));}finally{setBusy(false);window.dispatchEvent(new Event("krysta:patch-badges"));}};
  const official=shop==="steam"||shop==="epic"||(shop==="custom"&&/^(ubi-owned-|ubisoft-)/.test(id));
+ const [integrity,setIntegrity]=useState("");
+ const verify=async(action:"official"|"local")=>{
+  setBusy(true);setIntegrity("");
+  try{
+   const result=await window.electron.krystaGameIntegrity(shop,id,action);
+   if(result.mode==="local")setIntegrity((pl?"Odczytano plik EXE. Brak wzorca producenta — integralność niepotwierdzona. SHA-256: ":"EXE readable. No publisher reference — integrity unconfirmed. SHA-256: ")+result.sha256);
+   else if(result.mode==="official")setIntegrity(pl?"Przekazano polecenie weryfikacji do Steam. Wynik sprawdź w Steam.":"Validation requested in Steam. Check Steam for results.");
+   else setIntegrity(pl?"Otworzono "+result.provider+". Wybierz opcję weryfikacji plików gry.":"Opened "+result.provider+". Select the game's file verification option.");
+  }catch(e){setIntegrity(String(e));}finally{setBusy(false);}
+ };
  const prepareUpdate=async()=>{
   setBusy(true);setNotice("");
   try{
@@ -49,6 +59,10 @@ export function KrystaGameWatch({shop,id}:{shop:string;id:string}){
  {official&&<button type="button" disabled={busy} onClick={()=>void window.electron.krystaGameWatchOpenClient(shop,id).catch(e=>setNotice(String(e)))}>{shop==="steam"&&watch?.updateState==="required"?(pl?"Przejdź do aktualizacji Steam":"Go to Steam downloads"):(pl?"Otwórz oficjalny klient":"Open official client")}</button>}</div>
  {shop==="steam"&&watch?.updateState==="required"&&<small>{pl?"Kopia obejmuje wykryte zapisy; Steam może aktualizować gry niezależnie od Krysty.":"Backup covers detected saves; Steam may update games independently of Krysta."}</small>}
  <small>{pl?"Częstotliwość sprawdzania określają ustawienia globalne. Wersja lokalna pochodzi z manifestu, metadanych EXE lub pliku wersji i może różnić się od numeracji patchy. Najnowszy numer wersji pochodzi z tytułu wpisu Steam i nie potwierdza dostępności instalatora. Aktualizacje instaluje oficjalny klient.":"Check interval follows global settings. Local version comes from a manifest, EXE metadata or a version file and may differ from patch numbering. Latest version is inferred from Steam post titles, not installer availability. Official clients handle installation."}</small>
+ <h3>{pl?"Integralność plików gry":"Game file integrity"}</h3>
+ <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{official&&<button type="button" disabled={busy||!ready} onClick={()=>void verify("official")}>{pl?"Weryfikuj w oficjalnym kliencie":"Verify in official client"}</button>}<button type="button" disabled={busy||!ready} onClick={()=>void verify("local")}>{pl?"Sprawdź plik EXE (SHA-256)":"Inspect EXE (SHA-256)"}</button></div>
+ <small>{pl?"Lokalny odczyt sumy kontrolnej nie sprawdza wszystkich plików gry i nie naprawia uszkodzeń. Oficjalna weryfikacja może zastąpić zmodyfikowane pliki.":"Local checksum inspection does not verify all game files or repair damage. Official validation may replace modified files."}</small>
+ {integrity&&<p role="status" style={{overflowWrap:"anywhere"}}>{integrity}</p>}
  {watch?.error&&<p role="alert">{watch.error}</p>}{notice&&<p role="status">{notice}</p>}
  </section>;
 }
