@@ -1,5 +1,9 @@
-import { ipcMain, net, safeStorage, app } from "electron";
+import { ipcMain, net, safeStorage, app, dialog } from "electron";
 import { readFileSync, writeFileSync, rmSync } from "node:fs";
+import { createWriteStream, promises as fs } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { join } from "node:path";
 const keyPath=()=>join(app.getPath("userData"),"krysta-nexus.enc");
 function key(){try{return safeStorage.decryptString(readFileSync(keyPath()));}catch{return "";}}
@@ -33,4 +37,22 @@ ipcMain.handle("krysta:mods-files",async(_event,value:unknown,id:unknown)=>{
  if(typeof id!=="number"||!Number.isSafeInteger(id)||id<1)throw new Error("Invalid mod");
  const data=await api("games/"+d+"/mods/"+id+"/files.json");
  return (Array.isArray(data.files)?data.files:[]).map((f:any)=>({id:Number(f.file_id),name:String(f.name),version:String(f.version||"")}));
+});
+
+function positive(value:unknown){if(typeof value!=="number"||!Number.isSafeInteger(value)||value<1)throw new Error("Invalid ID");return value;}
+ipcMain.handle("krysta:mods-download",async(_event,d:unknown,m:unknown,f:unknown)=>{
+ const game=domain(d),mod=positive(m),file=positive(f);
+ const data=await api("games/"+game+"/mods/"+mod+"/files/"+file+"/download_link.json");
+ const url=new URL(data?.[0]?.URI||"");
+ if(url.protocol!=="https:")throw new Error("Invalid download URL");
+ const choice=await dialog.showSaveDialog({defaultPath:game+"-"+mod+"-"+file+".zip",filters:[{name:"Mod archive",extensions:["zip","7z","rar"]}]});
+ if(choice.canceled||!choice.filePath)return false;
+ const response=await net.fetch(url.href,{signal:AbortSignal.timeout(300000)});
+ if(!response.ok||!response.body)throw new Error("Download failed");
+ const temp=choice.filePath+".krysta-part-"+randomUUID();
+ try{
+  await pipeline(Readable.fromWeb(response.body as import("node:stream/web").ReadableStream),createWriteStream(temp,{flags:"wx"}));
+  await fs.rename(temp,choice.filePath);
+ }finally{await fs.rm(temp,{force:true});}
+ return true;
 });
