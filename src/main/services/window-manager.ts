@@ -3,7 +3,6 @@ import { isStaging } from "@main/constants";
 import { db, gamesSublevel, levelKeys } from "@main/level";
 import originalIcon from "@resources/icon.png?asset";
 import krystaIcon from "../../../build/pobrane.ico?asset";
-import trayIconDark from "@resources/tray-icon-dark.png?asset";
 import trayIcon from "@resources/tray-icon.png?asset";
 import {
   AUTH_WINDOW_CONTENT_HEIGHT,
@@ -35,7 +34,6 @@ import {
   WebContentsView,
   app,
   nativeImage,
-  nativeTheme,
   screen,
   shell,
 } from "electron";
@@ -1589,16 +1587,8 @@ export class WindowManager {
         .resize({ width: 24, height: 24 });
       tray = new Tray(macIcon);
     } else if (process.platform === "win32") {
-      const getWindowsTrayIcon = () =>
-        nativeTheme.shouldUseDarkColorsForSystemIntegratedUI
-          ? trayIcon
-          : trayIconDark;
-
-      tray = new Tray(getWindowsTrayIcon());
-
-      nativeTheme.on("updated", () => {
-        tray.setImage(getWindowsTrayIcon());
-      });
+      // Use the same Krysta ICO as the installer and application windows.
+      tray = new Tray(krystaIcon);
     } else {
       tray = new Tray(trayIcon);
     }
