@@ -52,6 +52,47 @@ async function latestKrysta():Promise<Release|null>{
  }
  return best;
 }
+type SyncStatus={base:string|null;upstream:string|null;phase:"integrated"|"pending"|"running"|"review"|"failed"|"unknown";checkedAt:string};
+let syncCache:SyncStatus|null=null;
+let syncRequest:Promise<SyncStatus>|null=null;
+const upstreamVersion=()=>{const v=import.meta.env.MAIN_VITE_KRYSTA_HYDRA_BASE;return typeof v==="string"&&/^v?\d+\.\d+\.\d+$/.test(v)?v:null;};
+async function githubJson(endpoint:string){
+ const r=await fetch("https://api.github.com/repos/"+endpoint,{headers:{Accept:"application/vnd.github+json","User-Agent":"Krysta-Launcher"},signal:AbortSignal.timeout(15000),redirect:"error"});
+ if(!r.ok)throw Error("GitHub HTTP "+r.status);
+ return r.json();
+}
+async function syncStatus(force=false):Promise<SyncStatus>{
+ if(syncRequest)return syncRequest;
+ if(!force&&syncCache&&Date.now()-Date.parse(syncCache.checkedAt)<15*60*1000)return syncCache;
+ syncRequest=(async()=>{
+  const base=upstreamVersion(),checkedAt=new Date().toISOString();
+  let upstream:string|null=null,phase:SyncStatus["phase"]="unknown";
+  try{
+   const d=await githubJson("hydralauncher/hydra/releases/latest");
+   if(typeof d.tag_name==="string"&&/^v?\d+\.\d+\.\d+$/.test(d.tag_name))upstream=d.tag_name;
+   if(base&&upstream){
+    if(newer(upstream,base)===false)phase="integrated";
+    else{
+     // Run status is informational only; it never authorizes installing upstream binaries.
+     phase="pending";
+     try{
+      const data=await githubJson(repo+"/actions/workflows/krysta-upstream-sync.yml/runs?per_page=10");
+      const runs=Array.isArray(data.workflow_runs)?data.workflow_runs:[];
+      // A run from before the upstream release cannot describe this integration.
+      const run=runs.find((r:any)=>Date.parse(r.created_at)>=Date.parse(d.published_at));
+      if(run){if(run.status!=="completed")phase="running";
+       else if(run.conclusion==="failure"||run.conclusion==="timed_out")phase="failed";
+       else if(run.conclusion==="success")phase="review";}
+     }catch{/* Upstream version available; workflow status unavailable. */}
+    }
+   }
+  }catch{/* Keep the update channel independent from Hydra availability. */}
+  return syncCache={base,upstream,phase,checkedAt};
+ })().finally(()=>{syncRequest=null;});
+ return syncRequest;
+}
+ipcMain.handle("krysta:updates-sync-status",()=>syncStatus());
+ipcMain.handle("krysta:updates-sync-refresh",()=>syncStatus(true));
 function canDownload(){return app.isPackaged&&process.platform==="win32"&&process.arch==="x64"&&!process.env.PORTABLE_EXECUTABLE_FILE;}
 async function verified(file:string,asset:Asset){
  try{const st=await fs.lstat(file);if(!st.isFile()||st.isSymbolicLink()||st.size!==asset.size)return false;
@@ -121,4 +162,4 @@ ipcMain.handle("krysta:updates-status",()=>({...status}));
 ipcMain.handle("krysta:updates-install",install);
 ipcMain.handle("krysta:updates-set",async(_e,automatic:unknown,notifications:unknown)=>{if(typeof automatic!=="boolean"||typeof notifications!=="boolean")throw Error("Invalid preferences");const p=await changePrefs({automatic,notifications});if(p.automatic)void check().catch(()=>{});return p;});
 ipcMain.handle("krysta:updates-open",(_e,kind:unknown)=>{if(kind==="krysta")return shell.openExternal(releasePage);if(kind==="sync")return shell.openExternal("https://github.com/"+repo+"/actions/workflows/krysta-upstream-sync.yml");throw Error("Invalid destination");});
-void app.whenReady().then(()=>{const tick=()=>void prefs().then(p=>p.automatic?check():null).catch(()=>{});const first=setTimeout(tick,30000),timer=setInterval(tick,60*60*1000);app.once("before-quit",()=>{clearTimeout(first);clearInterval(timer);});});
+void app.whenReady().then(()=>{const tick=()=>void prefs().then(p=>{if(p.automatic){void syncStatus().catch(()=>{});return check();}return null;}).catch(()=>{});const first=setTimeout(tick,30000),timer=setInterval(tick,60*60*1000);app.once("before-quit",()=>{clearTimeout(first);clearInterval(timer);});});
