@@ -15,16 +15,14 @@ export function SettingsContextKrystaUpdates(){
  <h3>Krysta Launcher</h3><p>{pl?"Zainstalowana wersja":"Installed version"}: {info?.version??"—"}</p>
  <p>{pl?"Najnowsze opublikowane wydanie Krysty":"Latest published Krysta release"}: {info?info.krysta?.tag??(pl?"Brak wydania":"No release"):"—"}</p>
  <Button theme="outline" onClick={()=>open("krysta")}>{pl?"Wydania i instalatory Krysty":"Krysta releases and installers"}</Button>
- <h3>Hydra Launcher</h3><p>{pl?"Wersja bazowa (numer pakietu)":"Base version (package version)"}: {info?.version??"—"}</p>
- <p>{pl?"Najnowsze wydanie Hydry":"Latest Hydra release"}: {info?.hydra?.tag??"—"}</p>
- {info&&<p>{info.hydraNew===true?(pl?"Nowa wersja Hydry — oczekuje na integrację z Krystą.":"New Hydra version — requires integration into Krysta."):info.hydraNew===false?(pl?"Brak nowszej wersji bazowej.":"No newer upstream release."):(pl?"Nie można porównać wersji.":"Cannot compare versions.")}</p>}
+ {info?.krystaNew===true&&<p role="status">{pl?"Dostępna nowa wersja Krysty. Pobierz instalator z wydań.":"New Krysta release available. Download the installer from releases."}</p>}
  <Button theme="outline" disabled={busy} onClick={()=>void check()}>{busy?(pl?"Sprawdzanie…":"Checking…"):(pl?"Sprawdź aktualizacje":"Check for updates")}</Button>
  {info&&<p>{pl?"Ostatnie sprawdzenie":"Last checked"}: {new Date(info.checkedAt).toLocaleString(i18n.language)}</p>}
  <Button theme="outline" onClick={()=>open("sync")}>{pl?"Status integracji na GitHubie":"Integration status on GitHub"}</Button>
  <label><input type="checkbox" disabled={!prefs} checked={prefs?.automatic??false} onChange={e=>void update(e.target.checked,prefs?.notifications??true)}/> {pl?"Automatyczne sprawdzanie":"Automatic checks"}</label>
- <label><input type="checkbox" disabled={!prefs} checked={prefs?.notifications??false} onChange={e=>void update(prefs?.automatic??true,e.target.checked)}/> {pl?"Powiadomienia o nowych wersjach Hydry":"New Hydra release notifications"}</label>
+ <label><input type="checkbox" disabled={!prefs} checked={prefs?.notifications??false} onChange={e=>void update(prefs?.automatic??true,e.target.checked)}/> {pl?"Powiadomienia o nowych wersjach Krysty":"New Krysta release notifications"}</label>
  <Button theme="outline" disabled={!info} onClick={()=>setNotes(!notes)}>{pl?"Historia zmian najnowszych wydań":"Latest release notes"}</Button>
- {notes&&info&&<><h4>Krysta {info.krysta?.tag??""}</h4><p style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{info.krysta?.body??(pl?"Brak opublikowanego wydania.":"No published release.")}</p><h4>Hydra {info.hydra?.tag??""}</h4><p style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{info.hydra?.body??"—"}</p></>}
+ {notes&&info&&<><h4>Krysta {info.krysta?.tag??""}</h4><p style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{info.krysta?.body??(pl?"Brak opublikowanego wydania.":"No published release.")}</p></>}
  <p>{pl?"Instalatory Krysty otwierają się na oficjalnej stronie repozytorium. Aktualizacja Hydry nie jest instalowana automatycznie.":"Krysta installers are available from the project release page. Hydra updates are never installed here automatically."}</p>
  {error&&<p role="alert">{error}</p>}
  </div></div>;
