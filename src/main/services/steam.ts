@@ -149,12 +149,12 @@ export const getSteamAppDetails = async (
   const searchParams = new URLSearchParams({
     appids: objectId,
     l: getSteamLanguage(language),
-    cc: "us",
+    cc: getSteamLanguage(language) === "polish" ? "PL" : "US",
   });
 
   return axios
     .get<SteamAppDetailsResponse>(
-      `http://store.steampowered.com/api/appdetails?${searchParams.toString()}`
+      `https://store.steampowered.com/api/appdetails?${searchParams.toString()}`
     )
     .then((response) => parseSteamAppDetailsResponse(response.data, objectId))
     .catch((err) => {
