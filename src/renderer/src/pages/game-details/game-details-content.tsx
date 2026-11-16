@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 
 import { HeroPanel } from "./hero";
+import { KrystaGameUpdates } from "./krysta-game-updates";
 import { DescriptionHeader } from "./description-header/description-header";
 import { GallerySlider } from "./gallery-slider/gallery-slider";
 import { Sidebar } from "./sidebar/sidebar";
@@ -505,7 +506,7 @@ export function GameDetailsContent() {
           ))}
         </nav>
         {detailTab === "screenshots" && <div className="krysta-game-extra"><GallerySlider /></div>}
-        {detailTab === "updates" && <div className="krysta-game-extra"><h2>Aktualizacje / Updates</h2>{shop === "steam" && /^\d+$/.test(String(objectId)) ? <a href={`https://store.steampowered.com/news/app/${objectId}`} target="_blank" rel="noreferrer">Steam — historia aktualizacji / Patch notes</a> : <p>Brak dostępnego źródła aktualizacji / No update source available.</p>}</div>}
+        {detailTab === "updates" && <KrystaGameUpdates appId={catalogueGame?.shop === "steam" ? String(catalogueGame.objectId) : shop === "steam" ? String(objectId ?? "") : ""} title={game?.title ?? shopDetails?.name ?? ""} />}
         {detailTab === "mods" && <div className="krysta-game-extra"><h2>Mody / Mods</h2><a href={`https://www.nexusmods.com/search/?gsearch=${encodeURIComponent(game?.title ?? shopDetails?.name ?? "")}&gsearchtype=games`} target="_blank" rel="noreferrer">Nexus Mods — przeglądaj mody / Browse mods</a></div>}
         <div className="game-details__description-container" style={detailTab !== "description" ? {display:"none"} : undefined}>
           <div className="game-details__description-content">
