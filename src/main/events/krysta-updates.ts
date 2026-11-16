@@ -1,3 +1,4 @@
+import { readKrystaSettings, writeKrystaSettings } from "@main/services/krysta-settings-recovery";
 import { app, ipcMain, Notification, shell } from "electron";
 import fs from "node:fs/promises";
 import { createReadStream, createWriteStream } from "node:fs";
@@ -18,11 +19,10 @@ let status:Status={phase:"idle",version:"",received:0,total:0};
 let ready: {asset:Asset;tag:string;file:string}|null=null;
 let downloading:Promise<void>|null=null;
 let current:Promise<unknown>|null=null;
-const settings=()=>path.join(app.getPath("userData"),"krysta-updates.json");
 const cache=()=>path.join(app.getPath("userData"),"krysta-update-cache");
-async function prefs():Promise<Prefs>{try{const p=JSON.parse(await fs.readFile(settings(),"utf8"));return {automatic:p.automatic!==false,notifications:p.notifications!==false,seen:typeof p.seen==="string"?p.seen:undefined};}catch{return {automatic:true,notifications:true};}}
+async function prefs():Promise<Prefs>{return readKrystaSettings<Prefs>(app.getPath("userData"),"updates",{automatic:true,notifications:true});}
 let prefQueue:Promise<unknown>=Promise.resolve();
-function changePrefs(patch:Partial<Prefs>){const task=prefQueue.then(async()=>{const p={...await prefs(),...patch};await fs.writeFile(settings()+".tmp",JSON.stringify(p),{mode:0o600});await fs.rename(settings()+".tmp",settings());return p;});prefQueue=task.catch(()=>{});return task;}
+function changePrefs(patch:Partial<Prefs>){const task=prefQueue.then(async()=>writeKrystaSettings(app.getPath("userData"),"updates",{...await prefs(),...patch}));prefQueue=task.catch(()=>{});return task;}
 const parse=(v:string)=>/^v?(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$/.exec(v);
 export function newer(tag:string,base:string):boolean|null{
  const a=parse(tag),b=parse(base);if(!a||!b)return null;
