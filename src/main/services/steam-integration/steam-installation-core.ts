@@ -273,3 +273,21 @@ export const findSteamAppInstallDirectories = async (
 
   return installDirectories;
 };
+
+/** Local Steam client state; announcement versions are deliberately not compared to build IDs. */
+export const readSteamUpdateState = async (appId:string, libraryFolders:string[], executablePath:string) => {
+ if(!/^\d{1,10}$/.test(appId)||!executablePath)return null;
+ for(const folder of libraryFolders){
+  const manifest=path.join(folder,"steamapps",`appmanifest_${appId}.acf`);
+  const installed=await readInstalledSteamApp(folder,manifest,appId);
+  if(!installed||!isPathInsideSteamInstallDirectory(executablePath,installed.installDirectory))continue;
+  const content=await fs.promises.readFile(manifest,"utf8").catch(()=>null);
+  if(!content||readManifestValue(content,"appid")!==appId)continue;
+  const raw=readManifestValue(content,"StateFlags");
+  if(raw===null||!/^\d+$/.test(raw))continue;
+  const flags=Number(raw);
+  // UpdateRequired is bit 2 in Steam's local app state.
+  return {buildId:readManifestValue(content,"buildid"),updateRequired:(flags&2)!==0};
+ }
+ return null;
+};
