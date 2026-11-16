@@ -21,8 +21,8 @@ function recordBuild(w:Watch|undefined,smart:Pick<Watch,"steamBuildId"|"updateSt
  return {lastKnownBuildId:current,buildHistory:[{from:previous,to:current,detectedAt:smart.updateCheckedAt??new Date().toISOString()},...history].slice(0,100)};
 }
 type Store=Record<string,Watch>;
-type Settings={enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;pauseDuringPlay:boolean};
-const defaults:Settings={enabled:false,intervalHours:6,notifications:true,startup:true,pauseDuringPlay:true};
+type Settings={enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;pauseDuringPlay:boolean;autoOpenSteamQueue:boolean};
+const defaults:Settings={enabled:false,intervalHours:6,notifications:true,startup:true,pauseDuringPlay:true,autoOpenSteamQueue:false};
 const settingsFile=()=>path.join(app.getPath("userData"),"krysta-game-update-settings.json");
 async function readSettings():Promise<Settings>{
  try{return {...defaults,...JSON.parse(await fs.readFile(settingsFile(),"utf8"))};}
@@ -145,6 +145,25 @@ ipcMain.handle("krysta:game-watch-dismiss",async(_e,shop:unknown,id:unknown)=>se
  const key=keyFor(shop,id),all=await read();
  if(all[key]){all[key]={...all[key],pendingPatch:undefined};await write(all);}
 }));
+const promptedBuilds=new Map<string,string>();
+async function offerSteamQueue(){
+ const settings=await serial(readSettings);
+ if(!settings.autoOpenSteamQueue||hasTrackedGamesRunning())return;
+ const all=await serial(read);
+ const candidates: {key:string;build:string}[]=[];
+ for(const [key,w] of Object.entries(all)){
+  if(w.shop!=="steam"||!effective(w,settings)||w.updateState!=="required"){promptedBuilds.delete(key);continue;}
+  const game=await gamesSublevel.get(key);
+  if(!game||game.isDeleted)continue;
+  const live=await smartState(game);
+  if(live.updateState!=="required"){if(live.updateState==="not-reported")promptedBuilds.delete(key);continue;}
+  const build=live.steamBuildId??"unknown";
+  if(promptedBuilds.get(key)!==build)candidates.push({key,build});
+ }
+ if(!candidates.length||hasTrackedGamesRunning()||!(await serial(readSettings)).autoOpenSteamQueue)return;
+ await shell.openExternal("steam://open/downloads");
+ for(const candidate of candidates)promptedBuilds.set(candidate.key,candidate.build);
+}
 let scanning=false,lastScan=0,lastFinished:string|null=null,lastError:string|null=null;
 async function scan(){
  if(scanning)return;
@@ -161,6 +180,7 @@ async function scan(){
    await new Promise(resolve=>setTimeout(resolve,350));
   }
   lastFinished=new Date().toISOString();
+  await offerSteamQueue();
  }catch(e){lastError=String(e);}
  finally{scanning=false;}
 }
@@ -169,8 +189,8 @@ ipcMain.handle("krysta:game-watch-settings",status);
 ipcMain.handle("krysta:game-watch-settings-set",async(_e,value:unknown)=>{
  if(!value||typeof value!=="object")throw Error("Invalid settings");
  const v=value as Settings;
- if(typeof v.enabled!=="boolean"||typeof v.notifications!=="boolean"||typeof v.startup!=="boolean"||(v.pauseDuringPlay!==undefined&&typeof v.pauseDuringPlay!=="boolean")||![1,3,6,12,24].includes(v.intervalHours))throw Error("Invalid settings");
- await serial(async()=>{const old=await readSettings();await fs.writeFile(settingsFile()+".tmp",JSON.stringify({enabled:v.enabled,intervalHours:v.intervalHours,notifications:v.notifications,startup:v.startup,pauseDuringPlay:v.pauseDuringPlay??old.pauseDuringPlay}),{mode:0o600});await fs.rename(settingsFile()+".tmp",settingsFile());if(v.enabled&&!old.enabled)lastScan=0;});
+ if(typeof v.enabled!=="boolean"||typeof v.notifications!=="boolean"||typeof v.startup!=="boolean"||(v.autoOpenSteamQueue!==undefined&&typeof v.autoOpenSteamQueue!=="boolean")||(v.pauseDuringPlay!==undefined&&typeof v.pauseDuringPlay!=="boolean")||![1,3,6,12,24].includes(v.intervalHours))throw Error("Invalid settings");
+ await serial(async()=>{const old=await readSettings();await fs.writeFile(settingsFile()+".tmp",JSON.stringify({enabled:v.enabled,intervalHours:v.intervalHours,notifications:v.notifications,startup:v.startup,pauseDuringPlay:v.pauseDuringPlay??old.pauseDuringPlay,autoOpenSteamQueue:v.autoOpenSteamQueue??old.autoOpenSteamQueue}),{mode:0o600});await fs.rename(settingsFile()+".tmp",settingsFile());if(v.enabled&&!old.enabled)lastScan=0;});
  if(v.enabled&&lastScan===0)void scan();return status();
 });
 ipcMain.handle("krysta:game-watch-scan",async()=>{void scan();return status();});
