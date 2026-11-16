@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
-import { NavLink } from "react-router-dom";
-import { Gamepad2, Download, Settings } from "lucide-react";
+import { Link, NavLink, useLocation } from "react-router-dom";
+import { Gamepad2, Download, Settings, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   DashIcon,
@@ -15,6 +15,9 @@ import { MAIN_WINDOW_TITLE_BAR_HEIGHT } from "@shared";
 
 import { NavigationArrows } from "../navigation-arrows/navigation-arrows";
 import { TitleBarSearch } from "./title-bar-search";
+import { useKrystaPendingPatches, findKrystaPendingPatch } from "../../pages/library/krysta-patch-badge";
+import { useAppSelector } from "@renderer/hooks";
+import { selectGroupedLibrary } from "@renderer/features";
 import "./app-title-bar.scss";
 import "./title-bar-search.scss";
 
@@ -38,7 +41,14 @@ export function AppTitleBar({
   version,
   isWindowMaximized,
 }: Readonly<AppTitleBarProps>) {
-  const { t } = useTranslation(["header", "sidebar"]);
+  const { t, i18n } = useTranslation(["header", "sidebar"]);
+  const location = useLocation();
+  const updatesSelected = location.pathname === "/library" && new URLSearchParams(location.search).get("collection") === "__krysta_updates__";
+  const patches = useKrystaPendingPatches();
+  const games = useAppSelector(selectGroupedLibrary);
+  const patchCount = games.filter(game=>Boolean(findKrystaPendingPatch(game,patches))).length;
+  const pl = i18n.language.startsWith("pl");
+  const updatesLabel = pl ? "Gry z nowymi patchami" : "Games with new patches";
 
   const { platform, hasNativeWindowDecorations } = window.electron;
 
@@ -80,7 +90,10 @@ export function AppTitleBar({
       </div>
 
       <NavigationArrows className="title-bar__navigation" />
-      <nav className="krysta-top-nav">{[{to:"/library",icon:Gamepad2,pl:"Biblioteka",en:"Library"},{to:"/downloads",icon:Download,pl:"Pobieranie",en:"Downloads"},{to:"/settings",icon:Settings,pl:"Ustawienia",en:"Settings"}].map(({to,icon:Icon,pl,en}) => <NavLink key={to} to={to} title={window.document.documentElement.lang.startsWith("pl") ? pl : en} aria-label={pl}><Icon size={17}/><span>{window.document.documentElement.lang.startsWith("pl") ? pl : en}</span></NavLink>)}</nav>
+      <nav className="krysta-top-nav">
+        {[{to:"/library",icon:Gamepad2,pl:"Biblioteka",en:"Library"},{to:"/downloads",icon:Download,pl:"Pobieranie",en:"Downloads"},{to:"/settings",icon:Settings,pl:"Ustawienia",en:"Settings"}].map(({to,icon:Icon,pl:polish,en}) => <NavLink key={to} to={to} className={({isActive})=>isActive&&!(to==="/library"&&updatesSelected)?"active":""} onClick={()=>{if(to==="/library"&&localStorage.getItem("library-collection")==="__krysta_updates__")localStorage.removeItem("library-collection");}} title={pl?polish:en} aria-current={to==="/library"&&updatesSelected?false:undefined} aria-label={pl?polish:en}><Icon size={17}/><span>{pl?polish:en}</span></NavLink>)}
+        <Link to="/library?collection=__krysta_updates__" className={updatesSelected?"active":""} aria-current={updatesSelected?"page":undefined} title={updatesLabel} aria-label={updatesLabel+" ("+patchCount+")"}><RefreshCw size={17}/><span>{updatesLabel} ({patchCount})</span></Link>
+      </nav>
 
       <div className="title-bar__search">
         <TitleBarSearch />
