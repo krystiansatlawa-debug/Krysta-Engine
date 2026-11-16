@@ -1,3 +1,4 @@
+import { KrystaPatchBadge } from "./krysta-patch-badge";
 import { LibraryGame } from "@types";
 import { getDisplayedPlayTimeInMilliseconds } from "@shared";
 import cn from "classnames";
@@ -292,11 +293,9 @@ export const LibraryGameCard = memo(function LibraryGameCard({
             )}
           </div>
 
-          {(showUbisoftBadge || showSteamLibraryBadge ||
-            showEpicLibraryBadge ||
-            showPlatformBadge ||
-            showReadyBadge) && (
+          {(
             <div className="library-game-card__top-right">
+              <KrystaPatchBadge game={game}/>
               {(showUbisoftBadge || showSteamLibraryBadge || showEpicLibraryBadge) && (
                 <div className="library-game-card__import-badges">
                   {showUbisoftBadge && <SteamLibraryBadge source="ubisoft" />}
