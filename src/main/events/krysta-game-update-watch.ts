@@ -11,7 +11,7 @@ import { hasTrackedGamesRunning } from "@main/services/game-running-state";
 import type { GameShop, Game } from "@types";
 
 type BuildChange={from:string;to:string;detectedAt:string};
-type Watch={buildHistory?:BuildChange[];lastKnownBuildId?:string;shop:GameShop;id:string;enabled:boolean;override?:"on"|"off"|"inherit";installedVersion:string;versionSource?:"product"|"file";seen?:string[];lastChecked?:string;latestTitle?:string;latestVersion?:string;error?:string;steamId?:string;pendingPatch?:string;steamBuildId?:string;updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string};
+type Watch={buildHistory?:BuildChange[];lastKnownBuildId?:string;shop:GameShop;id:string;enabled:boolean;override?:"on"|"off"|"inherit";installedVersion:string;versionSource?:"product"|"file"|"epic-manifest"|"version-file";seen?:string[];lastChecked?:string;latestTitle?:string;latestVersion?:string;error?:string;steamId?:string;pendingPatch?:string;steamBuildId?:string;updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string};
 function recordBuild(w:Watch|undefined,smart:Pick<Watch,"steamBuildId"|"updateState"|"updateCheckedAt">){
  const previous=w?.lastKnownBuildId??w?.steamBuildId;
  const current=smart.steamBuildId;
@@ -39,7 +39,7 @@ async function write(s:Store){await fs.writeFile(filename()+".tmp",JSON.stringif
 function keyFor(shop:unknown,id:unknown){if((shop!=="steam"&&shop!=="epic"&&shop!=="custom"&&shop!=="launchbox")||typeof id!=="string"||!id||id.length>200)throw Error("Invalid game");return levelKeys.game(shop,id);}
 function version(title:string){return title.match(/\b(?:patch|hotfix|update|version|v)\s*v?(\d+(?:\.\d+){1,4})\b/i)?.[1]??null;}
 const exec=promisify(execFile);
-async function detectVersion(exe:string|null|undefined):Promise<{installedVersion:string;versionSource?:"product"|"file"}>{
+async function detectExeVersion(exe:string|null|undefined):Promise<{installedVersion:string;versionSource?:"product"|"file"}>{
  const unknown={installedVersion:""};
  if(process.platform!=="win32"||!exe||!path.isAbsolute(exe)||path.extname(exe).toLowerCase()!==".exe")return unknown;
  try{
@@ -47,9 +47,54 @@ async function detectVersion(exe:string|null|undefined):Promise<{installedVersio
   // The executable path is passed as environment data, never interpolated into PowerShell code.
   const script="$ErrorActionPreference='Stop'; $v=[System.Diagnostics.FileVersionInfo]::GetVersionInfo($env:KRYSTA_VERSION_TARGET); @{product=$v.ProductVersion;file=$v.FileVersion} | ConvertTo-Json -Compress";
   const {stdout}=await exec(path.join(process.env.SystemRoot||"C:\\Windows","System32","WindowsPowerShell","v1.0","powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-Command",script],{env:{...process.env,KRYSTA_VERSION_TARGET:exe},windowsHide:true,timeout:10000,maxBuffer:65536});
-  const v=JSON.parse(stdout);for(const source of ["product","file"] as const){const raw=v[source];if(typeof raw!=="string")continue;const match=raw.trim().match(/^v?(\d+(?:[.,]\s*\d+){1,3})$/i);if(!match)continue;const number=match[1].replace(/,\s*/g,".").replace(/\s/g,"");if(!number.split(".").some(n=>Number(n)>0))continue;return {installedVersion:number,versionSource:source};}
+  const v=JSON.parse(stdout);for(const source of ["product","file"] as const){const raw=v[source];if(typeof raw!=="string")continue;const match=raw.trim().match(/^v?(\d+(?:[.,]\s*\d+){1,4})(?:\s+\([^\r\n]{1,80}\))?$/i);if(!match)continue;const number=match[1].replace(/,\s*/g,".").replace(/\s/g,"");if(!number.split(".").some(n=>Number(n)>0))continue;return {installedVersion:number,versionSource:source};}
  }catch{/* missing or unreadable metadata */}
  return unknown;
+}
+type LocalVersion={installedVersion:string;versionSource?:"product"|"file"|"epic-manifest"|"version-file"};
+async function detectVersion(game:Game):Promise<LocalVersion>{
+ const exe=game.executablePath;
+ if(!exe||!path.isAbsolute(exe))return {installedVersion:""};
+ const real=await fs.realpath(exe).catch(()=>null);
+ if(!real||!(await fs.stat(real).catch(()=>null))?.isFile())return {installedVersion:""};
+ const normalize=(p:string)=>process.platform==="win32"?p.toLowerCase():p;
+ if(game.shop==="epic"&&process.platform==="win32"&&process.env.ProgramData){
+  const manifests=path.join(process.env.ProgramData,"Epic","EpicGamesLauncher","Data","Manifests");
+  const entries=await fs.readdir(manifests).catch(()=>[] as string[]);
+  const versions=new Set<string>();
+  for(const name of entries.filter(n=>n.endsWith(".item")).slice(0,2000)){
+   try{
+    const f=path.join(manifests,name),st=await fs.lstat(f);
+    if(!st.isFile()||st.isSymbolicLink()||st.size>2*1024**2)continue;
+    const m=JSON.parse(await fs.readFile(f,"utf8"));
+    if(m.bIsIncompleteInstall===true||typeof m.InstallLocation!=="string"||typeof m.LaunchExecutable!=="string"||typeof m.AppVersionString!=="string")continue;
+    const root=await fs.realpath(m.InstallLocation),candidate=await fs.realpath(path.resolve(root,m.LaunchExecutable));
+    if(normalize(candidate)!==normalize(real))continue;
+    const rel=path.relative(root,candidate);
+    if(!rel||rel.startsWith("..")||path.isAbsolute(rel))continue;
+    const version=m.AppVersionString.trim();
+    if(version&&version.length<=160&&!/[\r\n]/.test(version))versions.add(version);
+   }catch{/* ignore invalid manifest */}
+  }
+  if(versions.size===1)return {installedVersion:[...versions][0],versionSource:"epic-manifest"};
+ }
+ const direct=await detectExeVersion(real);
+ if(direct.installedVersion)return direct;
+ // Read only small explicit version files alongside the selected executable.
+ const versions=new Set<string>();
+ for(const name of ["version.txt","gameversion.txt","game_version.txt","version.json"]){
+  try{
+   const file=path.join(path.dirname(real),name),st=await fs.lstat(file);
+   if(!st.isFile()||st.isSymbolicLink()||st.size>16384)continue;
+   const raw=(await fs.readFile(file,"utf8")).replace(/^\uFEFF/,"").trim();
+   const value=name.endsWith(".json")?JSON.parse(raw)?.version:raw;
+   if(typeof value!=="string")continue;
+   const match=value.trim().match(/^(?:version\s*[:=]\s*)?v?(\d+(?:\.\d+){1,4})$/i);
+   if(match&&match[1].split(".").some(n=>Number(n)>0))versions.add(match[1]);
+  }catch{/* missing or invalid file */}
+ }
+ if(versions.size===1)return {installedVersion:[...versions][0],versionSource:"version-file"};
+ return {installedVersion:""};
 }
 async function smartState(game:Game):Promise<Pick<Watch,"steamBuildId"|"updateState"|"updateCheckedAt">>{
  const unknown={steamBuildId:undefined,updateState:"unknown" as const,updateCheckedAt:new Date().toISOString()};
@@ -69,7 +114,7 @@ async function perform(key:string,force=false){
   all[key]=w;await write(all);return w;
  });
  if(!snapshot)return null;
- const detected=await detectVersion(game.executablePath);
+ const detected=await detectVersion(game);
  const smart=await smartState(game);
  try{
  const result=await getGameNews(game.catalogueGame?.shop==="steam"?game.catalogueGame.objectId:snapshot.shop==="steam"?snapshot.id:snapshot.steamId??"",game.title);
@@ -95,14 +140,14 @@ const inflight=new Map<string,Promise<Watch|null>>();
 function check(key:string,force=false){const old=inflight.get(key);if(old)return old;const p=perform(key,force).finally(()=>inflight.delete(key));inflight.set(key,p);return p;}
 ipcMain.handle("krysta:game-watch-get",async(_e,shop:unknown,id:unknown)=>{
  const key=keyFor(shop,id),game=await gamesSublevel.get(key);if(!game||game.isDeleted)return null;
- const detected=await detectVersion(game.executablePath);
+ const detected=await detectVersion(game);
  const smart=await smartState(game);
  return serial(async()=>{const prior=(await read())[key],settings=await readSettings();return {...(prior??{shop:game.shop,id:game.objectId}),override:mode(prior),enabled:effective(prior,settings),...detected,...smart,versionSource:detected.versionSource};});
 });
 ipcMain.handle("krysta:game-watch-set",async(_e,shop:GameShop,id:string,override:unknown)=>{
  const key=keyFor(shop,id);if(override!=="inherit"&&override!=="on"&&override!=="off")throw Error("Invalid settings");
  const game=await gamesSublevel.get(key);if(!game||game.isDeleted)throw Error("Add this game to the library first");
- const detected=await detectVersion(game.executablePath);
+ const detected=await detectVersion(game);
  const smart=await smartState(game);
  const w=await serial(async()=>{const all=await read(),settings=await readSettings(),old=all[key];const next:Watch={...old,shop,id,override,enabled:override==="on"||(override==="inherit"&&settings.enabled),...detected,...smart,...recordBuild(old,smart),versionSource:detected.versionSource};if(override==="off")next.pendingPatch=undefined;all[key]=next;await write(all);return next;});
  if(w.enabled&&!w.seen)void check(key).catch(()=>{});return w;
