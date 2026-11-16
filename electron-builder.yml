@@ -146,7 +146,7 @@ appImage:
 npmRebuild: false
 publish:
   provider: github
-  owner: hydralauncher
-  repo: hydra
+  owner: krystiansatlawa-debug
+  repo: Krysta-Engine
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
