@@ -15,3 +15,11 @@ Logowanie Google wymaga klienta typu Desktop app i uprawnionego konta Google. Ap
 - Brak podpisu cyfrowego instalatora: hash potwierdza zgodność z plikiem na GitHubie, nie zastępuje podpisu wydawcy.
 
 Beta 1 wymaga jednorazowego ręcznego przejścia na Beta 2. Test aktualizacji między wydaniami jest wymagany przed uznaniem mechanizmu za gotowy.
+
+## Naprawa ustawień
+
+- Walidacja i automatyczne odzyskiwanie ustawień czterech modułów: Krysta Cloud, FPS, aktualizator launchera oraz monitor aktualizacji gier.
+- Zapis ostatniej poprawnej wersji do lokalnej kopii .bak; zachowanie uszkodzonego pliku .corrupt-* przed odzyskaniem.
+- W przypadku braku poprawnej kopii uszkodzone ustawienia modułu są odtwarzane z bezpiecznych wartości domyślnych.
+- Ręczne sprawdzanie i raport w Ustawienia > Ogólne > Naprawa ustawień Krysty.
+- Mechanizm nie naprawia całej bazy LevelDB, nie usuwa biblioteki, historii aktualizacji, tokenów kont ani zapisów gier. Dodano testy regresji uruchamiane przed publikacją Windows.
