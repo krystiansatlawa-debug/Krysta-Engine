@@ -44,7 +44,7 @@ ipcMain.handle("krysta:ubisoft-import", async () => {
     const objectId = "ubisoft-" + item.id;
     const shop = "custom" as const;
     const key = levelKeys.game(shop, objectId);
-    const existing = (await gamesSublevel.iterator().all()).find(([k]) => k === key)?.[1];
+    const existing = await gamesSublevel.get(key);
     if (existing && !existing.isDeleted) continue;
     await gamesShopAssetsSublevel.put(key, {
       updatedAt: Date.now(), objectId, shop, title: item.title,
@@ -55,7 +55,7 @@ ipcMain.handle("krysta:ubisoft-import", async () => {
       title: item.title, iconUrl: null, logoImageUrl: null, libraryHeroImageUrl: null,
       objectId, shop, remoteId: null, isDeleted: false, playTimeInMilliseconds: 0,
       lastTimePlayed: null, addedToLibraryAt: new Date(),
-      executablePath: item.path, executablePathUpdatedAt: new Date(),
+      executablePath: findUbisoftExecutable(item.path,item.title), executablePathUpdatedAt: new Date(),
       launchOptions: null, favorite: false, automaticCloudSync: false,
       hasManuallyUpdatedPlaytime: false,
     });
