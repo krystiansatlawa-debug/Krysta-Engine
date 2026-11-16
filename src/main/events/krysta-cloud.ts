@@ -1,5 +1,6 @@
 import { app, dialog, ipcMain } from "electron";
 import fs from "node:fs/promises";
+import { createReadStream } from "node:fs";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { gamesSublevel, levelKeys } from "@main/level";
@@ -50,7 +51,10 @@ async function backupGame(shop:GameShop,id:string,automatic=false,expected?:Conf
  const files=await discover(shop,id);if(!files.length){if(automatic)return false;throw Error("No save files detected by Ludusavi");}
  if(files.length>5000)throw Error("Too many save files");
  if(files.some(p=>within(root,p)))throw Error("Save files overlap cloud folder");
- if(!automatic){const answer=await dialog.showMessageBox({type:"question",buttons:["Cancel","Create backup"],defaultId:0,cancelId:0,message:"Create a copy of "+files.length+" detected save files in your selected cloud folder?"});if(answer.response!==1)return false;}
+ const comparison=await compareSaves(base,root,files);
+ if(automatic&&comparison.state==="same")return false;
+ if(automatic&&(comparison.state==="different"||comparison.state==="unavailable"))throw Error("SAVE_CONFLICT: Local and cloud saves differ or cannot be verified. Open Cloud saves to choose a version.");
+ if(!automatic){const answer=await dialog.showMessageBox({type:"question",buttons:["Cancel","Create backup"],defaultId:0,cancelId:0,message:comparison.state==="different"?"Local and cloud saves differ. Keep local saves as a new backup without deleting previous versions? / Zapisy różnią się. Zachować lokalne jako nową kopię?":"Create a copy of "+files.length+" detected save files in your selected cloud folder?"});if(answer.response!==1)return false;}
  if(isTrackedGameKeyRunning(key))throw Error("Game started before backup");
  await safeDirectory(root,base);const uuid=randomUUID(),temp=path.join(base,".pending-"+uuid);await fs.mkdir(temp);
  try{const entries=[];let total=0;for(const [i,p] of files.entries()){const st=await fs.stat(p);total+=st.size;if(total>5*1024**3)throw Error("Backup exceeds 5 GB");const name=String(i);await copyVerified(p,path.join(temp,name));entries.push({name,original:p,size:st.size});}if(isTrackedGameKeyRunning(key))throw Error("Game started during backup");await fs.writeFile(path.join(temp,"manifest.json"),JSON.stringify({id:uuid,createdAt:new Date().toISOString(),kind:automatic?"automatic":"manual",files:entries}));await fs.rename(temp,path.join(base,uuid));return true;}catch(e){await fs.rm(temp,{recursive:true,force:true});throw e;}
@@ -159,3 +163,52 @@ onTrackedGamesRunningChange(()=>{
  previousRunning=now;
 });
 app.on("before-quit",()=>{shuttingDown=true;for(const timer of pendingAuto.values())clearTimeout(timer);pendingAuto.clear();});
+
+type Comparison={state:"same"|"different"|"no-backup"|"unavailable";version?:string;createdAt?:string;localFiles:number;cloudFiles:number};
+async function fileHash(file:string){const h=createHash("sha256");for await(const chunk of createReadStream(file))h.update(chunk);return h.digest("hex");}
+const comparablePath=(p:string)=>process.platform==="win32"?path.normalize(p).toLowerCase():path.normalize(p);
+async function compareSaves(base:string,root:string,files:string[]):Promise<Comparison>{
+ await safeDirectory(root,base);
+ const versions:{id:string;createdAt:string;dir:string;files:unknown[]}[]=[];
+ let incomplete=false;
+ for(const id of await fs.readdir(base)){
+  if(!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(id))continue;
+  try{
+   const dir=path.join(base,id);if(await fs.realpath(dir)!==dir)throw Error("Unsafe version");
+   const mp=path.join(dir,"manifest.json"),s=await fs.lstat(mp);
+   if(!s.isFile()||s.isSymbolicLink()||s.size>8*1024**2)throw Error("Invalid manifest");
+   const m=JSON.parse(await fs.readFile(mp,"utf8"));
+   if(m.id!==id||!Array.isArray(m.files)||!m.files.length||m.files.length>5000||typeof m.createdAt!=="string"||!Number.isFinite(Date.parse(m.createdAt)))throw Error("Invalid version");
+   if(m.kind!=="before-restore")versions.push({id,createdAt:m.createdAt,dir,files:m.files});
+  }catch{incomplete=true;}
+ }
+ const latest=versions.sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt)||b.id.localeCompare(a.id))[0];
+ const result:Comparison={state:"unavailable",version:latest?.id,createdAt:latest?.createdAt,localFiles:files.length,cloudFiles:latest?.files.length??0};
+ if(incomplete)return result;
+ if(!latest)return {...result,state:"no-backup"};
+ if(!files.length)return result;
+ const locals=new Map(files.map(p=>[comparablePath(p),p]));
+ let same=locals.size===latest.files.length,total=0;
+ const seen=new Set<string>();
+ try{
+  for(const entry of latest.files){
+   const e=entry as {original?:unknown;name?:unknown;size?:unknown};
+   if(!e||typeof e.original!=="string"||typeof e.name!=="string"||!/^\d+$/.test(e.name)||typeof e.size!=="number"||!Number.isSafeInteger(e.size)||e.size<0)throw Error("Invalid entry");
+   const key=comparablePath(e.original);if(seen.has(key))throw Error("Duplicate destination");seen.add(key);
+   const src=path.join(latest.dir,e.name),st=await fs.lstat(src);
+   if(!st.isFile()||st.isSymbolicLink()||st.size!==e.size||await fs.realpath(src)!==src)throw Error("Incomplete backup");
+   total+=st.size;if(total>5*1024**3)throw Error("Too large");
+   const local=locals.get(key);
+   if(!local){same=false;continue;}
+   const before=await fs.lstat(local);if(!before.isFile()||before.isSymbolicLink()||await fs.realpath(local)!==local)throw Error("Unsafe local file");
+   if(before.size!==st.size||await fileHash(local)!==await fileHash(src))same=false;
+   const after=await fs.stat(local),remoteAfter=await fs.stat(src);
+   if(before.size!==after.size||before.mtimeMs!==after.mtimeMs||st.size!==remoteAfter.size||st.mtimeMs!==remoteAfter.mtimeMs)throw Error("Files changed while comparing");
+  }
+ }catch{return result;}
+ return {...result,state:same?"same":"different"};
+}
+ipcMain.handle("krysta:cloud-compare",async(_e,shop:GameShop,id:string)=>{
+ const {key,base,root}=await gameContext(shop,id);
+ return locked(key,async()=>{if(isTrackedGameKeyRunning(key))throw Error("Close the game before comparing saves");const files=await discover(shop,id);return compareSaves(base,root,files);});
+});
