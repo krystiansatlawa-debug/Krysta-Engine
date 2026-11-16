@@ -18,6 +18,7 @@ import {
   ShieldCheckIcon,
 } from "@primer/octicons-react";
 import { Camera, Gamepad2, Wrench } from "lucide-react";
+import { SettingsContextKrystaCloud } from "./settings-context-krysta-cloud";
 import { SettingsContextGame } from "./settings-context-game";
 import { SettingsContextGeneral } from "./settings-context-general";
 import { SettingsContextDownloads } from "./settings-context-downloads";
@@ -64,6 +65,7 @@ export default function Settings() {
         label: t("content_gameplay"),
         icon: <PlayIcon size={16} />,
       },
+      { id: "krysta_cloud" as const, label: "Krysta Cloud", icon: <CloudIcon size={16} /> },
       { id: "game" as const, label: t("krysta_game_category", { defaultValue: "Game" }), icon: <Gamepad2 size={16} /> },
       ...(isScreenshotsEnabled
         ? [
@@ -138,6 +140,7 @@ export default function Settings() {
               return <SettingsContextContentGameplay />;
             }
 
+            if (selectedCategoryId === "krysta_cloud") return <SettingsContextKrystaCloud />;
             if (selectedCategoryId === "game") return <SettingsContextGame />;
 
             if (selectedCategoryId === "screenshots") {
