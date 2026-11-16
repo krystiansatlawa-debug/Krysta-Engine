@@ -7,21 +7,39 @@ import { KrystaGameWatch } from "./krysta-game-watch";
 type News = Awaited<ReturnType<typeof window.electron.getKrystaGameNews>>["items"][number];
 function safeImage(value: string) {
   try {
-    const url = new URL(value.replace("{STEAM_CLAN_IMAGE}", "https://clan.akamai.steamstatic.com/images"));
-    if(url.protocol === "https:" && /(^|\.)(steamstatic\.com|akamaihd\.net|steamcommunity\.com|steamusercontent\.com)$/.test(url.hostname)) return url.href;
+    const expanded = value.trim()
+      .replace(/\{STEAM_CLAN_IMAGE\}/gi, "https://clan.fastly.steamstatic.com/images")
+      .replace(/\{STEAM_APP_IMAGE\}/gi, "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps")
+      .replace(/^\/\//, "https://");
+    const url = new URL(expanded);
+    if(url.protocol === "https:" && /(^|\.)(steamstatic\.com|akamaihd\.net|steamcommunity\.com|steamusercontent\.com|steamcdn-a\.akamaihd\.net|steamcontent\.com)$/.test(url.hostname)) return url.href;
   } catch { /* no valid image */ }
   return "";
+}
+function NewsThumbnail({image,appId}:{image:string;appId:string|null}) {
+  const fallback = appId && /^\d{1,10}$/.test(appId)
+    ? ["https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/"+appId+"/header.jpg",
+       "https://cdn.cloudflare.steamstatic.com/steam/apps/"+appId+"/header.jpg"] : [];
+  const sources = [...new Set([image,...fallback].filter(Boolean))];
+  const [index,setIndex] = useState(0);
+  const src = sources[index];
+  return <div className="krysta-updates__thumb">
+    <ToolsIcon size={32}/>
+    {src&&<img key={src} src={src} alt="" loading="lazy" onError={()=>setIndex(i=>i+1)}/>}
+  </div>;
 }
 function parseContent(contents: string) {
   const bbImages = /\[img(?:\s+src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\]\s]+))|=([^\]]+))?\]([\s\S]*?)\[\/img\]/gi;
   let image = "";
-  const withoutImages = contents.replace(bbImages, (_match, doubleQuoted, singleQuoted, unquoted, assigned, body) => {
+  const decoded = contents.replace(/&quot;|&#34;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&amp;/gi,"&");
+  const withoutImages = decoded.replace(bbImages, (_match, doubleQuoted, singleQuoted, unquoted, assigned, body) => {
     if (!image) image = safeImage((doubleQuoted || singleQuoted || unquoted || assigned || body || "").trim());
     return "\n";
   });
   const doc = new DOMParser().parseFromString(withoutImages, "text/html");
   doc.querySelectorAll("script,style,iframe,object,template").forEach(node=>node.remove());
-  if (!image) image = safeImage(doc.querySelector("img")?.getAttribute("src") || "");
+  if (!image) { for (const node of doc.querySelectorAll("img")) { image = safeImage(node.getAttribute("src") || node.getAttribute("data-src") || ""); if (image) break; } }
+  if (!image) { const clan = decoded.match(/\{STEAM_CLAN_IMAGE\}\/[^\s"'<>\[\]]+\.(?:jpg|jpeg|png|webp|gif)/i)?.[0]; if (clan) image = safeImage(clan); }
   doc.querySelectorAll("br").forEach(node=>node.replaceWith("\n"));
   doc.querySelectorAll("p,li,h1,h2,h3,div").forEach(node=>node.append("\n"));
   const content = (doc.body.textContent ?? "")
@@ -62,7 +80,7 @@ export function KrystaGameUpdates({appId,title,shop,objectId}:{appId:string;titl
       return <article key={item.id} className="krysta-updates__article">
         <div className="krysta-updates__date">{item.date?new Date(item.date*1000).toLocaleDateString(pl?"pl-PL":"en-US",{day:"numeric",month:"long",year:"numeric"}):""}</div>
         <button type="button" className="krysta-updates__card" aria-expanded={expanded===item.id} onClick={()=>setExpanded(expanded===item.id?null:item.id)}>
-          <div className="krysta-updates__thumb">{image?<img src={image} alt="" loading="lazy" onError={e=>{e.currentTarget.style.display="none";}}/>:null}<ToolsIcon size={32}/></div>
+          <NewsThumbnail key={item.id+":"+image+":"+resolved} image={image} appId={resolved}/>
           <div className="krysta-updates__copy"><small>{isPatch?(pl?"AKTUALIZACJA / LISTA ZMIAN":"UPDATE / PATCH NOTES"):(pl?"AKTUALNOŚCI GRY":"GAME NEWS")}</small><strong>{item.title}</strong><p>{preview.slice(0,240)}{preview.length>240?"…":""}</p></div>
           <span aria-hidden="true">{expanded===item.id?"−":"+"}</span>
         </button>
