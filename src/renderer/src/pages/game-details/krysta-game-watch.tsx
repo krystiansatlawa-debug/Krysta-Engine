@@ -15,6 +15,8 @@ export function KrystaGameWatch({shop,id}:{shop:string;id:string}){
  <small>{watch?.enabled?(pl?"Monitorowanie aktywne":"Monitoring enabled"):(pl?"Monitorowanie nieaktywne":"Monitoring disabled")}</small>
  <p>{pl?"Zainstalowana wersja (automatycznie)":"Installed version (automatic)"}: {watch?.installedVersion||(pl?"Nie wykryto":"Not detected")}</p>
  {watch?.versionSource&&<small>{pl?"Źródło: metadane EXE":"Source: EXE metadata"} ({watch.versionSource==="product"?"ProductVersion":"FileVersion"})</small>}
+ <p>{pl?"Stan aktualizacji (Steam)":"Update state (Steam)"}: <strong>{watch?.updateState==="required"?(pl?"Aktualizacja wymagana":"Update required"):watch?.updateState==="not-reported"?(pl?"Steam nie zgłasza aktualizacji":"Steam reports no update"):(pl?"Niepotwierdzony":"Unconfirmed")}</strong></p>
+ {watch?.steamBuildId&&<small>Steam Build ID: {watch.steamBuildId}</small>}
  <p>{pl?"Najnowsza wykryta wersja":"Latest detected version"}: {watch?.latestVersion??"—"}</p>
  {watch?.pendingPatch&&<div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><strong>{pl?"Nowy patch":"New patch"}: {watch.pendingPatch}</strong><button type="button" disabled={busy} onClick={()=>{void window.electron.krystaGameWatchDismiss(shop,id).then(()=>{setWatch(w=>w?{...w,pendingPatch:undefined}:w);window.dispatchEvent(new Event("krysta:patch-badges"));}).catch(e=>setNotice(String(e)));}}>{pl?"Oznacz jako przeczytany":"Mark as read"}</button></div>}
  {watch?.latestTitle&&<p>{watch.latestTitle}</p>}
