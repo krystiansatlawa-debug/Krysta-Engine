@@ -188,6 +188,7 @@ contextBridge.exposeInMainWorld("electron", {
   nexusGames: () => ipcRenderer.invoke("krysta:mods-games"),
   nexusMods: (domain:string,sort:string) => ipcRenderer.invoke("krysta:mods-list",domain,sort),
   nexusInstalled: () => ipcRenderer.invoke("krysta:mods-installed"),
+  nexusGameRoot: (gameKey:string) => ipcRenderer.invoke("krysta:mods-game-root",gameKey),
   nexusInstallLocal: (gameKey:string) => ipcRenderer.invoke("krysta:mods-install-local",gameKey),
   nexusToggle: (id:string,enabled:boolean) => ipcRenderer.invoke("krysta:mods-toggle",id,enabled),
   nexusRemove: (id:string) => ipcRenderer.invoke("krysta:mods-remove",id),
