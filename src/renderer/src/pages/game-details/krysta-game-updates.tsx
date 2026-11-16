@@ -59,6 +59,20 @@ export function KrystaGameUpdates({appId,title,shop,objectId}:{appId:string;titl
   const [failed,setFailed]=useState(false);
   const [expanded,setExpanded]=useState<string|null>(null);
   const [retry,setRetry]=useState(0);
+  const [translated,setTranslated]=useState<{id:string;title:string;content:string}|null>(null);
+  const [translationState,setTranslationState]=useState<"idle"|"loading"|"unavailable">("idle");
+  const [original,setOriginal]=useState(false);
+  const selected=items.find(item=>item.id===expanded);
+  useEffect(()=>{
+    let active=true;
+    setTranslated(null);setOriginal(false);setTranslationState("idle");
+    if(!pl||!selected)return;
+    setTranslationState("loading");
+    void window.electron.translateKrystaNews(selected.title,parseContent(selected.contents).content)
+      .then(result=>{if(active){if(result){setTranslated({id:selected.id,...result});setTranslationState("idle");}else setTranslationState("unavailable");}})
+      .catch(()=>{if(active)setTranslationState("unavailable");});
+    return ()=>{active=false;};
+  },[pl,selected]);
   const [filter,setFilter]=useState<"patch"|"news"|"all">("patch");
   const filtered=items.filter(item=>filter==="all"||item.category===filter);
   useEffect(()=>{
@@ -81,10 +95,10 @@ export function KrystaGameUpdates({appId,title,shop,objectId}:{appId:string;titl
         <div className="krysta-updates__date">{item.date?new Date(item.date*1000).toLocaleDateString(pl?"pl-PL":"en-US",{day:"numeric",month:"long",year:"numeric"}):""}</div>
         <button type="button" className="krysta-updates__card" aria-expanded={expanded===item.id} onClick={()=>setExpanded(expanded===item.id?null:item.id)}>
           <NewsThumbnail key={item.id+":"+image+":"+resolved} image={image} appId={resolved}/>
-          <div className="krysta-updates__copy"><small>{isPatch?(pl?"AKTUALIZACJA / LISTA ZMIAN":"UPDATE / PATCH NOTES"):(pl?"AKTUALNOŚCI GRY":"GAME NEWS")}</small><strong>{item.title}</strong><p>{preview.slice(0,240)}{preview.length>240?"…":""}</p></div>
+          <div className="krysta-updates__copy"><small>{isPatch?(pl?"AKTUALIZACJA / LISTA ZMIAN":"UPDATE / PATCH NOTES"):(pl?"AKTUALNOŚCI GRY":"GAME NEWS")}</small><strong>{pl&&!original&&translated?.id===item.id?translated.title:item.title}</strong><p>{preview.slice(0,240)}{preview.length>240?"…":""}</p></div>
           <span aria-hidden="true">{expanded===item.id?"−":"+"}</span>
         </button>
-        {expanded===item.id&&<div className="krysta-updates__body"><p>{content}</p>{/^https:\/\//i.test(item.url)&&<button type="button" onClick={()=>void window.electron.openExternal(item.url)}>{pl?"Oryginalny wpis":"Original announcement"}</button>}</div>}
+        {expanded===item.id&&<div className="krysta-updates__body">{pl&&translationState==="loading"&&<small role="status">Tłumaczenie na polski…</small>}{pl&&translationState==="unavailable"&&<small role="status">Tłumaczenie niedostępne — wyświetlono oryginał. Wymagana konfiguracja usługi tłumaczenia.</small>}{pl&&translated?.id===item.id&&<button type="button" onClick={()=>setOriginal(v=>!v)}>{original?"Pokaż tłumaczenie":"Pokaż oryginał"}</button>}<p>{pl&&!original&&translated?.id===item.id?translated.content:content}</p>{/^https:\/\//i.test(item.url)&&<button type="button" onClick={()=>void window.electron.openExternal(item.url)}>{pl?"Oryginalny wpis":"Original announcement"}</button>}</div>}
       </article>;
     })}
   </section>;
