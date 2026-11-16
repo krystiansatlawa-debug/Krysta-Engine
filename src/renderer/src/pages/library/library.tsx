@@ -1271,6 +1271,9 @@ export default function Library() {
                 onCategoryChange={handleCategoryChange}
               />
 
+              <Button theme={selectedCollectionId===UPDATES_COLLECTION_ID?"primary":"outline"} className="library__action" onClick={()=>handleCollectionSelect(selectedCollectionId===UPDATES_COLLECTION_ID?null:UPDATES_COLLECTION_ID)}>
+                <SyncIcon size={16}/>{document.documentElement.lang.startsWith("pl")?"Gry z nowymi patchami":"Games with new patches"} ({libraryCollections.find(c=>c.id===UPDATES_COLLECTION_ID)?.gamesCount??0})
+              </Button>
               <LibraryFiltersMenu
                 collections={libraryCollections}
                 selectedCollectionId={selectedCollectionId}
