@@ -40,6 +40,7 @@ import "./krysta-game-news";
 import "./krysta-mods";
 import "./krysta-fps";
 import "./krysta-cloud";
+import "./krysta-updates";
 import "./krysta-cloud-accounts";
 import "./screenshot-input";
 
