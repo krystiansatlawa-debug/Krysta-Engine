@@ -1267,6 +1267,7 @@
     "extraction_pkg_keys_unavailable_description": "Connect to the internet to extract a PKG for the first time."
   },
   "settings": {
+    "krysta_game_category": "Game",
     "rpcs3_config_title": "RPCS3 configuration folder",
     "rpcs3_config_description": "Krysta Launcher found more than one RPCS3 configuration folder. Choose the one this RPCS3 installation uses.",
     "shadps4_data_dir_title": "shadPS4 data folder",
