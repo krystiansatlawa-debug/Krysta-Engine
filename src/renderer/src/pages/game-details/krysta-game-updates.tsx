@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ToolsIcon } from "@primer/octicons-react";
 import "./krysta-game-updates.scss";
@@ -75,6 +75,7 @@ export function KrystaGameUpdates({appId,title,shop,objectId}:{appId:string;titl
   },[pl,selected]);
   const [filter,setFilter]=useState<"patch"|"news"|"all">("patch");
   const filtered=items.filter(item=>filter==="all"||item.category===filter);
+  const parsedItems=useMemo(()=>new Map(items.map(item=>[item.id,parseContent(item.contents)])),[items]);
   useEffect(()=>{
     let active=true;
     setLoading(true);setFailed(false);setItems([]);setResolved(null);setExpanded(null);
@@ -88,7 +89,7 @@ export function KrystaGameUpdates({appId,title,shop,objectId}:{appId:string;titl
     {shop&&objectId&&<KrystaGameWatch key={shop+":"+objectId} shop={shop} id={objectId}/>}
     <nav className="krysta-game-tabs" aria-label={pl?"Typ wpisów":"Entry type"}>{(["patch","news","all"] as const).map(type=><button key={type} type="button" aria-pressed={filter===type} onClick={()=>{setFilter(type);setExpanded(null);}}>{type==="patch"?(pl?"Aktualizacje gry":"Game updates"):type==="news"?(pl?"Aktualności":"News"):(pl?"Wszystkie":"All")} ({type==="all"?items.length:items.filter(item=>item.category===type).length})</button>)}</nav>
     {loading?<p role="status">{pl?"Pobieranie aktualizacji...":"Loading updates..."}</p>:failed?<div><p>{pl?"Nie udało się pobrać aktualizacji.":"Could not fetch updates."}</p><button type="button" onClick={()=>setRetry(n=>n+1)}>{pl?"Spróbuj ponownie":"Retry"}</button></div>:filtered.length===0?<p>{filter==="patch"?(pl?"Nie znaleziono patchy w pobranych wpisach Steam.":"No patches found in the retrieved Steam posts."):(pl?"Brak wpisów w tej kategorii.":"No posts in this category.")}</p>:filtered.map(item=>{
-      const {image,content}=parseContent(item.contents);
+      const {image,content}=parsedItems.get(item.id)??parseContent(item.contents);
       const preview=content.replace(/\s+/g," ").trim();
       const isPatch=item.category==="patch";
       return <article key={item.id} className="krysta-updates__article">
