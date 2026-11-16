@@ -1,4 +1,7 @@
-import { ipcMain, net } from "electron";
+import { app, ipcMain, net } from "electron";
+import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 type News = { id: string; title: string; date: number; contents: string; url: string; author: string; category: "patch" | "news" };
 // Normalize display-title decorations only, preserving edition and sequel identities.
@@ -40,32 +43,36 @@ export async function getGameNews(id: unknown, title: unknown) {
 ipcMain.handle("krysta:game-news",(_event,id:unknown,title:unknown)=>getGameNews(id,title));
 
  
-// Optional local Google Cloud Translation key; never included in the installer.
+// Local translation only: article text never leaves the computer.
 const translations = new Map<string, {title:string;content:string}>();
 let translationQueue: Promise<unknown> = Promise.resolve();
+async function localTranslate(title:string,content:string):Promise<{title:string;content:string}>{
+ const root=path.join(process.resourcesPath,"krysta-translate");
+ const python=path.join(root,"python.exe");
+ const helper=path.join(root,"krysta-translate.py");
+ await fs.access(python);await fs.access(helper);
+ const models=path.join(app.getPath("userData"),"translation-models");
+ return new Promise((resolve,reject)=>{
+  const child=spawn(python,["-I",helper,models],{windowsHide:true,stdio:["pipe","pipe","pipe"],cwd:root});
+  let output="",done=false;
+  const finish=(error?:Error,result?:{title:string;content:string})=>{if(done)return;done=true;clearTimeout(timer);if(error)reject(error);else resolve(result!);};
+  const timer=setTimeout(()=>{child.kill();finish(Error("Translation timeout"));},300000);
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data",chunk=>{output+=chunk;if(output.length>1000000){child.kill();finish(Error("Translation too large"));}});
+  child.stderr.resume();
+  child.on("error",finish);
+  child.stdin.on("error",finish);
+  child.on("close",code=>{try{if(code!==0)throw Error("Local translator failed");const data=JSON.parse(output);if(typeof data.title!=="string"||typeof data.content!=="string")throw Error("Invalid local translation");finish(undefined,data);}catch{finish(Error("Translation unavailable"));}});
+  child.stdin.end(JSON.stringify({title,content}),"utf8");
+ });
+}
 ipcMain.handle("krysta:news-translate",(_event,title:unknown,content:unknown)=>{
- const key=process.env.KRYSTA_TRANSLATION_API_KEY?.trim();
- if(!key)return null;
- if(typeof title!=="string"||typeof content!=="string"||title.length>1000||content.length>60000)return null;
- const cacheKey=JSON.stringify([title,content]);
- const cached=translations.get(cacheKey);
+ if(process.platform!=="win32"||typeof title!=="string"||typeof content!=="string"||title.length>1000||content.length>60000)return null;
+ const cacheKey=JSON.stringify([title,content]),cached=translations.get(cacheKey);
  if(cached)return cached;
  const task=translationQueue.then(async()=>{
   const previous=translations.get(cacheKey);if(previous)return previous;
-  const chunks=content.match(/[\s\S]{1,3500}/gu)??[];
-  const values=[title,...chunks],out:string[]=[];
-  for(let i=0;i<values.length;i+=4){
-   const q=values.slice(i,i+4);
-   const response=await net.fetch("https://translation.googleapis.com/language/translate/v2",{
-    method:"POST",headers:{"Content-Type":"application/json","X-goog-api-key":key},
-    body:JSON.stringify({q,target:"pl",format:"text"}),signal:AbortSignal.timeout(20000),redirect:"error"
-   });
-   if(!response.ok)throw Error("Translation unavailable");
-   const data=await response.json(),items=data?.data?.translations;
-   if(!Array.isArray(items)||items.length!==q.length||items.some(x=>typeof x?.translatedText!=="string"))throw Error("Invalid translation");
-   out.push(...items.map(x=>x.translatedText));
-  }
-  const result={title:out[0],content:out.slice(1).join("")};
+  const result=await localTranslate(title,content);
   if(translations.size>=64)translations.delete(translations.keys().next().value!);
   translations.set(cacheKey,result);return result;
  }).catch(()=>null);
