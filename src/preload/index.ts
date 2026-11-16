@@ -194,6 +194,7 @@ contextBridge.exposeInMainWorld("electron", {
   krystaCloudProvider: (provider:string) => ipcRenderer.invoke("krysta:cloud-provider",provider),
   krystaCloudFolder: () => ipcRenderer.invoke("krysta:cloud-folder"),
   krystaCloudList: (shop:string,id:string) => ipcRenderer.invoke("krysta:cloud-list",shop,id),
+  krystaCloudRestore: (shop:string,id:string,version:string) => ipcRenderer.invoke("krysta:cloud-restore",shop,id,version),
   krystaCloudBackup: (shop:string,id:string) => ipcRenderer.invoke("krysta:cloud-backup",shop,id),
   krystaFpsStatus: () => ipcRenderer.invoke("krysta:fps-status"),
   krystaFpsSelectTool: () => ipcRenderer.invoke("krysta:fps-select-tool"),
