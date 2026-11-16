@@ -105,6 +105,7 @@ export const LibraryGameCardLarge = memo(function LibraryGameCardLarge({
   const hideClassicsBadges =
     userPreferences?.hideLibraryClassicsBadges ?? false;
   const importSources = getLibraryPresentationImportSources(game);
+  const showUbisoftBadge = game.shop === "custom" && /^(ubi-owned-|ubisoft-)/.test(game.objectId);
   const showEpicLibraryBadge =
     importSources.epic && !userPreferences?.hideEpicLibraryBadges;
   const showSteamLibraryBadge =
@@ -480,8 +481,9 @@ export const LibraryGameCardLarge = memo(function LibraryGameCardLarge({
                 </span>
               </div>
             )}
-            {(showSteamLibraryBadge || showEpicLibraryBadge) && (
+            {(showUbisoftBadge || showSteamLibraryBadge || showEpicLibraryBadge) && (
               <div className="library-game-card-large__import-badges">
+                {showUbisoftBadge && <SteamLibraryBadge source="ubisoft" variant="large" />}
                 {showSteamLibraryBadge && (
                   <SteamLibraryBadge
                     variant="large"
