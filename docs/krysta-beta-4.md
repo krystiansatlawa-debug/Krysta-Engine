@@ -1,5 +1,7 @@
 # Krysta Launcher 1.0.0 Beta 4
 
+- Wersja lokalna gry odczytywana jest automatycznie po otwarciu zakładki aktualizacji i zmianie ścieżki EXE; informacje o patchach odświeżają się bez ręcznego klikania. Gdy brak numeru wersji, wyświetlany jest rozpoznany identyfikator kompilacji platformy (Build ID), o ile dostępny.
+
 - Do instalatora i wersji portable Windows dołączono zweryfikowany PresentMon 2.3.1 (x64). Licznik FPS automatycznie wykrywa dołączone narzędzie; ręczny wybór pozostaje opcjonalny. Pomiar wymaga zgodności z konfiguracją Windows i grą.
 
 - Kopie zapisów przed aktualizacją gier są zapisywane i weryfikowane lokalnie, niezależnie od połączenia z Google Drive, Synology lub Hydra Cloud.

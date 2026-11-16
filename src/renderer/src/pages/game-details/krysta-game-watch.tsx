@@ -2,12 +2,28 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "./krysta-game-updates.scss";
 type Watch=Awaited<ReturnType<typeof window.electron.krystaGameWatchGet>>;
-export function KrystaGameWatch({shop,id}:{shop:string;id:string}){
+export function KrystaGameWatch({shop,id,executablePath}:{shop:string;id:string;executablePath?:string|null}){
  const {i18n}=useTranslation();const pl=i18n.language.startsWith("pl");
  const [watch,setWatch]=useState<Watch>(null),[override,setOverride]=useState<"inherit"|"on"|"off">("inherit"),[ready,setReady]=useState(false),[busy,setBusy]=useState(false),[notice,setNotice]=useState("");
- useEffect(()=>{let active=true;setReady(false);setNotice("");setWatch(null);
- void window.electron.krystaGameWatchGet(shop,id).then(w=>{if(active){setWatch(w);setOverride(w?.override??"inherit");setReady(true);}}).catch(e=>{if(active)setNotice(String(e));});
- return()=>{active=false;};},[shop,id]);
+ const [autoChecking,setAutoChecking]=useState(false);
+ useEffect(()=>{
+  let active=true;setReady(false);setNotice("");setWatch(null);setBusy(false);setAutoChecking(true);
+  void (async()=>{
+   try{
+    // Local metadata appears first. Checking remote updates is automatic.
+    const local=await window.electron.krystaGameWatchGet(shop,id);
+    if(!active)return;
+    setWatch(local);setOverride(local?.override??"inherit");setReady(true);
+    if(!local||shop==="launchbox")return;
+    const checked=await window.electron.krystaGameWatchCheck(shop,id);
+    if(active&&checked){setWatch(checked);setOverride(checked.override??"inherit");}
+   }catch(e){if(active)setNotice(String(e));}
+   finally{
+    if(active){setAutoChecking(false);window.dispatchEvent(new Event("krysta:patch-badges"));}
+   }
+  })();
+  return()=>{active=false;};
+ },[shop,id,executablePath]);
  const changeMonitor=async(value:"inherit"|"on"|"off")=>{const previous=override;setOverride(value);setBusy(true);setNotice("");try{setWatch(await window.electron.krystaGameWatchSet(shop,id,value));}catch(e){setOverride(previous);setNotice(String(e));}finally{setBusy(false);window.dispatchEvent(new Event("krysta:patch-badges"));}};
  const checkNow=async()=>{setBusy(true);setNotice("");try{setWatch(await window.electron.krystaGameWatchCheck(shop,id));}catch(e){setNotice(String(e));}finally{setBusy(false);window.dispatchEvent(new Event("krysta:patch-badges"));}};
  const official=shop==="steam"||shop==="epic"||(shop==="custom"&&/^(ubi-owned-|ubisoft-)/.test(id));
@@ -23,24 +39,25 @@ export function KrystaGameWatch({shop,id}:{shop:string;id:string}){
  };
  const openClient=async()=>{setBusy(true);setNotice("");try{await window.electron.krystaGameWatchOpenClient(shop,id);}catch(e){setNotice(String(e));}finally{setBusy(false);}};
  const required=watch?.updateState==="required",noUpdate=watch?.updateState==="not-reported";
+ const displayedVersion=watch?.installedVersion||(watch?.installedBuild?((watch.installedBuildSource??"").toUpperCase()+" Build: "+watch.installedBuild):watch?.steamBuildId?"Steam Build ID: "+watch.steamBuildId:null);
  const provider=watch?.updateProvider==="gog"?"GOG":watch?.updateProvider==="epic"?"Epic Games":shop==="steam"?"Steam":null;
  const history=[...(watch?.buildHistory??[]).map(v=>({...v,label:"Steam Build ID"})),...(watch?.platformBuildHistory??[]).map(v=>({...v,label:v.source.toUpperCase()})),...(watch?.localVersionHistory??[]).map(v=>({...v,label:pl?"Lokalna":"Local"}))].sort((a,b)=>Date.parse(b.detectedAt)-Date.parse(a.detectedAt));
  return <section className="krysta-watch krysta-watch--compact">
- <header className="krysta-watch__head"><div className="krysta-watch__status"><span aria-hidden="true" className={"krysta-watch__dot "+(required?"is-required":noUpdate?"is-current":"is-unknown")}/><div><h3>{!ready?(notice?(pl?"Nie udało się sprawdzić":"Check failed"):(pl?"Sprawdzanie wersji…":"Checking version…")):required?(pl?"Dostępna aktualizacja":"Update available"):noUpdate?(pl?"Brak zgłoszonych aktualizacji":"No update reported"):(pl?"Stan aktualizacji niepotwierdzony":"Update status unconfirmed")}</h3><small>{watch?.lastChecked?(pl?"Sprawdzono: ":"Checked: ")+new Date(watch.lastChecked).toLocaleString(i18n.language):pl?"Monitor aktualizacji":"Update monitor"}</small></div></div><button type="button" disabled={!ready||busy||!watch} onClick={()=>void checkNow()}>{pl?"Sprawdź teraz":"Check now"}</button></header>
- <div className="krysta-watch__versions"><div><small>{pl?"Zainstalowana wersja":"Installed version"}</small><strong>{watch?.installedVersion||(pl?"Nieznana":"Unknown")}</strong></div><div><small>{pl?"Najnowszy ogłoszony patch":"Latest announced patch"}</small><strong>{watch?.latestVersion??"—"}</strong></div></div>
+ <header className="krysta-watch__head"><div className="krysta-watch__status"><span aria-hidden="true" className={"krysta-watch__dot "+(required?"is-required":noUpdate?"is-current":"is-unknown")}/><div><h3>{!ready?(notice?(pl?"Nie udało się sprawdzić":"Check failed"):(pl?"Wykrywanie wersji…":"Detecting version…")):autoChecking?(pl?"Sprawdzanie aktualizacji…":"Checking for updates…"):required?(pl?"Dostępna aktualizacja":"Update available"):noUpdate?(pl?"Brak zgłoszonych aktualizacji":"No update reported"):(pl?"Stan aktualizacji niepotwierdzony":"Update status unconfirmed")}</h3><small>{watch?.lastChecked?(pl?"Sprawdzono: ":"Checked: ")+new Date(watch.lastChecked).toLocaleString(i18n.language):pl?"Monitor aktualizacji":"Update monitor"}</small></div></div><button type="button" disabled={!ready||busy||autoChecking||!watch} onClick={()=>void checkNow()}>{pl?"Sprawdź teraz":"Check now"}</button></header>
+ <div className="krysta-watch__versions"><div><small>{pl?"Zainstalowana wersja":"Installed version"}</small><strong>{displayedVersion??(!ready&&!notice?(pl?"Wykrywanie…":"Detecting…"):(pl?"Nieznana":"Unknown"))}</strong></div><div><small>{pl?"Najnowszy ogłoszony patch":"Latest announced patch"}</small><strong>{watch?.latestVersion??"—"}</strong></div></div>
  {watch?.latestTitle&&<p className="krysta-watch__patch-title">{watch.latestTitle}</p>}
- {watch?.pendingPatch&&<div className="krysta-watch__actions"><small>{pl?"Nowy wpis: ":"New post: "}{watch.pendingPatch}</small><button type="button" disabled={busy} onClick={()=>{setBusy(true);void window.electron.krystaGameWatchDismiss(shop,id).then(()=>{setWatch(w=>w?{...w,pendingPatch:undefined}:w);window.dispatchEvent(new Event("krysta:patch-badges"));}).catch(e=>setNotice(String(e))).finally(()=>setBusy(false));}}>{pl?"Oznacz jako przeczytany":"Mark as read"}</button></div>}
- {official&&<div className="krysta-watch__actions"><button type="button" disabled={busy||!ready||!watch} onClick={()=>void openClient()}>{required&&shop==="steam"?(pl?"Aktualizuj w Steam":"Update in Steam"):(pl?"Otwórz klienta":"Open client")}</button>{required&&shop==="steam"&&<small>{pl?"Krysta sprawdzi kopię zapisów zgodnie z ustawieniami.":"Krysta checks save protection according to settings."}</small>}</div>}
+ {watch?.pendingPatch&&<div className="krysta-watch__actions"><small>{pl?"Nowy wpis: ":"New post: "}{watch.pendingPatch}</small><button type="button" disabled={busy||autoChecking} onClick={()=>{setBusy(true);void window.electron.krystaGameWatchDismiss(shop,id).then(()=>{setWatch(w=>w?{...w,pendingPatch:undefined}:w);window.dispatchEvent(new Event("krysta:patch-badges"));}).catch(e=>setNotice(String(e))).finally(()=>setBusy(false));}}>{pl?"Oznacz jako przeczytany":"Mark as read"}</button></div>}
+ {official&&<div className="krysta-watch__actions"><button type="button" disabled={busy||autoChecking||!ready||!watch} onClick={()=>void openClient()}>{required&&shop==="steam"?(pl?"Aktualizuj w Steam":"Update in Steam"):(pl?"Otwórz klienta":"Open client")}</button>{required&&shop==="steam"&&<small>{pl?"Krysta sprawdzi kopię zapisów zgodnie z ustawieniami.":"Krysta checks save protection according to settings."}</small>}</div>}
  <details><summary>{pl?"Ustawienia i szczegóły":"Settings and details"}</summary><div className="krysta-watch__details">
- <label>{pl?"Monitorowanie":"Monitoring"} <select value={override} disabled={!ready||busy||!watch} onChange={e=>void changeMonitor(e.target.value as "inherit"|"on"|"off")}><option value="inherit">{pl?"Ustawienia globalne":"Global settings"}</option><option value="on">{pl?"Włączone":"Enabled"}</option><option value="off">{pl?"Wyłączone":"Disabled"}</option></select></label>
+ <label>{pl?"Monitorowanie":"Monitoring"} <select value={override} disabled={!ready||busy||autoChecking||!watch} onChange={e=>void changeMonitor(e.target.value as "inherit"|"on"|"off")}><option value="inherit">{pl?"Ustawienia globalne":"Global settings"}</option><option value="on">{pl?"Włączone":"Enabled"}</option><option value="off">{pl?"Wyłączone":"Disabled"}</option></select></label>
  <small>{watch?.enabled?(pl?"Monitorowanie aktywne":"Monitoring enabled"):(pl?"Monitorowanie nieaktywne":"Monitoring disabled")}</small>
  {watch?.steamBuildId&&<p>Steam Build ID: {watch.steamBuildId}</p>}
  {provider&&<small>{pl?"Źródło statusu: ":"Status source: "}{provider}</small>}
  {watch?.versionSource&&<small>{pl?"Źródło wersji lokalnej: ":"Local version source: "}{watch.versionSource}</small>}
- {ready&&!watch?.installedVersion&&<small>{pl?"Nie odczytano numeru wersji. Sprawdź ścieżkę EXE w ustawieniach gry.":"Version unavailable. Check the executable path in game settings."}</small>}
+ {ready&&!autoChecking&&!displayedVersion&&<small>{pl?"Nie odczytano numeru wersji. Sprawdź ścieżkę EXE w ustawieniach gry.":"Version unavailable. Check the executable path in game settings."}</small>}
  <small>{pl?"Numer ogłoszonego patcha może różnić się od numeru wersji lokalnej i nie potwierdza dostępności instalatora.":"An announced patch number may differ from the installed version and does not confirm installer availability."}</small>
  <details><summary>{pl?"Historia wykrytych wersji":"Detected version history"} ({history.length})</summary>{history.length?<ul>{history.map((v,i)=><li key={v.detectedAt+":"+i}>{v.label}: {v.from} → {v.to} — {new Date(v.detectedAt).toLocaleString(i18n.language)}</li>)}</ul>:<p>{pl?"Brak wykrytych zmian.":"No detected changes."}</p>}<small>{pl?"Data wykrycia, nie data instalacji.":"Detection date, not installation date."}</small></details>
- <details><summary>{pl?"Integralność plików gry":"Game file integrity"}</summary><div className="krysta-watch__actions">{official&&<button type="button" disabled={busy||!ready||!watch} onClick={()=>void verify("official")}>{pl?"Weryfikuj w kliencie":"Verify in client"}</button>}<button type="button" disabled={busy||!ready||!watch} onClick={()=>void verify("local")}>{pl?"Sprawdź EXE (SHA-256)":"Inspect EXE (SHA-256)"}</button></div><small>{pl?"Suma EXE nie potwierdza integralności całej gry. Oficjalna weryfikacja może zastąpić zmodyfikowane pliki.":"EXE checksum does not validate the whole game. Official verification may replace modified files."}</small>{integrity&&<p role="status" style={{overflowWrap:"anywhere"}}>{integrity}</p>}</details>
+ <details><summary>{pl?"Integralność plików gry":"Game file integrity"}</summary><div className="krysta-watch__actions">{official&&<button type="button" disabled={busy||autoChecking||!ready||!watch} onClick={()=>void verify("official")}>{pl?"Weryfikuj w kliencie":"Verify in client"}</button>}<button type="button" disabled={busy||autoChecking||!ready||!watch} onClick={()=>void verify("local")}>{pl?"Sprawdź EXE (SHA-256)":"Inspect EXE (SHA-256)"}</button></div><small>{pl?"Suma EXE nie potwierdza integralności całej gry. Oficjalna weryfikacja może zastąpić zmodyfikowane pliki.":"EXE checksum does not validate the whole game. Official verification may replace modified files."}</small>{integrity&&<p role="status" style={{overflowWrap:"anywhere"}}>{integrity}</p>}</details>
  {watch?.error&&<p role="alert">{watch.error}</p>}
  </div></details>
  {notice&&<p role="status" style={{overflowWrap:"anywhere"}}>{notice}</p>}

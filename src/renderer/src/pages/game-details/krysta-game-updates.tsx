@@ -50,7 +50,7 @@ function parseContent(contents: string) {
     .replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   return { image, content };
 }
-export function KrystaGameUpdates({appId,title,shop,objectId}:{appId:string;title:string;shop?:string;objectId?:string}) {
+export function KrystaGameUpdates({appId,title,shop,objectId,executablePath}:{appId:string;title:string;shop?:string;objectId?:string;executablePath?:string|null}) {
   const {i18n}=useTranslation();
   const pl=i18n.language.startsWith("pl");
   const [items,setItems]=useState<News[]>([]);
@@ -86,7 +86,7 @@ export function KrystaGameUpdates({appId,title,shop,objectId}:{appId:string;titl
   },[appId,title,retry]);
   return <section className="krysta-updates">
     <header className="krysta-updates__header"><h2>{pl?"Aktualizacje i lista zmian":"Updates and patch notes"}</h2>{resolved&&<span>Steam</span>}</header>
-    {shop&&objectId&&<KrystaGameWatch key={shop+":"+objectId} shop={shop} id={objectId}/>}
+    {shop&&objectId&&<KrystaGameWatch key={shop+":"+objectId} shop={shop} id={objectId} executablePath={executablePath}/>}
     <nav className="krysta-game-tabs" aria-label={pl?"Typ wpisów":"Entry type"}>{(["patch","news","all"] as const).map(type=><button key={type} type="button" aria-pressed={filter===type} onClick={()=>{setFilter(type);setExpanded(null);}}>{type==="patch"?(pl?"Aktualizacje gry":"Game updates"):type==="news"?(pl?"Aktualności":"News"):(pl?"Wszystkie":"All")} ({type==="all"?items.length:items.filter(item=>item.category===type).length})</button>)}</nav>
     {loading?<p role="status">{pl?"Pobieranie aktualizacji...":"Loading updates..."}</p>:failed?<div><p>{pl?"Nie udało się pobrać aktualizacji.":"Could not fetch updates."}</p><button type="button" onClick={()=>setRetry(n=>n+1)}>{pl?"Spróbuj ponownie":"Retry"}</button></div>:filtered.length===0?<p>{filter==="patch"?(pl?"Nie znaleziono patchy w pobranych wpisach Steam.":"No patches found in the retrieved Steam posts."):(pl?"Brak wpisów w tej kategorii.":"No posts in this category.")}</p>:filtered.map(item=>{
       const {image,content}=parsedItems.get(item.id)??parseContent(item.contents);

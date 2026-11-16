@@ -212,9 +212,16 @@ const inflight=new Map<string,Promise<Watch|null>>();
 function check(key:string,force=false){const old=inflight.get(key);if(old)return old;const p=perform(key,force).finally(()=>inflight.delete(key));inflight.set(key,p);return p;}
 ipcMain.handle("krysta:game-watch-get",async(_e,shop:unknown,id:unknown)=>{
  const key=keyFor(shop,id),game=await gamesSublevel.get(key);if(!game||game.isDeleted)return null;
+ // Show the local version without waiting for provider or news network calls.
  const detected=await detectVersion(game);
- const smart=await smartState(game);
- return serial(async()=>{const prior=(await read())[key],settings=await readSettings();return {...(prior??{shop:game.shop,id:game.objectId}),override:mode(prior),enabled:effective(prior,settings),...detected,...smart,versionSource:detected.versionSource};});
+ return serial(async()=>{
+  const all=await read(),prior=all[key],settings=await readSettings();
+  const local:Watch={...prior,gameTitle:game.title,shop:game.shop,id:game.objectId,override:mode(prior),enabled:effective(prior,settings),...detected,...localHistory(prior,detected),versionSource:detected.versionSource};
+  if(game.shop!=="launchbox"){
+   all[key]=local;await write(all);
+  }
+  return local;
+ });
 });
 ipcMain.handle("krysta:game-watch-set",async(_e,shop:GameShop,id:string,override:unknown)=>{
  const key=keyFor(shop,id);if(override!=="inherit"&&override!=="on"&&override!=="off")throw Error("Invalid settings");
