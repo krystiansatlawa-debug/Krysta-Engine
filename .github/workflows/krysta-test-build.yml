@@ -36,6 +36,12 @@ jobs:
           Copy-Item scripts/krysta-translate.py $runtime
           '{"title":"Game update","content":"Fixed a crash."}' | & "$runtime/python.exe" -I "$runtime/krysta-translate.py" "$env:RUNNER_TEMP/krysta-model-test"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Record Hydra base package version
+        shell: pwsh
+        run: |
+          $base = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($base -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid Hydra base package version' }
+          "MAIN_VITE_KRYSTA_HYDRA_BASE=$base" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Build Windows without publishing
         run: yarn build:win --publish never
         env:
