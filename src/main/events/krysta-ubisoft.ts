@@ -1,3 +1,4 @@
+import { gamesSublevel, gamesShopAssetsSublevel, levelKeys } from "@main/level";
 import { ipcMain, shell } from "electron";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -28,9 +29,37 @@ async function scan() {
   return { supported:true, installed, games: [...games.values()].sort((a,b)=>a.title.localeCompare(b.title)) };
 }
 ipcMain.handle("krysta:ubisoft-scan", scan);
-ipcMain.handle("krysta:ubisoft-launch", async (_event, id: unknown) => {
+export async function launchUbisoft(id: unknown) {
   if (process.platform !== "win32" || typeof id !== "string" || !/^\d{1,12}$/.test(id)) throw new Error("Invalid Ubisoft game");
   const result = await scan();
   if (!result.installed || !result.games.some(game=>game.id===id)) throw new Error("Ubisoft game not installed");
   await shell.openExternal("uplay://launch/" + id + "/0");
+}
+ipcMain.handle("krysta:ubisoft-launch", (_event, id: unknown) => launchUbisoft(id));
+
+ipcMain.handle("krysta:ubisoft-import", async () => {
+  const result = await scan();
+  let imported = 0;
+  for (const item of result.games) {
+    const objectId = "ubisoft-" + item.id;
+    const shop = "custom" as const;
+    const key = levelKeys.game(shop, objectId);
+    const existing = (await gamesSublevel.iterator().all()).find(([k]) => k === key)?.[1];
+    if (existing && !existing.isDeleted) continue;
+    await gamesShopAssetsSublevel.put(key, {
+      updatedAt: Date.now(), objectId, shop, title: item.title,
+      iconUrl: null, libraryHeroImageUrl: "", libraryImageUrl: "",
+      logoImageUrl: "", logoPosition: null, coverImageUrl: "", downloadSources: [],
+    });
+    await gamesSublevel.put(key, {
+      title: item.title, iconUrl: null, logoImageUrl: null, libraryHeroImageUrl: null,
+      objectId, shop, remoteId: null, isDeleted: false, playTimeInMilliseconds: 0,
+      lastTimePlayed: null, addedToLibraryAt: new Date(),
+      executablePath: item.path, executablePathUpdatedAt: new Date(),
+      launchOptions: null, favorite: false, automaticCloudSync: false,
+      hasManuallyUpdatedPlaytime: false,
+    });
+    imported++;
+  }
+  return imported;
 });
