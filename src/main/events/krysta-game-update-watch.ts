@@ -4,6 +4,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { gamesSublevel, levelKeys } from "@main/level";
+import { getEpicGameInstallOptions } from "@main/services/epic";
 import { getGameNews } from "./krysta-game-news";
 import { getSteamLibraryFolders } from "@main/services/steam";
 import { readSteamUpdateState } from "@main/services/steam-integration/steam-installation-core";
@@ -98,6 +99,17 @@ async function detectVersion(game:Game):Promise<LocalVersion>{
 }
 async function smartState(game:Game):Promise<Pick<Watch,"steamBuildId"|"updateState"|"updateCheckedAt">>{
  const unknown={steamBuildId:undefined,updateState:"unknown" as const,updateCheckedAt:new Date().toISOString()};
+ if(game.shop==="epic"&&game.epicInstallation&&game.executablePath){
+  try{
+   const result=await getEpicGameInstallOptions(game.objectId,AbortSignal.timeout(25000));
+   if(result.error)return unknown;
+   const installation=game.epicInstallation;
+   const matches=result.options.filter(o=>o.artifactId===installation.artifactId&&o.platform===installation.platform&&o.installed&&o.installedVersion&&o.publishedVersion);
+   if(matches.length!==1)return unknown;
+   const option=matches[0];
+   return {...unknown,updateState:option.installedVersion!==option.publishedVersion?"required":"not-reported"};
+  }catch{return unknown;}
+ }
  if(game.shop!=="steam")return unknown;
  try{
  const found=await readSteamUpdateState(game.objectId,await getSteamLibraryFolders(),game.executablePath);
@@ -126,7 +138,7 @@ async function perform(key:string,force=false){
  const all=await read(),w=all[key],settings=await readSettings();if(!w)return null;
  const enabled=effective(w,settings);
  if(enabled&&snapshot.enabled&&settings.notifications&&Notification.isSupported()){
- if(smart.updateState==="required"&&w.updateState!=="required")new Notification({title:game.title,body:"Steam: aktualizacja wymagana / Update required"}).show();
+ if(smart.updateState==="required"&&w.updateState!=="required")new Notification({title:game.title,body:(game.shop==="epic"?"Epic Games":"Steam")+": aktualizacja wymagana / Update required"}).show();
  const fresh=newItems.filter(x=>!w.seen?.includes(x.id));
  if(fresh.length)new Notification({title:game.title,body:"Nowy patch / New patch: "+fresh[0].title}).show();
  }
@@ -134,7 +146,7 @@ async function perform(key:string,force=false){
  const next={...w,enabled,pendingPatch:enabled?(freshPatch?.title??w.pendingPatch):undefined,...detected,...smart,...recordBuild(w,smart),versionSource:detected.versionSource,steamId:result.appId??undefined,lastChecked:new Date().toISOString(),latestTitle:latest?.title,latestVersion:latest?version(latest.title)??undefined:undefined,seen:[...new Set([...patches.map(x=>x.id),...(w.seen??[])])].slice(0,500),error:undefined};
  all[key]=next;await write(all);return next;
  });
- }catch(e){return serial(async()=>{const all=await read(),w=all[key];if(!w)return null;all[key]={...w,...detected,...smart,...recordBuild(w,smart),versionSource:detected.versionSource,error:String(e)};await write(all);return all[key];});}
+ }catch(e){return serial(async()=>{const all=await read(),w=all[key];if(!w)return null;if(effective(w,await readSettings())&&snapshot.enabled&&smart.updateState==="required"&&w.updateState!=="required"&&(await readSettings()).notifications&&Notification.isSupported())new Notification({title:game.title,body:(game.shop==="epic"?"Epic Games":"Steam")+": aktualizacja wymagana / Update required"}).show();all[key]={...w,...detected,...smart,...recordBuild(w,smart),versionSource:detected.versionSource,error:String(e)};await write(all);return all[key];});}
 }
 const inflight=new Map<string,Promise<Watch|null>>();
 function check(key:string,force=false){const old=inflight.get(key);if(old)return old;const p=perform(key,force).finally(()=>inflight.delete(key));inflight.set(key,p);return p;}
@@ -182,7 +194,7 @@ ipcMain.handle("krysta:game-watch-badges",()=>serial(async()=>{
    }catch{/* retain last checked status when local state cannot be read */}
   }
   if(!required&&!w.pendingPatch)continue;
-  badges.push({shop:w.shop,id:w.id,gameTitle:game.title,title:required?"Steam: update required":w.pendingPatch!,kind:required?"required":"patch",downloadPercent});
+  badges.push({shop:w.shop,id:w.id,gameTitle:game.title,title:required?(game.shop==="epic"?"Epic Games: update required":"Steam: update required"):w.pendingPatch!,kind:required?"required":"patch",downloadPercent});
  }
  return badges;
 }));
