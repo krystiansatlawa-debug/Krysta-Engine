@@ -128,7 +128,7 @@ async function list(dir:string):Promise<Clip[]>{
  return clips.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
 }
 async function persist(a:Active,result:Result,names:string[]){
- if(!result||typeof result.data!=="string"||result.data.length>Math.ceil(maxBytes/3)*4+4||!Number.isFinite(result.duration)||result.duration<1||result.duration>a.prefs.seconds+a.prefs.preSeconds+4)return;
+ if(!result||typeof result.data!=="string"||result.data.length>Math.ceil(maxBytes/3)*4+4||!Number.isFinite(result.duration)||result.duration<1||result.duration>a.prefs.seconds+a.prefs.preSeconds+4)throw Error("Recording incomplete or too short");
  const bytes=Buffer.from(result.data,"base64");
  if(!bytes.length||bytes.length>maxBytes||bytes.subarray(0,4).toString("hex")!=="1a45dfa3")throw Error("Invalid WebM recording");
  const dir=folder(a.prefs);
@@ -143,8 +143,10 @@ async function writeClip(dir:string,clip:Clip,bytes:Uint8Array){
  const file=path.join(dir,clip.id+".webm"),info=path.join(dir,clip.id+".json");
  let wroteVideo=false,wroteInfo=false;
  try{
-  await fs.writeFile(file,bytes,{flag:"wx"});wroteVideo=true;
-  await fs.writeFile(info,JSON.stringify(clip),{flag:"wx",mode:0o600});wroteInfo=true;
+  const video=await fs.open(file,"wx");wroteVideo=true;
+  try{await video.writeFile(bytes);}finally{await video.close();}
+  const metadata=await fs.open(info,"wx",0o600);wroteInfo=true;
+  try{await metadata.writeFile(JSON.stringify(clip));}finally{await metadata.close();}
  }catch(e){
   if(wroteVideo)await fs.rm(file,{force:true}).catch(()=>{});
   if(wroteInfo)await fs.rm(info,{force:true}).catch(()=>{});
@@ -228,6 +230,7 @@ async function trigger(expected:string|null,names:string[]){
   a=await ensure(expected);
   if(!a||a.stopped||a.saving||(expected&&a.key!==expected)||!await sameForeground(a))return;
   if(!await enoughSpace(a.prefs,8*1024**2,true))throw Error("Recording storage limit or insufficient space");
+  if(a.stopped||!await sameForeground(a))return;
   a.saving=true;pendingKey=a.key;
   const result=await Promise.race([
    a.win.webContents.executeJavaScript("globalThis.krystaSave()") as Promise<Result>,

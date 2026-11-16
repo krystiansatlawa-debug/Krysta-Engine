@@ -21,8 +21,26 @@ export async function trimWebm(url:string,start:number,end:number,audio:boolean,
   const loaded=waitFor(video,"loadeddata",signal);video.src=url;await loaded;
   if(Number.isFinite(video.duration)&&end>video.duration+0.2)throw Error("Trim range exceeds clip duration");
   if(start>0.05){
-   const seeked=waitFor(video,"seeked",signal);video.currentTime=start;await seeked;
-   if(Math.abs(video.currentTime-start)>0.6)throw Error("Clip cannot be seeked accurately");
+   try{
+    const seeked=waitFor(video,"seeked",signal,4000);video.currentTime=start;await seeked;
+    if(Math.abs(video.currentTime-start)>0.25)throw Error("Clip cannot be seeked accurately");
+   }catch(error){
+    if(signal.aborted)throw error;
+    // Some MediaRecorder WebM files lack seek metadata. Decode forward instead.
+    video.removeAttribute("src");video.load();
+    const ready=waitFor(video,"loadeddata",signal);video.src=url;await ready;
+    await new Promise<void>((resolve,reject)=>{
+     let tick:ReturnType<typeof setInterval>,deadline:ReturnType<typeof setTimeout>;
+     const clean=()=>{clearInterval(tick);clearTimeout(deadline);signal.removeEventListener("abort",cancel);video.removeEventListener("ended",fail);video.pause();};
+     const fail=()=>{clean();reject(Error("Cannot reach trim start"));};
+     const cancel=()=>{clean();reject(Error("Trim cancelled"));};
+     tick=setInterval(()=>{if(video.currentTime>=start){clean();resolve();}},30);
+     deadline=setTimeout(fail,(start+12)*1000);
+     signal.addEventListener("abort",cancel,{once:true});video.addEventListener("ended",fail,{once:true});
+     if(signal.aborted){cancel();return;}
+     void video.play().catch(fail);
+    });
+   }
   }
   const capture=video.captureStream??video.mozCaptureStream;
   if(!capture)throw Error("Local video export unavailable");
