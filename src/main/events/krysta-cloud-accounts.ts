@@ -99,3 +99,93 @@ export async function uploadCloudSnapshot(provider:DirectProvider,identity:strin
   }
  }else throw Error("Cloud account unavailable");
 }
+
+type RemoteManifest={id:string;createdAt:string;files:{name:string;original:string;size:number}[]};
+const uuidPattern=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
+async function boundedBody(response:Response,limit:number){
+ if(!response.ok)throw Error("Cloud download failed ("+response.status+")");
+ const reader=response.body?.getReader();if(!reader)throw Error("Missing cloud response");
+ const chunks:Buffer[]=[];let total=0;
+ try{while(true){const {done,value}=await reader.read();if(done)break;total+=value.byteLength;if(total>limit)throw Error("Cloud response exceeds size limit");chunks.push(Buffer.from(value));}}
+ finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+ return Buffer.concat(chunks);
+}
+function validateRemoteManifest(value:unknown,id:string):RemoteManifest{
+ const m=value as RemoteManifest;
+ if(!m||m.id!==id||typeof m.createdAt!=="string"||!Number.isFinite(Date.parse(m.createdAt))||!Array.isArray(m.files)||!m.files.length||m.files.length>5000)throw Error("Invalid cloud manifest");
+ const names=new Set<string>();let total=0;
+ for(const f of m.files){
+  if(!f||typeof f.name!=="string"||!/^\d+$/.test(f.name)||names.has(f.name)||typeof f.original!=="string"||!Number.isSafeInteger(f.size)||f.size<0||f.size>64*1024**2)throw Error("Invalid cloud save entry");
+  names.add(f.name);total+=f.size;if(total>5*1024**3)throw Error("Cloud snapshot too large");
+ }
+ return m;
+}
+async function remoteCloud(provider:DirectProvider,identity:string,gameKey:string){
+ if(!/^[a-f0-9]{64}$/.test(gameKey)||await directCloudIdentity(provider)!==identity)throw Error("Cloud account changed");
+ const c=await read(),account=c[provider];
+ if(!account||createHash("sha256").update(JSON.stringify(account)).digest("hex")!==identity)throw Error("Cloud account changed");
+ if(provider==="google"&&c.google){
+  const g=c.google,t=await tokenRequest({client_id:g.clientId,client_secret:g.clientSecret,refresh_token:g.refreshToken,grant_type:"refresh_token"});
+  if(!t.access_token)throw Error("Google access token unavailable");
+  const auth={Authorization:"Bearer "+t.access_token};
+  async function list(q:string){
+   const result:{id:string;name:string}[]=[];let page="";
+   do{
+    const params=new URLSearchParams({q,fields:"nextPageToken,files(id,name)",pageSize:"100"});
+    if(page)params.set("pageToken",page);
+    const res=await fetch("https://www.googleapis.com/drive/v3/files?"+params,{headers:auth,redirect:"error",signal:AbortSignal.timeout(30000)});
+    const data=JSON.parse((await boundedBody(res,2*1024**2)).toString("utf8"));
+    if(!Array.isArray(data.files))throw Error("Invalid Drive list");
+    for(const f of data.files)if(typeof f.id==="string"&&/^[\w-]+$/.test(f.id)&&typeof f.name==="string")result.push(f);
+    page=data.nextPageToken??"";if(result.length>10000)throw Error("Cloud history too large");
+   }while(page);
+   return result;
+  }
+  const roots=await list("trashed = false and mimeType = 'application/vnd.google-apps.folder' and name = 'Krysta Cloud'");
+  if(roots.length>1)throw Error("Multiple Krysta Cloud folders");
+  const folders=roots.length?await list("trashed = false and '"+roots[0].id+"' in parents and mimeType = 'application/vnd.google-apps.folder' and name contains '"+gameKey+"-'"):[];
+  const snapshots=folders.filter(f=>f.name.startsWith(gameKey+"-")&&uuidPattern.test(f.name.slice(65)));
+  return {ids:snapshots.map(f=>f.name.slice(65)),get:async(id:string,name:string,limit:number)=>{
+   const matches=snapshots.filter(f=>f.name===gameKey+"-"+id);if(matches.length!==1)throw Error("Cloud snapshot missing or ambiguous");
+   const children=await list("trashed = false and '"+matches[0].id+"' in parents and name = '"+name+"'");
+   if(!children.length)return null;if(children.length!==1)throw Error("Duplicate cloud file");
+   return boundedBody(await fetch("https://www.googleapis.com/drive/v3/files/"+children[0].id+"?alt=media",{headers:auth,redirect:"error",signal:AbortSignal.timeout(120000)}),limit);
+  }};
+ }
+ if(provider==="synology"&&c.synology){
+  const nas=c.synology,root=new URL(nas.url);if(root.protocol!=="https:"||root.username||root.password||root.search||root.hash)throw Error("Unsafe NAS URL");
+  if(!root.pathname.endsWith("/"))root.pathname+="/";
+  const cloud=new URL("Krysta%20Cloud/",root),auth={Authorization:"Basic "+Buffer.from(nas.username+":"+nas.password).toString("base64")};
+  const res=await fetch(cloud,{method:"PROPFIND",headers:{...auth,Depth:"1"},redirect:"error",signal:AbortSignal.timeout(30000)});
+  const xml=res.status===404?"":(await boundedBody(res,8*1024**2)).toString("utf8");if(res.status===404)await res.body?.cancel();
+  const ids=new Set<string>();
+  for(const match of xml.matchAll(/<(?:[\w.-]+:)?href\b[^>]*>([^<]+)<\/(?:[\w.-]+:)?href>/gi)){
+   try{const u=new URL(match[1].replace(/&amp;/g,"&"),cloud),name=decodeURIComponent(u.pathname.replace(/\/$/,"").split("/").pop()??"");if(u.origin===cloud.origin&&u.pathname.startsWith(cloud.pathname)&&name.startsWith(gameKey+"-")&&uuidPattern.test(name.slice(65)))ids.add(name.slice(65));}catch{/* invalid href */}
+  }
+  return {ids:[...ids],get:async(id:string,name:string,limit:number)=>{
+   const response=await fetch(new URL(gameKey+"-"+id+"/"+name,cloud),{headers:auth,redirect:"error",signal:AbortSignal.timeout(120000)});
+   if(response.status===404){await response.body?.cancel();return null;}return boundedBody(response,limit);
+  }};
+ }
+ throw Error("Cloud account unavailable");
+}
+export async function listRemoteCloudSnapshots(provider:DirectProvider,identity:string,gameKey:string){
+ const remote=await remoteCloud(provider,identity,gameKey),results:RemoteManifest[]=[];
+ for(const id of [...new Set(remote.ids)]){
+  const bytes=await remote.get(id,"manifest.json",8*1024**2);if(!bytes)continue;
+  results.push(validateRemoteManifest(JSON.parse(bytes.toString("utf8")),id));
+ }
+ return results.sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt));
+}
+export async function downloadCloudSnapshot(provider:DirectProvider,identity:string,gameKey:string,id:string,dir:string){
+ if(!uuidPattern.test(id))throw Error("Invalid snapshot ID");
+ const remote=await remoteCloud(provider,identity,gameKey);
+ if(!remote.ids.includes(id))throw Error("Cloud snapshot not found");
+ const bytes=await remote.get(id,"manifest.json",8*1024**2);if(!bytes)throw Error("Incomplete cloud snapshot");
+ const m=validateRemoteManifest(JSON.parse(bytes.toString("utf8")),id);
+ for(const f of m.files){
+  const content=await remote.get(id,f.name,f.size);if(!content||content.length!==f.size)throw Error("Incomplete cloud save");
+  await fs.writeFile(path.join(dir,f.name),content,{flag:"wx",mode:0o600});
+ }
+ await fs.writeFile(path.join(dir,"manifest.json"),bytes,{flag:"wx",mode:0o600});
+}
