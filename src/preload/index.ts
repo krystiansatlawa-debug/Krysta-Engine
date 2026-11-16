@@ -194,6 +194,7 @@ contextBridge.exposeInMainWorld("electron", {
   nexusInstall: (domain:string,mod:number,file:number,gameKey:string) => ipcRenderer.invoke("krysta:mods-install-nexus",domain,mod,file,gameKey),
   nexusUpdates: (gameKey:string) => ipcRenderer.invoke("krysta:mods-updates",gameKey),
   nexusApplyUpdate: (id:string) => ipcRenderer.invoke("krysta:mods-apply-update",id),
+  nexusRequirements: (domain:string,mod:number,gameKey:string) => ipcRenderer.invoke("krysta:mods-requirements",domain,mod,gameKey),
   nexusDownload: (domain:string,id:number,file:number) => ipcRenderer.invoke("krysta:mods-download",domain,id,file),
   nexusFiles: (domain:string,id:number) => ipcRenderer.invoke("krysta:mods-files",domain,id),
   getKrystaGameNews: (id: string, title: string) => ipcRenderer.invoke("krysta:game-news", id, title),
