@@ -53,6 +53,7 @@ export default function Notifications() {
   const [isLoading, setIsLoading] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
   const [filter, setFilter] = useState<NotificationFilter>("all");
+  const [category,setCategory]=useState<"all"|"updates"|"cloud"|"errors"|"other">("all");
   const [pagination, setPagination] = useState({
     total: 0,
     hasMore: false,
@@ -221,8 +222,8 @@ export default function Notifications() {
   }, [visibleApiNotifications, localNotifications, filter]);
 
   const displayedNotifications = useMemo(() => {
-    return mergedNotifications;
-  }, [mergedNotifications]);
+    return mergedNotifications.filter(n=>category==="all"||(category==="updates"&&n.source==="local"&&["KRYSTA_PATCH","KRYSTA_UPDATE","UPDATE_AVAILABLE"].includes(n.type))||(category==="cloud"&&n.source==="local"&&n.type==="KRYSTA_CLOUD")||(category==="errors"&&n.source==="local"&&n.type==="KRYSTA_ERROR")||(category==="other"&&(n.source==="api"||!["KRYSTA_PATCH","KRYSTA_UPDATE","UPDATE_AVAILABLE","KRYSTA_CLOUD","KRYSTA_ERROR"].includes(n.type))));
+  }, [mergedNotifications,category]);
 
   const notifyCountChange = useCallback(
     (detail?: NotificationsChangedDetail) => {
@@ -357,7 +358,7 @@ export default function Notifications() {
       clearingTimeoutsRef.current = [];
 
       // Snapshot current notifications for staggered removal
-      const notificationsToRemove = [...displayedNotifications];
+      const notificationsToRemove = [...mergedNotifications];
       const totalNotifications = notificationsToRemove.length;
 
       if (totalNotifications === 0) {
@@ -394,7 +395,7 @@ export default function Notifications() {
       clearingTimeoutsRef.current = [];
     }
   }, [
-    displayedNotifications,
+    mergedNotifications,
     isClearing,
     removeNotificationWithDelay,
     userDetails,
@@ -512,7 +513,7 @@ export default function Notifications() {
     </div>
   );
 
-  const hasNoNotifications = mergedNotifications.length === 0;
+  const hasNoNotifications = displayedNotifications.length === 0;
   const shouldDisableActions = isClearing || hasNoNotifications;
   const hasApiUnread = apiNotifications.some((n) => !n.isRead);
   const shouldDisableMarkAllAsRead =
@@ -545,6 +546,7 @@ export default function Notifications() {
           </div>
         </div>
 
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",padding:"8px 0"}}>{(["all","updates","cloud","errors","other"] as const).map(value=><Button key={value} theme="outline" onClick={()=>setCategory(value)} disabled={category===value}>{(i18n.language.startsWith("pl")?{all:"Wszystkie",updates:"Aktualizacje",cloud:"Krysta Cloud",errors:"Błędy",other:"Pozostałe"}:{all:"All",updates:"Updates",cloud:"Krysta Cloud",errors:"Errors",other:"Other"})[value]}</Button>)}</div>
         {/* Keep AnimatePresence mounted during clearing to preserve exit animations */}
         <AnimatePresence mode="wait">
           <motion.div
