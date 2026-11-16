@@ -43,3 +43,59 @@ ipcMain.handle("krysta:cloud-synology-connect",(_e,url:unknown,username:unknown,
  await write({...await read(),synology:{url:u.toString(),username,password}});return true;
 }));
 ipcMain.handle("krysta:cloud-account-disconnect",(_e,provider:unknown)=>exclusive(async()=>{const c=await read();if(provider==="google")delete c.google;else if(provider==="synology")delete c.synology;else throw Error("Invalid provider");await write(c);return true;}));
+
+type DirectProvider="google"|"synology";
+export async function directCloudIdentity(provider:DirectProvider){
+ const c=await read();
+ const account=c[provider];
+ if(!account)throw Error("Connect the selected cloud account first");
+ return createHash("sha256").update(JSON.stringify(account)).digest("hex");
+}
+export async function uploadCloudSnapshot(provider:DirectProvider,identity:string,gameKey:string,snapshotId:string,dir:string,names:string[]){
+ const c=await read(),account=c[provider];
+ if(!account||createHash("sha256").update(JSON.stringify(account)).digest("hex")!==identity)throw Error("Cloud account changed");
+ if(!/^[a-f0-9]{64}$/.test(gameKey)||!/^[a-f0-9-]{36}$/.test(snapshotId)||names.some(n=>!/^\d+$/.test(n)))throw Error("Invalid snapshot identity");
+ const files=[...names,"manifest.json"];
+ // Bound memory per upload; the manifest is committed last, never overwriting an older snapshot.
+ async function payload(name:string){
+  const p=path.join(dir,name),st=await fs.lstat(p);
+  if(!st.isFile()||st.isSymbolicLink()||st.size>64*1024**2)throw Error("Individual cloud save file exceeds 64 MB or is unsafe");
+  return fs.readFile(p);
+ }
+ if(provider==="google"&&c.google){
+  const g=c.google,t=await tokenRequest({client_id:g.clientId,client_secret:g.clientSecret,refresh_token:g.refreshToken,grant_type:"refresh_token"});
+  if(!t.access_token)throw Error("Google access token unavailable");
+  const auth={Authorization:"Bearer "+t.access_token};
+  async function createFolder(name:string,parent?:string){
+   const response=await fetch("https://www.googleapis.com/drive/v3/files?fields=id",{method:"POST",headers:{...auth,"Content-Type":"application/json"},body:JSON.stringify({name,mimeType:"application/vnd.google-apps.folder",...(parent?{parents:[parent]}:{})}),redirect:"error",signal:AbortSignal.timeout(30000)});
+   if(!response.ok)throw Error("Google Drive folder creation failed ("+response.status+")");
+   const data=await response.json() as {id?:string};if(!data.id)throw Error("Missing Google folder ID");return data.id;
+  }
+  const q="trashed = false and mimeType = 'application/vnd.google-apps.folder' and name = 'Krysta Cloud'";
+  const list=await fetch("https://www.googleapis.com/drive/v3/files?"+new URLSearchParams({q,fields:"files(id),nextPageToken",pageSize:"100"}),{headers:auth,redirect:"error",signal:AbortSignal.timeout(30000)});
+  if(!list.ok)throw Error("Google Drive folder lookup failed ("+list.status+")");
+  const data=await list.json() as {files?:{id:string}[];nextPageToken?:string};
+  if(data.nextPageToken||(data.files?.length??0)>1)throw Error("Multiple Krysta Cloud folders; resolve ambiguity in Drive");
+  const root=data.files?.[0]?.id??await createFolder("Krysta Cloud");
+  const folder=await createFolder(gameKey+"-"+snapshotId,root);
+  for(const name of files){
+   const bytes=await payload(name),boundary="krysta_"+randomBytes(18).toString("hex");
+   const body=Buffer.concat([Buffer.from("--"+boundary+"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"+JSON.stringify({name,parents:[folder]})+"\r\n--"+boundary+"\r\nContent-Type: application/octet-stream\r\n\r\n"),bytes,Buffer.from("\r\n--"+boundary+"--\r\n")]);
+   const response=await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",{method:"POST",headers:{...auth,"Content-Type":"multipart/related; boundary="+boundary},body:new Uint8Array(body),redirect:"error",signal:AbortSignal.timeout(120000)});
+   await response.body?.cancel();if(!response.ok)throw Error("Google Drive upload failed ("+response.status+")");
+  }
+ }else if(provider==="synology"&&c.synology){
+  const nas=c.synology,root=new URL(nas.url);if(root.protocol!=="https:"||root.username||root.password||root.search||root.hash)throw Error("Unsafe NAS URL");
+  if(!root.pathname.endsWith("/"))root.pathname+="/";
+  const auth={Authorization:"Basic "+Buffer.from(nas.username+":"+nas.password).toString("base64")};
+  const cloud=new URL("Krysta%20Cloud/",root),snapshot=new URL(gameKey+"-"+snapshotId+"/",cloud);
+  for(const u of [cloud,snapshot]){
+   const response=await fetch(u,{method:"MKCOL",headers:auth,redirect:"error",signal:AbortSignal.timeout(30000)});
+   await response.body?.cancel();if(response.status!==201&&response.status!==405)throw Error("WebDAV folder creation failed ("+response.status+")");
+  }
+  for(const name of files){
+   const response=await fetch(new URL(name,snapshot),{method:"PUT",headers:{...auth,"Content-Type":"application/octet-stream","If-None-Match":"*"},body:new Uint8Array(await payload(name)),redirect:"error",signal:AbortSignal.timeout(120000)});
+   await response.body?.cancel();if(!response.ok)throw Error("WebDAV upload failed ("+response.status+")");
+  }
+ }else throw Error("Cloud account unavailable");
+}
