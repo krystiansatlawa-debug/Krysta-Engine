@@ -65,7 +65,6 @@ export function GallerySlider() {
   );
   const autoplayEnabled = userPreferences?.autoplayGameTrailers !== false;
 
-  const hasScreenshots = shopDetails && shopDetails.screenshots?.length;
 
   const [emblaRef, emblaApi] = useEmblaCarousel({
     loop: false,
@@ -187,26 +186,16 @@ export function GallerySlider() {
     return items;
   }, [shopDetails, t]);
 
-  const previews = useMemo(() => {
-    const screenshotPreviews =
-      shopDetails?.screenshots?.map(({ id, path_thumbnail }) => ({
-        id,
-        thumbnail: path_thumbnail,
-        type: "image" as const,
-      })) ?? [];
+  const hasMedia = mediaItems.length > 0;
 
-    if (shopDetails?.movies) {
-      const moviePreviews = shopDetails.movies.map(({ id, thumbnail }) => ({
-        id,
-        thumbnail,
-        type: "video" as const,
-      }));
-
-      return [...moviePreviews, ...screenshotPreviews];
-    }
-
-    return screenshotPreviews;
-  }, [shopDetails]);
+  const previews = useMemo(
+    () => mediaItems.map(({ id, thumbnail, type, poster }) => ({
+      id,
+      thumbnail: thumbnail ?? poster,
+      type,
+    })),
+    [mediaItems]
+  );
 
   const videoHostsRef = useRef(new Map<string, GalleryVideoHost>());
   mediaItemsRef.current = mediaItems;
@@ -299,7 +288,7 @@ export function GallerySlider() {
     observer.observe(container);
 
     return () => observer.disconnect();
-  }, [hasScreenshots]);
+  }, [hasMedia]);
 
   useEffect(() => {
     if (lightbox) return undefined;
@@ -356,7 +345,7 @@ export function GallerySlider() {
     };
   }, [lightbox, mediaItems, selectedIndex, openLightbox]);
 
-  if (!hasScreenshots) {
+  if (!hasMedia) {
     return null;
   }
 
