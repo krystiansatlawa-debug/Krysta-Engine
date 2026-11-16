@@ -1,4 +1,6 @@
 import type { CSSProperties } from "react";
+import { NavLink } from "react-router-dom";
+import { ShoppingCart, Gamepad2, Download, Settings } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   DashIcon,
@@ -59,7 +61,7 @@ export function AppTitleBar({
       <div className="title-bar__brand">
         {hasCustomFrame && (
           <h4>
-            Krysta
+            <span className="krysta-mark" aria-hidden="true">K</span> Krysta
             {hasActiveSubscription && (
               <span className="title-bar__cloud-text"> Cloud</span>
             )}
@@ -78,6 +80,7 @@ export function AppTitleBar({
       </div>
 
       <NavigationArrows className="title-bar__navigation" />
+      <nav className="krysta-top-nav">{[{to:"/shop",icon:ShoppingCart,pl:"Sklep",en:"Store"},{to:"/library",icon:Gamepad2,pl:"Biblioteka",en:"Library"},{to:"/downloads",icon:Download,pl:"Pobieranie",en:"Downloads"},{to:"/settings",icon:Settings,pl:"Ustawienia",en:"Settings"}].map(({to,icon:Icon,pl,en}) => <NavLink key={to} to={to} title={window.document.documentElement.lang.startsWith("pl") ? pl : en} aria-label={pl}><Icon size={17}/><span>{window.document.documentElement.lang.startsWith("pl") ? pl : en}</span></NavLink>)}</nav>
 
       <div className="title-bar__search">
         <TitleBarSearch />
