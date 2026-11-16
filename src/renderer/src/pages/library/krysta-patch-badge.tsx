@@ -7,8 +7,8 @@ const listeners=new Set<()=>void>();
 let snapshot:Patch[]=[];
 let timer:ReturnType<typeof setInterval>|undefined;
 let busy=false;
-function refresh(){if(busy)return;busy=true;void window.electron.krystaGameWatchBadges().then(value=>{if(JSON.stringify(value)!==JSON.stringify(snapshot)){snapshot=value;listeners.forEach(fn=>fn());}}).catch(()=>{}).finally(()=>{busy=false;});}
-function subscribe(fn:()=>void){listeners.add(fn);if(!timer){refresh();timer=setInterval(refresh,15000);window.addEventListener("focus",refresh);window.addEventListener("krysta:patch-badges",refresh);}return()=>{listeners.delete(fn);if(!listeners.size&&timer){clearInterval(timer);timer=undefined;window.removeEventListener("focus",refresh);window.removeEventListener("krysta:patch-badges",refresh);}};}
+function refresh(){if(busy||document.hidden)return;busy=true;void window.electron.krystaGameWatchBadges().then(value=>{if(JSON.stringify(value)!==JSON.stringify(snapshot)){snapshot=value;listeners.forEach(fn=>fn());}}).catch(()=>{}).finally(()=>{busy=false;});}
+function subscribe(fn:()=>void){listeners.add(fn);if(!timer){refresh();timer=setInterval(refresh,15000);window.addEventListener("focus",refresh);document.addEventListener("visibilitychange",refresh);window.addEventListener("krysta:patch-badges",refresh);}return()=>{listeners.delete(fn);if(!listeners.size&&timer){clearInterval(timer);timer=undefined;window.removeEventListener("focus",refresh);document.removeEventListener("visibilitychange",refresh);window.removeEventListener("krysta:patch-badges",refresh);}};}
 const getSnapshot=()=>snapshot;
 export const useKrystaPendingPatches=()=>useSyncExternalStore(subscribe,getSnapshot);
 export function findKrystaPendingPatch(game:LibraryGame,patches:Patch[]){
