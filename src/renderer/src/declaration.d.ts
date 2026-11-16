@@ -187,6 +187,8 @@ declare global {
   };
 
   interface Electron {
+    scanUbisoft: () => Promise<{supported:boolean; installed:boolean; games:{id:string; title:string; path:string}[]}>;
+    launchUbisoft: (id:string) => Promise<void>;
     onCloudSaveAutomaticSyncModeChanged: (
       callback: (event: CloudSaveAutomaticSyncModeChangedEvent) => void
     ) => () => void;
