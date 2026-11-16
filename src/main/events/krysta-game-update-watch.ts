@@ -1,5 +1,5 @@
 import { readKrystaSettings, writeKrystaSettings } from "@main/services/krysta-settings-recovery";
-import { app, ipcMain, shell, net } from "electron";
+import { app, dialog, ipcMain, shell, net } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createReadStream } from "node:fs";
@@ -231,7 +231,16 @@ ipcMain.handle("krysta:game-watch-open-client",async(_e,shop:unknown,id:unknown)
  if((await serial(readSettings)).pauseDuringPlay&&hasTrackedGamesRunning())throw Error("Zamknij uruchomione gry przed przejściem do aktualizacji / Close running games before opening updates");
  if(game.shop==="steam"&&/^\d+$/.test(game.objectId)){
   const state=await smartState(game);
-  if(state.updateState==="required"){await protectUpdate(game,await serial(readSettings));return shell.openExternal("steam://open/downloads");}
+  if(state.updateState==="required"){
+   const settings=await serial(readSettings);
+   try{await protectUpdate(game,settings,true);}catch(e){
+    if(!String(e).includes("KRYSTA_NO_SAVE_FILES"))throw e;
+    const answer=await dialog.showMessageBox({type:"warning",title:"Krysta Launcher",message:"Nie wykryto zapisów gry / No save files detected",detail:"Krysta nie mogła znaleźć plików zapisów. Możesz otworzyć aktualizacje Steam bez kopii na własną odpowiedzialność albo anulować. / Krysta could not detect save files. Continue without a backup or cancel.",buttons:["Anuluj / Cancel","Otwórz aktualizacje Steam bez kopii / Continue without backup"],defaultId:0,cancelId:0,noLink:true});
+    if(answer.response!==1)return;
+   }
+   if(hasTrackedGamesRunning())throw Error("Zamknij uruchomione gry / Close running games");
+   return shell.openExternal("steam://open/downloads");
+  }
   return shell.openExternal("steam://nav/games/details/"+game.objectId);
  }
  if(game.shop==="epic")return shell.openExternal("com.epicgames.launcher://library");
@@ -310,10 +319,10 @@ ipcMain.handle("krysta:game-watch-dismiss",async(_e,shop:unknown,id:unknown)=>se
  const key=keyFor(shop,id),all=await read();
  if(all[key]){all[key]={...all[key],pendingPatch:undefined};await write(all);}
 }));
-async function protectUpdate(game:Game,settings:Settings){
+async function protectUpdate(game:Game,settings:Settings,manual=false){
  if(!settings.backupBeforeUpdate)return;
  if(hasTrackedGamesRunning())throw Error("Gra jest uruchomiona / Game is running");
- try{if(!await backupBeforeGameUpdate(game.shop,game.objectId))throw Error("Nie wykonano kopii zapisów / Save backup not completed");}catch(e){await publishKrystaNotification("KRYSTA_ERROR",game.title,"Aktualizacja wstrzymana — nie wykonano kopii zapisów / Update blocked — save backup failed",settings.notifications);throw e;}
+ try{if(!await backupBeforeGameUpdate(game.shop,game.objectId))throw Error("Nie wykonano kopii zapisów / Save backup not completed");}catch(e){if(!(manual&&String(e).includes("KRYSTA_NO_SAVE_FILES")))await publishKrystaNotification("KRYSTA_ERROR",game.title,"Aktualizacja wstrzymana — nie wykonano lokalnej kopii zapisów / Update blocked — local save backup failed",settings.notifications).catch(()=>{});throw e;}
  if(hasTrackedGamesRunning())throw Error("Gra uruchomiona podczas kopii / Game started during backup");
 }
 const promptedBuilds=new Map<string,string>();
