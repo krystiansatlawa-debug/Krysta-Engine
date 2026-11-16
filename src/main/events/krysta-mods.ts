@@ -5,7 +5,9 @@ import { constants, createWriteStream, renameSync, promises as fs } from "node:f
 import { randomUUID, createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { join, basename } from "node:path";
+import { gamesSublevel, levelKeys } from "@main/level";
+import { findGameRootFromExe, isUnsafePath } from "./helpers/find-game-root";
+import { join, basename, isAbsolute } from "node:path";
 const keyPath=()=>join(app.getPath("userData"),"krysta-nexus.enc");
 function key(){try{return safeStorage.decryptString(readFileSync(keyPath()));}catch{return "";}}
 async function api(path:string, token=key()){
@@ -71,8 +73,8 @@ async function exclusive<T>(work:()=>Promise<T>){if(modifying)throw new Error("A
 ipcMain.handle("krysta:mods-installed",()=>records().map(({id,name,root,gameKey,enabled,nexus})=>({id,name,root,gameKey,enabled:enabled!==false,nexus})));
 ipcMain.handle("krysta:mods-install-local",(_event,gameKey:unknown)=>exclusive(async()=>{
  const archive=await dialog.showOpenDialog({properties:["openFile"],filters:[{name:"Mod archive",extensions:["zip","7z","rar"]}]});if(archive.canceled)return false;
- const folder=await dialog.showOpenDialog({title:"Select game installation directory",properties:["openDirectory"]});if(folder.canceled)return false;
- const root=await fs.realpath(folder.filePaths[0]), source=archive.filePaths[0];
+ const root=await chooseGameRoot(gameKey);if(!root)return false;
+ const source=archive.filePaths[0];
  const entries=await SevenZip.listEntries(source);
  if(!entries.length||entries.length>2000||entries.some(e=>e.encrypted||e.size>128*1024*1024)||entries.reduce((n,e)=>n+e.size,0)>1024*1024*1024)throw new Error("Unsupported archive");
  const seen=new Set<string>();
@@ -212,9 +214,7 @@ ipcMain.handle("krysta:mods-install-nexus",(_event,d:unknown,m:unknown,f:unknown
  const n={domain:domain(d),modId:positive(m),fileId:positive(f),version:""};
  const info=await fileInfo(n.domain,n.modId,n.fileId);n.version=String(info.version||"");
  if(records().some(x=>x.gameKey===gameKey&&x.nexus?.domain===n.domain&&x.nexus?.modId===n.modId))throw new Error("Mod already installed; use update");
- const folder=await dialog.showOpenDialog({title:"Select game installation directory",properties:["openDirectory"]});
- if(folder.canceled)return false;
- const root=await fs.realpath(folder.filePaths[0]);
+ const root=await chooseGameRoot(gameKey);if(!root)return false;
  if(!await confirmRequirements(n.domain,n.modId,gameKey,root))return false;
  const confirm=await dialog.showMessageBox({type:"warning",buttons:["Cancel","Install"],defaultId:0,cancelId:0,message:"Install "+String(info.name||"mod")+" into "+root+"?",detail:"Only install trusted mods. Simple archives relative to the game folder are supported."});
  if(confirm.response!==1)return false;
@@ -281,4 +281,41 @@ async function confirmRequirements(d:string,m:number,g:string,root:string){
  }catch{detail="Nexus requirements could not be verified. Check the mod author’s instructions.";}
  const choice=await dialog.showMessageBox({type:"warning",buttons:["Cancel","Continue anyway"],defaultId:0,cancelId:0,message:"Mod dependencies require attention",detail});
  return choice.response===1;
+}
+
+async function validRoot(value:string){
+ if(!isAbsolute(value))return null;
+ try{const root=await fs.realpath(value);return (await fs.stat(root)).isDirectory()&&!isUnsafePath(root)?root:null;}catch{return null;}
+}
+async function detectGameRoot(gameKey:unknown):Promise<{path:string;source:"library"|"previous"}|null>{
+ if(typeof gameKey!=="string"||gameKey.length>250)return null;
+ const match=/^(steam|epic|custom|launchbox):(.+)$/.exec(gameKey);
+ if(!match||match[1]==="launchbox")return null;
+ const shop=match[1] as "steam"|"epic"|"custom";
+ const game=await gamesSublevel.get(levelKeys.game(shop,match[2])).catch(()=>undefined);
+ if(game&&!game.isDeleted&&game.executablePath&&isAbsolute(game.executablePath)){
+  try{
+   const stat=await fs.stat(game.executablePath);
+   const candidate=stat.isDirectory()&&shop==="custom"&&match[2].startsWith("ubisoft-")?game.executablePath:stat.isFile()?await findGameRootFromExe(game.executablePath):null;
+   const root=candidate?await validRoot(candidate):null;
+   if(root)return {path:root,source:"library"};
+  }catch{/* stale executable */}
+ }
+ const previous=[...new Set(records().filter(m=>m.gameKey===gameKey).map(m=>m.root))];
+ if(previous.length===1){const root=await validRoot(previous[0]);if(root)return {path:root,source:"previous"};}
+ return null;
+}
+ipcMain.handle("krysta:mods-game-root",(_event,gameKey:unknown)=>detectGameRoot(gameKey));
+async function chooseGameRoot(gameKey:unknown){
+ const detected=await detectGameRoot(gameKey);
+ if(detected){
+  const answer=await dialog.showMessageBox({type:"question",buttons:["Use detected folder","Choose another folder","Cancel"],defaultId:0,cancelId:2,message:"Detected game directory",detail:detected.path});
+  if(answer.response===2)return null;
+  if(answer.response===0)return validRoot(detected.path);
+ }
+ const folder=await dialog.showOpenDialog({title:"Select game installation directory",defaultPath:detected?.path,properties:["openDirectory"]});
+ if(folder.canceled||!folder.filePaths[0])return null;
+ const root=await validRoot(folder.filePaths[0]);
+ if(!root)throw new Error("Invalid or unsafe game directory");
+ return root;
 }
