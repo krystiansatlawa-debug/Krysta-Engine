@@ -204,6 +204,7 @@ declare global {
     krystaCloudAccountStatus: () => Promise<{google:boolean;synology:boolean;googleConfigured:boolean}>;
     krystaCloudGoogleConnect: () => Promise<boolean>;
     krystaCloudGoogleConnectJson: () => Promise<boolean>;
+    krystaCloudOpenPreUpdateFolder: () => Promise<void>;
     krystaCloudSynologyConnect: (url:string,username:string,password:string) => Promise<boolean>;
     krystaCloudAccountDisconnect: (provider:string) => Promise<boolean>;
     installUbisoftGame: (id:string) => Promise<"client"|"launched">;
