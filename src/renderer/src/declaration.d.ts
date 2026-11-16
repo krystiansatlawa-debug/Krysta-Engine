@@ -193,6 +193,12 @@ declare global {
     connectUbisoftAccount: () => Promise<UbisoftAccountState>;
     syncUbisoftAccount: () => Promise<UbisoftAccountState>;
     disconnectUbisoftAccount: () => Promise<UbisoftAccountState>;
+    nexusStatus: () => Promise<{connected:boolean}>;
+    nexusConnect: (key:string) => Promise<{connected:boolean;name:string;premium:boolean}>;
+    nexusDisconnect: () => Promise<void>;
+    nexusGames: () => Promise<{name:string;domain:string}[]>;
+    nexusMods: (domain:string,sort:string) => Promise<{id:number;name:string;summary:string;version:string;picture:string;author:string}[]>;
+    nexusFiles: (domain:string,id:number) => Promise<{id:number;name:string;version:string}[]>;
     getKrystaGameNews: (id: string, title: string) => Promise<{appId:string|null;items:{id:string;title:string;date:number;contents:string;url:string;author:string}[]}>;
     scanUbisoft: () => Promise<{supported:boolean; installed:boolean; games:{id:string; title:string; path:string}[]}>;
     launchUbisoft: (id:string) => Promise<void>;
