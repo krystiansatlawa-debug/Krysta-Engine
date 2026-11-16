@@ -202,6 +202,7 @@ declare global {
     krystaCloudGoogleConnect: () => Promise<boolean>;
     krystaCloudSynologyConnect: (url:string,username:string,password:string) => Promise<boolean>;
     krystaCloudAccountDisconnect: (provider:string) => Promise<boolean>;
+    installUbisoftGame: (id:string) => Promise<"client"|"launched">;
     krystaUpdatesCheck: () => Promise<{version:string;hydra:{tag:string;body:string;publishedAt:string}|null;krysta:{tag:string;body:string;publishedAt:string}|null;hydraNew:boolean|null;krystaNew:boolean|null;checkedAt:string}>;
     krystaUpdatesPrefs: () => Promise<{automatic:boolean;notifications:boolean}>;
     krystaUpdatesSet: (automatic:boolean,notifications:boolean) => Promise<{automatic:boolean;notifications:boolean}>;
