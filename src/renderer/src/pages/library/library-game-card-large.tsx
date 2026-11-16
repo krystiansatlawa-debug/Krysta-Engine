@@ -1,3 +1,4 @@
+import { KrystaPatchBadge } from "./krysta-patch-badge";
 import cn from "classnames";
 import { getLibraryPresentationImportSources } from "./library-category";
 
@@ -461,6 +462,7 @@ export const LibraryGameCardLarge = memo(function LibraryGameCardLarge({
           )}
 
           <div className="library-game-card-large__top-right">
+            <KrystaPatchBadge game={game}/>
             <GameVisibilityBadge
               variant="large"
               isHiddenFromOthers={game.isHiddenFromOthers}
