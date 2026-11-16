@@ -5,7 +5,7 @@ export function SettingsContextKrystaCloud(){
  const {i18n}=useTranslation();const pl=i18n.language.startsWith("pl");
  const [cfg,setCfg]=useState<{provider:string;folder?:string;autoBackup?:boolean;syncBeforeLaunch?:boolean}|null>(null);
  const [busy,setBusy]=useState(false);const [error,setError]=useState(false);
- const [accounts,setAccounts]=useState<{google:boolean;synology:boolean}|null>(null);
+ const [accounts,setAccounts]=useState<{google:boolean;synology:boolean;googleConfigured?:boolean}|null>(null);
  const [nasUrl,setNasUrl]=useState("");
  const [nasUser,setNasUser]=useState("");
  const [nasPassword,setNasPassword]=useState("");
@@ -39,8 +39,9 @@ export function SettingsContextKrystaCloud(){
  {(cfg?.provider==="google"||cfg?.provider==="synology")&&<><h3>{pl?"Połączenia z chmurą":"Cloud connections"}</h3>
  <p>{pl?"Połącz wybranego dostawcę. Kopie z tego komputera są przesyłane bezpośrednio; lokalna historia pozostaje dostępna.":"Connect your provider. Backups from this computer upload directly; local history remains available."}</p>
  {cfg.provider==="google"&&<><h4>Google Drive</h4>
- <p>{pl?"Wybierz plik JSON klienta OAuth typu aplikacja komputerowa z własnego projektu Google Cloud z włączonym Drive API.":"Select a desktop OAuth client JSON from your own Google Cloud project with Drive API enabled."}</p>
- <Button theme="outline" disabled={busy||!accounts} onClick={()=>void accountAction(()=>accounts?.google?window.electron.krystaCloudAccountDisconnect("google"):window.electron.krystaCloudGoogleConnect())}>{accounts?.google?(pl?"Odłącz Google Drive":"Disconnect Google Drive"):(pl?"Połącz konto Google":"Connect Google account")}</Button>
+ {accounts&&!accounts.google&&!accounts.googleConfigured&&<p role="status">{pl?"Logowanie Google wymaga konfiguracji OAuth w kompilacji Krysty.":"Google sign-in requires OAuth configuration in this Krysta build."}</p>}
+ <p>{pl?"Zaloguj się do Google w przeglądarce i zezwól Krystie na zapisywanie kopii gier.":"Sign in to Google in your browser and allow Krysta to store game backups."}</p>
+ <Button theme="outline" disabled={busy||!accounts||(!accounts.google&&!accounts.googleConfigured)} onClick={()=>void accountAction(()=>accounts?.google?window.electron.krystaCloudAccountDisconnect("google"):window.electron.krystaCloudGoogleConnect())}>{accounts?.google?(pl?"Odłącz Google Drive":"Disconnect Google Drive"):(pl?"Połącz konto Google":"Connect Google account")}</Button>
  </>}{cfg.provider==="synology"&&<><h4>Synology NAS (WebDAV HTTPS)</h4>
  {accounts?.synology?<Button theme="outline" disabled={busy} onClick={()=>void accountAction(()=>window.electron.krystaCloudAccountDisconnect("synology"))}>{pl?"Odłącz Synology":"Disconnect Synology"}</Button>:<>
  <input aria-label="WebDAV HTTPS URL" placeholder="https://nas.example.org:5006/Backups/" value={nasUrl} onChange={e=>setNasUrl(e.target.value)} disabled={busy} style={{background:"#202020",color:"inherit",padding:10,border:"1px solid #555",borderRadius:6}}/>
