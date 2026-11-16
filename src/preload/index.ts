@@ -199,7 +199,7 @@ contextBridge.exposeInMainWorld("electron", {
   krystaGameWatchGet: (shop:string,id:string) => ipcRenderer.invoke("krysta:game-watch-get",shop,id),
   krystaGameWatchSet: (shop:string,id:string,override:"inherit"|"on"|"off") => ipcRenderer.invoke("krysta:game-watch-set",shop,id,override),
   krystaGameWatchSettings: () => ipcRenderer.invoke("krysta:game-watch-settings"),
-  krystaGameWatchSettingsSet: (value:{enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;pauseDuringPlay?:boolean}) => ipcRenderer.invoke("krysta:game-watch-settings-set",value),
+  krystaGameWatchSettingsSet: (value:{enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;pauseDuringPlay?:boolean;autoOpenSteamQueue?:boolean}) => ipcRenderer.invoke("krysta:game-watch-settings-set",value),
   krystaGameWatchScan: () => ipcRenderer.invoke("krysta:game-watch-scan"),
   krystaGameWatchCheck: (shop:string,id:string) => ipcRenderer.invoke("krysta:game-watch-check",shop,id),
   krystaGameWatchOpenClient: (shop:string,id:string) => ipcRenderer.invoke("krysta:game-watch-open-client",shop,id),
