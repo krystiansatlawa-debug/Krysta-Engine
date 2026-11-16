@@ -1,7 +1,8 @@
 import { is } from "@electron-toolkit/utils";
 import { isStaging } from "@main/constants";
 import { db, gamesSublevel, levelKeys } from "@main/level";
-import icon from "@resources/icon.png?asset";
+import originalIcon from "@resources/icon.png?asset";
+import krystaIcon from "../../../build/pobrane.ico?asset";
 import trayIconDark from "@resources/tray-icon-dark.png?asset";
 import trayIcon from "@resources/tray-icon.png?asset";
 import {
@@ -142,7 +143,7 @@ export class WindowManager {
       height: WindowManager.DEFAULT_WINDOW_HEIGHT,
       minWidth: WindowManager.MIN_WINDOW_WIDTH,
       minHeight: WindowManager.MIN_WINDOW_HEIGHT,
-      icon,
+      icon: process.platform === "win32" ? krystaIcon : originalIcon,
       // Centers the traffic lights in the title bar.
       trafficLightPosition: { x: 16, y: 13 },
       show: false,
@@ -567,7 +568,7 @@ export class WindowManager {
       width: targetBounds.width,
       height: targetBounds.height,
       backgroundColor: "#0a0a0a",
-      icon,
+      icon: process.platform === "win32" ? krystaIcon : originalIcon,
       frame: false,
       show: false,
       webPreferences: {
@@ -635,7 +636,7 @@ export class WindowManager {
       maximizable: false,
       backgroundColor: "#1c1c1c",
       frame: this.hasNativeWindowDecorations,
-      icon,
+      icon: process.platform === "win32" ? krystaIcon : originalIcon,
       webPreferences: this.getDecoratedWindowWebPreferences(),
       show: false,
     });
@@ -776,7 +777,7 @@ export class WindowManager {
       fullscreenable: false,
       backgroundColor: "#1c1c1c",
       frame: this.hasNativeWindowDecorations,
-      icon,
+      icon: process.platform === "win32" ? krystaIcon : originalIcon,
       webPreferences: this.getDecoratedWindowWebPreferences(),
       show: false,
     });
@@ -1239,7 +1240,7 @@ export class WindowManager {
       maximizable: false,
       resizable: false,
       frame: false,
-      icon,
+      icon: process.platform === "win32" ? krystaIcon : originalIcon,
       backgroundColor: "#1c1c1c",
       webPreferences: {
         preload: path.join(__dirname, "../preload/index.mjs"),
@@ -1326,7 +1327,7 @@ export class WindowManager {
       resizable: false,
       minimizable: layout.minimizable,
       frame: layout.frame,
-      icon,
+      icon: process.platform === "win32" ? krystaIcon : originalIcon,
       webPreferences: this.getDecoratedWindowWebPreferences(),
     });
 
@@ -1404,7 +1405,7 @@ export class WindowManager {
         minHeight: 540,
         backgroundColor: "#1c1c1c",
         titleBarStyle: process.platform === "linux" ? "default" : "hidden",
-        icon,
+        icon: process.platform === "win32" ? krystaIcon : originalIcon,
         trafficLightPosition: { x: 16, y: 16 },
         titleBarOverlay: {
           symbolColor: "#DADBE1",
@@ -1486,7 +1487,7 @@ export class WindowManager {
       fullscreenable: false,
       frame: false,
       backgroundColor: "#1c1c1c",
-      icon,
+      icon: process.platform === "win32" ? krystaIcon : originalIcon,
       skipTaskbar: false,
       webPreferences: {
         preload: path.join(__dirname, "../preload/index.mjs"),
