@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, safeStorage, shell } from "electron";
+import { app, ipcMain, safeStorage, shell } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash, randomBytes } from "node:crypto";
@@ -10,13 +10,11 @@ async function write(c:Credentials){if(!safeStorage.isEncryptionAvailable()||saf
 let busy=false;
 async function exclusive<T>(fn:()=>Promise<T>){if(busy)throw Error("Account operation already running");busy=true;try{return await fn();}finally{busy=false;}}
 async function tokenRequest(params:Record<string,string>){const r=await fetch("https://oauth2.googleapis.com/token",{method:"POST",body:new URLSearchParams(params),signal:AbortSignal.timeout(30000),redirect:"error"});if(!r.ok)throw Error("Google authorization failed ("+r.status+")");return await r.json() as {access_token?:string;refresh_token?:string};}
-ipcMain.handle("krysta:cloud-account-status",async()=>{const c=await read();return {google:!!c.google,synology:!!c.synology};});
+ipcMain.handle("krysta:cloud-account-status",async()=>{const c=await read();return {google:!!c.google,synology:!!c.synology,googleConfigured:Boolean(import.meta.env.MAIN_VITE_KRYSTA_GOOGLE_CLIENT_ID&&import.meta.env.MAIN_VITE_KRYSTA_GOOGLE_CLIENT_SECRET)};});
 ipcMain.handle("krysta:cloud-google-connect",()=>exclusive(async()=>{
  if(!safeStorage.isEncryptionAvailable())throw Error("Secure storage unavailable");
- const selection=await dialog.showOpenDialog({title:"Select Google Desktop OAuth client JSON",properties:["openFile"],filters:[{name:"Google OAuth JSON",extensions:["json"]}]});
- if(selection.canceled||!selection.filePaths[0])return false;
- const f=selection.filePaths[0];if((await fs.stat(f)).size>65536)throw Error("Invalid client config");
- const installed=JSON.parse(await fs.readFile(f,"utf8")).installed;
+ const installed={client_id:import.meta.env.MAIN_VITE_KRYSTA_GOOGLE_CLIENT_ID,client_secret:import.meta.env.MAIN_VITE_KRYSTA_GOOGLE_CLIENT_SECRET};
+ if(!installed.client_id||!installed.client_secret)throw Error("Krysta: Google OAuth is not configured in this build / Logowanie Google nie zostało skonfigurowane w tej kompilacji.");
  if(typeof installed?.client_id!=="string"||!installed.client_id.endsWith(".apps.googleusercontent.com")||typeof installed.client_secret!=="string")throw Error("Desktop OAuth client required");
  const verifier=randomBytes(48).toString("base64url"),state=randomBytes(32).toString("base64url");
  let callback:(code:string)=>void=()=>{},rejectCallback:(e:Error)=>void=()=>{};
