@@ -1,6 +1,12 @@
 import { ipcMain, net } from "electron";
 
 type News = { id: string; title: string; date: number; contents: string; url: string; author: string; category: "patch" | "news" };
+// Normalize display-title decorations only, preserving edition and sequel identities.
+export function normalizeNewsTitle(value:string){
+ return value.normalize("NFKD").toLowerCase().replace(/[\u0300-\u036f]/g,"")
+  .replace(/\((?:tm|r|c)\)/g,"").replace(/[™®©]/g,"")
+  .replace(/[^a-z0-9]/g,"");
+}
 function category(x:{title:string;tags?:unknown}):"patch"|"news" {
   const tags=Array.isArray(x.tags)?x.tags.map(t=>String(t).toLowerCase()):[];
   if(tags.some(t=>/^(patchnotes|patch_notes|patch-notes|hotfix)$/.test(t))) return "patch";
@@ -16,8 +22,8 @@ export async function getGameNews(id: unknown, title: unknown) {
     const res = await net.fetch(q.toString(), {signal:AbortSignal.timeout(15000)});
     if(!res.ok) throw new Error("Steam search unavailable");
     const data = await res.json();
-    const normalize = (s:string) => s.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]/g,"");
-    const match = (Array.isArray(data.items) ? data.items : []).find((g:{name?:string;id?:number}) => typeof g.name==="string" && normalize(g.name)===normalize(title));
+    const matches = (Array.isArray(data.items) ? data.items : []).filter((g:{name?:string;id?:number}) => typeof g.name==="string" && normalizeNewsTitle(g.name)===normalizeNewsTitle(title));
+    const match = matches.length===1?matches[0]:undefined;
     if(match && /^\d{1,10}$/.test(String(match.id))) appId=String(match.id);
   }
   if(!appId) return {appId:null,items:[] as News[]};
