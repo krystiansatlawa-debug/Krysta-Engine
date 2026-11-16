@@ -10,7 +10,7 @@ import { directCloudIdentity, uploadCloudSnapshot, listRemoteCloudSnapshots, dow
 import type { GameShop } from "@types";
 
 type Provider="google"|"synology"|"local"|"hydra";
-type Config={provider:Provider;folder?:string;autoBackup?:boolean};
+type Config={provider:Provider;folder?:string;autoBackup?:boolean;syncBeforeLaunch?:boolean};
 type Entry={id:string;createdAt:string;files:number};
 const cfgPath=()=>path.join(app.getPath("userData"),"krysta-cloud.json");
 async function config():Promise<Config>{try{return JSON.parse(await fs.readFile(cfgPath(),"utf8"));}catch(e){if((e as NodeJS.ErrnoException).code==="ENOENT")return {provider:"hydra"};throw e;}}
@@ -74,7 +74,7 @@ ipcMain.handle("krysta:cloud-backup",(_e,shop:GameShop,id:string)=>backupGame(sh
 
 /* Restore only files independently detected for this game on this PC.
  * The remote manifest is never trusted to choose a writable destination. */
-ipcMain.handle("krysta:cloud-restore",async(_e,shop:GameShop,id:string,version:unknown)=>{
+async function restoreGame(shop:GameShop,id:string,version:unknown){
  if(typeof version!=="string"||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(version))throw Error("Invalid backup version");
  const {key,base,root,provider,identity,remoteKey}=await gameContext(shop,id);
  return locked(key,async()=>{
@@ -145,7 +145,8 @@ ipcMain.handle("krysta:cloud-restore",async(_e,shop:GameShop,id:string,version:u
    throw e;
   }
  });
-});
+}
+ipcMain.handle("krysta:cloud-restore",(_e,shop:GameShop,id:string,version:unknown)=>restoreGame(shop,id,version));
 
 type AutoResult={state:"saved"|"skipped"|"error";at:string;message?:string};
 const autoResults=new Map<string,AutoResult>();
@@ -226,3 +227,56 @@ ipcMain.handle("krysta:cloud-compare",async(_e,shop:GameShop,id:string)=>{
  const {key,base,root}=await gameContext(shop,id);
  return locked(key,async()=>{if(isTrackedGameKeyRunning(key))throw Error("Close the game before comparing saves");const files=await discover(shop,id);return compareSaves(base,root,files);});
 });
+
+ipcMain.handle("krysta:cloud-sync-before-launch",async(_e,enabled:unknown)=>{
+ if(typeof enabled!=="boolean")throw Error("Invalid sync setting");
+ const c=await config();
+ if(enabled){if(c.provider!=="google"&&c.provider!=="synology")throw Error("Select a direct cloud provider");await directCloudIdentity(c.provider);}
+ return save({...c,syncBeforeLaunch:enabled});
+});
+const launchSyncs=new Set<string>();
+export async function syncKrystaCloudBeforeLaunch(shop:GameShop,id:string):Promise<boolean>{
+ const c=await config();
+ if(!c.syncBeforeLaunch||(c.provider!=="google"&&c.provider!=="synology")||shop==="launchbox")return true;
+ const gameKey=levelKeys.game(shop,id);
+ if(launchSyncs.has(gameKey))return false;
+ launchSyncs.add(gameKey);
+ try{
+  const {key,base,root,provider,identity,remoteKey,game}=await gameContext(shop,id);
+  if(!provider||!identity)return true;
+  if(isTrackedGameKeyRunning(key))return false;
+  const latest=await locked(key,async()=>{
+   const versions=await listRemoteCloudSnapshots(provider,identity,remoteKey);
+   const remote=versions[0];if(!remote)return null;
+   const current=await discover(shop,id);
+   await safeDirectory(root,base);
+   const dir=path.join(base,remote.id);
+   if(!(await fs.lstat(dir).catch(()=>null))){
+    const temp=path.join(base,".pending-"+randomUUID());await fs.mkdir(temp);
+    try{await downloadCloudSnapshot(provider,identity,remoteKey,remote.id,temp);await fs.rename(temp,dir);}catch(e){await fs.rm(temp,{recursive:true,force:true});throw e;}
+   }
+   if(await fs.realpath(dir)!==dir)throw Error("Unsafe snapshot");
+   const local=new Map(current.map(p=>[comparablePath(p),p]));
+   let same=local.size===remote.files.length,canRestore=true;
+   for(const entry of remote.files){
+    const target=local.get(comparablePath(entry.original));
+    if(!target){same=false;canRestore=false;continue;}
+    const source=path.join(dir,entry.name),st=await fs.lstat(source);
+    if(!st.isFile()||st.isSymbolicLink()||st.size!==entry.size||await fs.realpath(source)!==source)throw Error("Incomplete snapshot");
+    if(await fileHash(target)!==await fileHash(source))same=false;
+   }
+   return same?null:{remote,canRestore,title:game.title};
+  });
+  if(!latest)return true;
+  const options=latest.canRestore?["Cancel / Anuluj","Use local / Użyj lokalnych","Restore cloud / Przywróć z chmury"]:["Cancel / Anuluj","Use local / Użyj lokalnych"];
+  const answer=await dialog.showMessageBox({type:"warning",buttons:options,defaultId:0,cancelId:0,message:"Krysta Cloud — "+latest.title,detail:"Cloud and local saves differ. / Zapisy w chmurze i lokalne różnią się. "+new Date(latest.remote.createdAt).toLocaleString()+(latest.canRestore?"":"\nNie wykryto zgodnych lokalnych ścieżek; przywracanie niedostępne.")});
+  if(answer.response===1)return true;
+  if(answer.response!==2||!latest.canRestore)return false;
+  const now=await config();
+  if(!now.syncBeforeLaunch||now.provider!==provider||await directCloudIdentity(provider)!==identity)return false;
+  return await restoreGame(shop,id,latest.remote.id);
+ }catch{
+  const answer=await dialog.showMessageBox({type:"warning",buttons:["Cancel / Anuluj","Play offline / Graj bez synchronizacji"],defaultId:0,cancelId:0,message:"Krysta Cloud: nie można zweryfikować zapisów / Unable to verify saves"});
+  return answer.response===1;
+ }finally{launchSyncs.delete(gameKey);}
+}
