@@ -24,6 +24,7 @@ extraResources:
 files:
   - "!.cache/**"
   - "!legendary/**"
+  - "!krysta-translate/**"
   - "!resources/legendary/**"
   - "!native/torrent-bridge/**"
   - "!**/.vscode/*"
@@ -45,6 +46,8 @@ win:
   icon: build/pobrane.ico
   executableName: Krysta
   extraResources:
+    - from: krysta-translate
+      to: krysta-translate
     - from: legendary/win32/${arch}
       to: legendary
       filter:
