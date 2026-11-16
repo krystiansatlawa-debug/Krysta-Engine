@@ -53,10 +53,10 @@ ipcMain.handle("krysta:cloud-list",async(_e,shop:GameShop,id:string)=>{
  if(provider){const remote=await listRemoteCloudSnapshots(provider,identity!,remoteKey);for(const m of remote){if(!list.some(e=>e.id===m.id))list.push({id:m.id,createdAt:m.createdAt,files:m.files.length});}}
  return list.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
 });
-async function backupGame(shop:GameShop,id:string,automatic=false,expected?:Config){
+async function backupGame(shop:GameShop,id:string,automatic=false,expected?:Config,beforeUpdate=false){
  const {key,base,root,provider,identity,remoteKey}=await gameContext(shop,id);
  return locked(key,async()=>{if(isTrackedGameKeyRunning(key))throw Error("Close the game before backing up");
- if(automatic){const c=await config();if(!c.autoBackup||c.provider!==expected?.provider||c.folder!==expected?.folder)return false;}
+ if(automatic||beforeUpdate){const c=await config();if((automatic&&!c.autoBackup)||c.provider!==expected?.provider||c.folder!==expected?.folder)return false;}
  const files=await discover(shop,id);if(!files.length){if(automatic)return false;throw Error("No save files detected by Ludusavi");}
  if(files.length>5000)throw Error("Too many save files");
  if(files.some(p=>within(root,p)))throw Error("Save files overlap cloud folder");
@@ -64,11 +64,16 @@ async function backupGame(shop:GameShop,id:string,automatic=false,expected?:Conf
  if(automatic&&comparison.state==="same"&&!provider)return false;
  if(provider&&automatic){const remote=await listRemoteCloudSnapshots(provider,identity!,remoteKey);if(comparison.state==="same"&&remote[0]?.id===comparison.version)return false;}
  if(automatic&&!provider&&(comparison.state==="different"||comparison.state==="unavailable"))throw Error("SAVE_CONFLICT: Local and cloud saves differ or cannot be verified. Open Cloud saves to choose a version.");
- if(!automatic){const answer=await dialog.showMessageBox({type:"question",buttons:["Cancel","Create backup"],defaultId:0,cancelId:0,message:comparison.state==="different"?"Local and cloud saves differ. Keep local saves as a new backup without deleting previous versions? / Zapisy różnią się. Zachować lokalne jako nową kopię?":"Create a copy of "+files.length+" detected save files in your selected cloud folder?"});if(answer.response!==1)return false;}
+ if(!automatic&&!beforeUpdate){const answer=await dialog.showMessageBox({type:"question",buttons:["Cancel","Create backup"],defaultId:0,cancelId:0,message:comparison.state==="different"?"Local and cloud saves differ. Keep local saves as a new backup without deleting previous versions? / Zapisy różnią się. Zachować lokalne jako nową kopię?":"Create a copy of "+files.length+" detected save files in your selected cloud folder?"});if(answer.response!==1)return false;}
  if(isTrackedGameKeyRunning(key))throw Error("Game started before backup");
  await safeDirectory(root,base);const uuid=randomUUID(),temp=path.join(base,".pending-"+uuid);await fs.mkdir(temp);
- try{const entries=[];let total=0;for(const [i,p] of files.entries()){const st=await fs.stat(p);total+=st.size;if(total>5*1024**3)throw Error("Backup exceeds 5 GB");const name=String(i);await copyVerified(p,path.join(temp,name));entries.push({name,original:p,size:st.size});}if(isTrackedGameKeyRunning(key))throw Error("Game started during backup");await fs.writeFile(path.join(temp,"manifest.json"),JSON.stringify({id:uuid,createdAt:new Date().toISOString(),kind:automatic?"automatic":"manual",files:entries}));if(provider){const current=await config();if(current.provider!==provider)throw Error("Cloud provider changed");await uploadCloudSnapshot(provider,identity!,remoteKey,uuid,temp,entries.map(e=>e.name));}await fs.rename(temp,path.join(base,uuid));return true;}catch(e){await fs.rm(temp,{recursive:true,force:true});throw e;}
+ try{const entries=[];let total=0;for(const [i,p] of files.entries()){const st=await fs.stat(p);total+=st.size;if(total>5*1024**3)throw Error("Backup exceeds 5 GB");const name=String(i);await copyVerified(p,path.join(temp,name));entries.push({name,original:p,size:st.size});}if(isTrackedGameKeyRunning(key))throw Error("Game started during backup");await fs.writeFile(path.join(temp,"manifest.json"),JSON.stringify({id:uuid,createdAt:new Date().toISOString(),kind:beforeUpdate?"pre-update":automatic?"automatic":"manual",files:entries}));if(provider){const current=await config();if(current.provider!==provider||await directCloudIdentity(provider)!==identity)throw Error("Cloud provider changed");await uploadCloudSnapshot(provider,identity!,remoteKey,uuid,temp,entries.map(e=>e.name));}await fs.rename(temp,path.join(base,uuid));return true;}catch(e){await fs.rm(temp,{recursive:true,force:true});throw e;}
  });
+}
+export async function backupBeforeGameUpdate(shop:GameShop,id:string){
+ const expected=await config();
+ if(expected.provider==="hydra"||(expected.provider==="local"&&!expected.folder))throw Error("Configure Krysta Cloud backup destination first");
+ return backupGame(shop,id,false,expected,true);
 }
 ipcMain.handle("krysta:cloud-backup",(_e,shop:GameShop,id:string)=>backupGame(shop,id));
 
