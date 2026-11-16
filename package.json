@@ -1,7 +1,7 @@
 {
-  "name": "hydralauncher",
+  "name": "krysta-launcher",
   "version": "4.4.1",
-  "description": "Hydra",
+  "description": "Krysta Launcher (based on Hydra)",
   "main": "./out/main/index.js",
   "author": "Los Broxas",
   "repository": {
