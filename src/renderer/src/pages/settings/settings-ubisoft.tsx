@@ -1,44 +1,46 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { LinkExternalIcon, SyncIcon } from "@primer/octicons-react";
+import { LinkExternalIcon, SyncIcon, PersonIcon } from "@primer/octicons-react";
 import { Button } from "@renderer/components";
 import { SettingsIntegrationCard, SettingsIntegrationLastSynced } from "./settings-integration-card";
 
 export function SettingsUbisoft() {
   const { i18n } = useTranslation("settings");
   const pl = i18n.language.startsWith("pl");
-  const [installed, setInstalled] = useState(false);
+  const [state, setState] = useState<Awaited<ReturnType<typeof window.electron.getUbisoftAccount>> | null>(null);
   const [busy, setBusy] = useState(false);
-  const [lastSync, setLastSync] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
-    void window.electron.scanUbisoft().then(result => setInstalled(result.installed)).catch(() => {});
-  }, []);
-  const openLogin = async () => {
-    try { await window.electron.openExternal("https://account.ubisoft.com/"); }
-    catch { setNotice(pl ? "Nie udało się otworzyć strony Ubisoft." : "Could not open Ubisoft."); }
-  };
-  const sync = async () => {
+    let active = true;
+    void window.electron.getUbisoftAccount().then(value => { if(active) setState(value); }).catch(() => { if(active) setNotice(pl ? "Nie udało się odczytać statusu konta." : "Could not read account status."); }).finally(() => { if(active) setLoading(false); });
+    return () => { active = false; };
+  }, [pl]);
+  const run = async (action: "connect" | "sync" | "disconnect") => {
     setBusy(true); setNotice("");
     try {
-      const count = await window.electron.importUbisoft();
-      setLastSync(new Date().toISOString());
-      setNotice(pl ? "Dodano gier: " + count : "Games added: " + count);
-    } catch { setNotice(pl ? "Import nie powiódł się." : "Import failed."); }
-    finally { setBusy(false); }
+      const result = await (action === "connect" ? window.electron.connectUbisoftAccount() : action === "sync" ? window.electron.syncUbisoftAccount() : window.electron.disconnectUbisoftAccount());
+      setState(result);
+      if(action !== "disconnect") setNotice(pl ? "Gry na koncie: " + result.games.length : "Games on account: " + result.games.length);
+    } catch {
+      setNotice(pl ? "Operacja nie powiodła się. Spróbuj ponownie po zalogowaniu." : "Operation failed. Try signing in again.");
+      try { setState(await window.electron.getUbisoftAccount()); } catch { /* keep status */ }
+    } finally { setBusy(false); }
   };
-  return (
-    <SettingsIntegrationCard title="Ubisoft Connect"
-      logo={<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M4 8c9-10 21 3 11 10-6 4-13-4-7-8 4-3 9 2 5 5"/></svg>}
-      status={pl ? "Konto niepołączone" : "Account not linked"}
-      actions={<>
-        <Button onClick={() => void openLogin()}><LinkExternalIcon size={14}/>{pl ? "Zaloguj się w Ubisoft" : "Sign in at Ubisoft"}</Button>
-        {installed && <Button theme="outline" disabled={busy} onClick={() => void sync()}><SyncIcon size={14}/>{pl ? "Import lokalny" : "Local import"}</Button>}
-      </>}>
-      <p className="settings-integration-card__description">{pl ? "Logowanie odbywa się na oficjalnej stronie Ubisoft. Łączenie konta i synchronizacja pełnej biblioteki nie są jeszcze dostępne. Możesz importować zainstalowane gry bezpośrednio do biblioteki Krysta." : "Sign in on Ubisoft's official website. Account linking and full library sync are not yet available. Installed games can be imported into your Krysta library."}</p>
-      {lastSync && <SettingsIntegrationLastSynced lastSyncedAt={lastSync}/>}
-      {busy && <p role="status">{pl ? "Importowanie..." : "Importing..."}</p>}
-      {notice && <p role="status">{notice}</p>}
-    </SettingsIntegrationCard>
-  );
+  return <SettingsIntegrationCard title="Ubisoft Connect"
+    logo={<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M4 8c9-10 21 3 11 10-6 4-13-4-7-8 4-3 9 2 5 5"/></svg>}
+    loading={loading}
+    status={state?.connected ? (pl ? "Połączono" : "Connected") : (pl ? "Niepołączono" : "Not connected")}
+    statusTone={state?.connected ? "success" : "neutral"}
+    actions={state?.connected ? <>
+      <Button theme="outline" disabled={busy} onClick={() => void run("sync")}><SyncIcon size={14}/>{pl ? "Synchronizuj" : "Sync"}</Button>
+      <Button theme="danger" disabled={busy} onClick={() => void run("disconnect")}>{pl ? "Rozłącz" : "Disconnect"}</Button>
+    </> : <Button disabled={busy} onClick={() => void run("connect")}><LinkExternalIcon size={14}/>{pl ? "Połącz konto" : "Connect account"}</Button>}>
+    {state?.connected ? <div className="settings-integration-card__profile">
+      <div className="settings-integration-card__avatar"><PersonIcon size={28}/></div>
+      <div className="settings-integration-card__account"><span className="settings-integration-card__username">{state.username}</span><SettingsIntegrationLastSynced lastSyncedAt={state.lastSync}/></div>
+    </div> : <p className="settings-integration-card__description">{pl ? "Połącz konto Ubisoft, aby pobrać bibliotekę posiadanych gier." : "Connect your Ubisoft account to retrieve your owned games."}</p>}
+    {busy && <p role="status">{pl ? "Trwa operacja..." : "Working..."}</p>}
+    {notice && <p role="status">{notice}</p>}
+  </SettingsIntegrationCard>;
 }
