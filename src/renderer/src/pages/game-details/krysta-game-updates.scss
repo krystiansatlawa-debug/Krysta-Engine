@@ -1,2 +1,22 @@
 .krysta-updates{padding:24px;display:flex;flex-direction:column;gap:22px;max-width:1120px;width:100%;margin:0 auto}.krysta-updates__header{display:flex;align-items:center;justify-content:space-between;gap:12px}.krysta-updates__header span,.krysta-updates__date,.krysta-updates__copy small{opacity:.7;font-size:12px;letter-spacing:.07em;text-transform:uppercase}.krysta-updates__article{display:flex;flex-direction:column;gap:8px}.krysta-updates__card{display:flex;align-items:center;text-align:left;gap:18px;padding:14px;background:#202020;color:inherit;border:1px solid #383838;border-radius:8px;width:100%;cursor:pointer}.krysta-updates__card:hover{border-color:#777777}.krysta-updates__thumb{position:relative;width:160px;height:94px;flex-shrink:0;background:#121212;display:grid;place-items:center;border-radius:5px;overflow:hidden;color:#bdbdbd}.krysta-updates__thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}.krysta-updates__copy{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}.krysta-updates__copy strong{font-size:18px;overflow-wrap:anywhere}.krysta-updates__copy p{font-size:13px;opacity:.8;line-height:1.45;overflow-wrap:anywhere}.krysta-updates__body{padding:18px 22px;background:#1b1b1b;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65}.krysta-updates__body button,.krysta-updates>div button{margin-top:12px;padding:8px 14px;background:#333333;color:#fff;border-radius:6px;cursor:pointer}@media(max-width:650px){.krysta-updates{padding:12px}.krysta-updates__thumb{width:88px;height:70px}.krysta-updates__card{gap:10px;padding:10px}}
 .krysta-watch{padding:20px;border:1px solid #444;border-radius:10px;background:#191919;display:flex;flex-direction:column;gap:14px;color:#eee}.krysta-watch h3{font-size:18px}.krysta-watch small{color:#bdbdbd;line-height:1.5}.krysta-watch button{background:#333;color:#fff;border:1px solid #666;border-radius:6px;padding:9px 14px;cursor:pointer;font-weight:500}.krysta-watch button:hover:not(:disabled){background:#494949}.krysta-watch button:disabled{opacity:.5;cursor:default}.krysta-watch__versions{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px}.krysta-watch__versions>div{background:#252525;border:1px solid #414141;border-radius:7px;padding:14px;display:flex;flex-direction:column;gap:7px}.krysta-watch__versions strong{font-size:20px;overflow-wrap:anywhere}.krysta-watch__warning{padding:12px;background:#30291e;border:1px solid #76603b;border-radius:6px;color:#f1d497}.krysta-watch details{padding:12px;border:1px solid #444;border-radius:6px}.krysta-watch summary{cursor:pointer}.krysta-watch details p,.krysta-watch details ul{margin:10px 0}.krysta-watch select{color-scheme:dark}
+
+/* Compact update overview; advanced details remain accessible on demand. */
+.krysta-watch--compact{padding:16px 18px;gap:11px}
+.krysta-watch__head,.krysta-watch__status,.krysta-watch__actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.krysta-watch__head{justify-content:space-between}
+.krysta-watch__status{flex:1;min-width:180px;flex-wrap:nowrap}
+.krysta-watch__status>div{display:flex;flex-direction:column;gap:3px}
+.krysta-watch__status h3{font-size:16px;line-height:1.4}
+.krysta-watch__dot{width:9px;height:9px;flex-shrink:0;border-radius:50%;background:#a7a7a7}
+.krysta-watch__dot.is-required{background:#e6ad67}
+.krysta-watch__dot.is-current{background:#66b98f}
+.krysta-watch--compact .krysta-watch__versions{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.krysta-watch--compact .krysta-watch__versions>div{padding:11px 13px;gap:3px}
+.krysta-watch--compact .krysta-watch__versions strong{font-size:18px}
+.krysta-watch__patch-title{font-size:13px;color:#ddd;overflow-wrap:anywhere}
+.krysta-watch--compact details{padding:10px 12px}
+.krysta-watch__details{display:flex;flex-direction:column;gap:10px;padding-top:12px}
+.krysta-watch__details select{padding:5px;background:#252525;color:inherit;border:1px solid #555;border-radius:4px}
+.krysta-watch__details .krysta-watch__actions{margin:12px 0 8px}
+@media(max-width:480px){.krysta-watch--compact{padding:12px}.krysta-watch--compact .krysta-watch__versions{grid-template-columns:1fr}}
