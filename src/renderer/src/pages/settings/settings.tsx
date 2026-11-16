@@ -17,7 +17,8 @@ import {
   VideoIcon,
   ShieldCheckIcon,
 } from "@primer/octicons-react";
-import { Camera, Gamepad2, Wrench } from "lucide-react";
+import { Camera, Gamepad2, Wrench, RefreshCw } from "lucide-react";
+import { SettingsContextKrystaUpdates } from "./settings-context-krysta-updates";
 import { SettingsContextKrystaCloud } from "./settings-context-krysta-cloud";
 import { SettingsContextGame } from "./settings-context-game";
 import { SettingsContextGeneral } from "./settings-context-general";
@@ -32,7 +33,7 @@ import { SettingsContextBigPicture } from "./settings-context-big-picture";
 import { SettingsContextEmulation } from "./emulation/settings-context-emulation";
 
 export default function Settings() {
-  const { t } = useTranslation("settings");
+  const { t, i18n } = useTranslation("settings");
 
   const { userDetails } = useUserDetails();
   const { isFeatureEnabled, Feature } = useFeature();
@@ -65,6 +66,7 @@ export default function Settings() {
         label: t("content_gameplay"),
         icon: <PlayIcon size={16} />,
       },
+      { id: "krysta_updates" as const, label: i18n.language.startsWith("pl") ? "Aktualizacje" : "Updates", icon: <RefreshCw size={16} /> },
       { id: "krysta_cloud" as const, label: "Krysta Cloud", icon: <CloudIcon size={16} /> },
       { id: "game" as const, label: t("krysta_game_category", { defaultValue: "Game" }), icon: <Gamepad2 size={16} /> },
       ...(isScreenshotsEnabled
@@ -107,7 +109,7 @@ export default function Settings() {
         group: "classics" as const,
       },
     ],
-    [t, userDetails, isScreenshotsEnabled]
+    [t, i18n.language, userDetails, isScreenshotsEnabled]
   );
 
   return (
@@ -140,6 +142,7 @@ export default function Settings() {
               return <SettingsContextContentGameplay />;
             }
 
+            if (selectedCategoryId === "krysta_updates") return <SettingsContextKrystaUpdates />;
             if (selectedCategoryId === "krysta_cloud") return <SettingsContextKrystaCloud />;
             if (selectedCategoryId === "game") return <SettingsContextGame />;
 
