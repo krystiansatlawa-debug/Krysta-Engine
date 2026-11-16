@@ -38,6 +38,7 @@ import "./krysta-ubisoft";
 import "./krysta-ubisoft-account";
 import "./krysta-game-news";
 import "./krysta-mods";
+import "./krysta-fps";
 import "./screenshot-input";
 
 ipcMain.handle("ping", () => "pong");
