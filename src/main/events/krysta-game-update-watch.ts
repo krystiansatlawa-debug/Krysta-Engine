@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { gamesSublevel, levelKeys } from "@main/level";
 import { getEpicGameInstallOptions, startEpicGameUpdate } from "@main/services/epic";
 import { scanUbisoft, findUbisoftExecutable } from "./krysta-ubisoft";
+import { backupBeforeGameUpdate } from "./krysta-cloud";
 import { getGameNews } from "./krysta-game-news";
 import { getSteamLibraryFolders } from "@main/services/steam";
 import { readSteamUpdateState } from "@main/services/steam-integration/steam-installation-core";
@@ -23,8 +24,8 @@ function recordBuild(w:Watch|undefined,smart:Pick<Watch,"steamBuildId"|"updateSt
  return {lastKnownBuildId:current,buildHistory:[{from:previous,to:current,detectedAt:smart.updateCheckedAt??new Date().toISOString()},...history].slice(0,100)};
 }
 type Store=Record<string,Watch>;
-type Settings={enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;pauseDuringPlay:boolean;autoOpenSteamQueue:boolean;autoDownloadEpic:boolean};
-const defaults:Settings={enabled:false,intervalHours:6,notifications:true,startup:true,pauseDuringPlay:true,autoOpenSteamQueue:false,autoDownloadEpic:false};
+type Settings={enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;pauseDuringPlay:boolean;autoOpenSteamQueue:boolean;autoDownloadEpic:boolean;backupBeforeUpdate:boolean};
+const defaults:Settings={enabled:false,intervalHours:6,notifications:true,startup:true,pauseDuringPlay:true,autoOpenSteamQueue:false,autoDownloadEpic:false,backupBeforeUpdate:true};
 const settingsFile=()=>path.join(app.getPath("userData"),"krysta-game-update-settings.json");
 async function readSettings():Promise<Settings>{
  try{return {...defaults,...JSON.parse(await fs.readFile(settingsFile(),"utf8"))};}
@@ -254,6 +255,12 @@ ipcMain.handle("krysta:game-watch-dismiss",async(_e,shop:unknown,id:unknown)=>se
  const key=keyFor(shop,id),all=await read();
  if(all[key]){all[key]={...all[key],pendingPatch:undefined};await write(all);}
 }));
+async function protectUpdate(game:Game,settings:Settings){
+ if(!settings.backupBeforeUpdate)return;
+ if(hasTrackedGamesRunning())throw Error("Gra jest uruchomiona / Game is running");
+ if(!await backupBeforeGameUpdate(game.shop,game.objectId))throw Error("Nie wykonano kopii zapisów / Save backup not completed");
+ if(hasTrackedGamesRunning())throw Error("Gra uruchomiona podczas kopii / Game started during backup");
+}
 const promptedBuilds=new Map<string,string>();
 async function offerSteamQueue(){
  const settings=await serial(readSettings);
@@ -267,7 +274,10 @@ async function offerSteamQueue(){
   const live=await smartState(game);
   if(live.updateState!=="required"){if(live.updateState==="not-reported")promptedBuilds.delete(key);continue;}
   const build=live.steamBuildId??"unknown";
-  if(promptedBuilds.get(key)!==build)candidates.push({key,build});
+  if(promptedBuilds.get(key)!==build){
+   await protectUpdate(game,settings);
+   candidates.push({key,build});
+  }
  }
  if(!candidates.length||hasTrackedGamesRunning()||!(await serial(readSettings)).autoOpenSteamQueue)return;
  await shell.openExternal("steam://open/downloads");
@@ -292,6 +302,10 @@ async function offerEpicUpdates(){
   if(epicRequested.get(key)===target)continue;
   const current=await serial(async()=>({settings:await readSettings(),watch:(await read())[key]}));
   if(!current.settings.autoDownloadEpic||!effective(current.watch,current.settings)||hasTrackedGamesRunning())return;
+  await protectUpdate(game,current.settings);
+  const afterBackup=await serial(async()=>({settings:await readSettings(),watch:(await read())[key]}));
+  if(!afterBackup.settings.autoDownloadEpic||!effective(afterBackup.watch,afterBackup.settings)||hasTrackedGamesRunning())return;
+  if(afterBackup.settings.backupBeforeUpdate&&!current.settings.backupBeforeUpdate)return;
   const response=await startEpicGameUpdate({epicObjectId:game.objectId,connectionId:result.connectionId,artifactId:option.artifactId,platform:option.platform,preparationId:option.preparationId,addToQueueOnly:false});
   if(response.ok){epicRequested.set(key,target);if(current.settings.notifications&&Notification.isSupported())new Notification({title:game.title,body:"Epic Games: przekazano aktualizację do kolejki / Update submitted"}).show();return;}
  }
@@ -312,8 +326,8 @@ async function scan(){
    await new Promise(resolve=>setTimeout(resolve,350));
   }
   lastFinished=new Date().toISOString();
-  await offerSteamQueue();
-  await offerEpicUpdates();
+  try{await offerSteamQueue();}catch(e){lastError="Steam: "+String(e);}
+  try{await offerEpicUpdates();}catch(e){lastError=[lastError,"Epic: "+String(e)].filter(Boolean).join(" | ");}
  }catch(e){lastError=String(e);}
  finally{scanning=false;}
 }
@@ -322,8 +336,8 @@ ipcMain.handle("krysta:game-watch-settings",status);
 ipcMain.handle("krysta:game-watch-settings-set",async(_e,value:unknown)=>{
  if(!value||typeof value!=="object")throw Error("Invalid settings");
  const v=value as Settings;
- if(typeof v.enabled!=="boolean"||typeof v.notifications!=="boolean"||typeof v.startup!=="boolean"||(v.autoDownloadEpic!==undefined&&typeof v.autoDownloadEpic!=="boolean")||(v.autoOpenSteamQueue!==undefined&&typeof v.autoOpenSteamQueue!=="boolean")||(v.pauseDuringPlay!==undefined&&typeof v.pauseDuringPlay!=="boolean")||![1,3,6,12,24].includes(v.intervalHours))throw Error("Invalid settings");
- await serial(async()=>{const old=await readSettings();await fs.writeFile(settingsFile()+".tmp",JSON.stringify({enabled:v.enabled,intervalHours:v.intervalHours,notifications:v.notifications,startup:v.startup,pauseDuringPlay:v.pauseDuringPlay??old.pauseDuringPlay,autoOpenSteamQueue:v.autoOpenSteamQueue??old.autoOpenSteamQueue,autoDownloadEpic:v.autoDownloadEpic??old.autoDownloadEpic}),{mode:0o600});await fs.rename(settingsFile()+".tmp",settingsFile());if(v.enabled&&!old.enabled)lastScan=0;});
+ if(typeof v.enabled!=="boolean"||typeof v.notifications!=="boolean"||typeof v.startup!=="boolean"||(v.backupBeforeUpdate!==undefined&&typeof v.backupBeforeUpdate!=="boolean")||(v.autoDownloadEpic!==undefined&&typeof v.autoDownloadEpic!=="boolean")||(v.autoOpenSteamQueue!==undefined&&typeof v.autoOpenSteamQueue!=="boolean")||(v.pauseDuringPlay!==undefined&&typeof v.pauseDuringPlay!=="boolean")||![1,3,6,12,24].includes(v.intervalHours))throw Error("Invalid settings");
+ await serial(async()=>{const old=await readSettings();await fs.writeFile(settingsFile()+".tmp",JSON.stringify({enabled:v.enabled,intervalHours:v.intervalHours,notifications:v.notifications,startup:v.startup,pauseDuringPlay:v.pauseDuringPlay??old.pauseDuringPlay,autoOpenSteamQueue:v.autoOpenSteamQueue??old.autoOpenSteamQueue,autoDownloadEpic:v.autoDownloadEpic??old.autoDownloadEpic,backupBeforeUpdate:v.backupBeforeUpdate??old.backupBeforeUpdate}),{mode:0o600});await fs.rename(settingsFile()+".tmp",settingsFile());if(v.enabled&&!old.enabled)lastScan=0;});
  if(v.enabled&&lastScan===0)void scan();return status();
 });
 ipcMain.handle("krysta:game-watch-scan",async()=>{void scan();return status();});
