@@ -17,7 +17,7 @@ function category(x:{title:string;tags?:unknown}):"patch"|"news" {
   if(/\b(patch notes|release notes|changelog|hotfix(?:es)?|bug fixes|maintenance patch|patch\s+v?\d|(?:game |title )update\s+v?\d|version\s+v?\d+(?:\.\d+)+|update\s+v?\d+(?:\.\d+)+)\b|lista zmian|poprawki błędów|aktualizacja\s+\d/i.test(title)) return "patch";
   return "news";
 }
-export async function getGameNews(id: unknown, title: unknown) {
+async function fetchGameNews(id: unknown, title: unknown, metadataOnly=false) {
   let appId = typeof id === "string" && /^\d{1,10}$/.test(id) ? id : "";
   if (!appId && typeof title === "string" && title.trim()) {
     const q = new URL("https://store.steampowered.com/api/storesearch/");
@@ -31,7 +31,7 @@ export async function getGameNews(id: unknown, title: unknown) {
   }
   if(!appId) return {appId:null,items:[] as News[]};
   const url = new URL("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/");
-  url.searchParams.set("appid",appId); url.searchParams.set("count","100"); url.searchParams.set("maxlength","0"); url.searchParams.set("feeds","steam_community_announcements");
+  url.searchParams.set("appid",appId); url.searchParams.set("count","100"); url.searchParams.set("maxlength",metadataOnly?"1":"0"); url.searchParams.set("feeds","steam_community_announcements");
   const res=await net.fetch(url.toString(),{signal:AbortSignal.timeout(20000)});
   if(!res.ok) throw new Error("Steam news unavailable");
   const data=await res.json();
@@ -40,12 +40,22 @@ export async function getGameNews(id: unknown, title: unknown) {
   const items:News[]=raw.filter((x:any)=>typeof x.title==="string" && typeof x.contents==="string").map((x:any)=>({id:String(x.gid),title:x.title,date:Number(x.date)||0,contents:x.contents.slice(0,60000),url:typeof x.url==="string"?x.url:"",author:String(x.author||""),category:category(x)}));
   return {appId,items};
 }
+type NewsResult=Awaited<ReturnType<typeof fetchGameNews>>;
+const newsRequests=new Map<string,Promise<NewsResult>>();
+export async function getGameNews(id:unknown,title:unknown,metadataOnly=false):Promise<NewsResult>{
+ const key=JSON.stringify([typeof id==="string"?id.slice(0,40):"",typeof title==="string"?title.slice(0,200):"",metadataOnly]);
+ const running=newsRequests.get(key);if(running)return running;
+ if(newsRequests.size>=8)throw Error("Too many concurrent news requests");
+ const request=fetchGameNews(id,title,metadataOnly).finally(()=>newsRequests.delete(key));
+ newsRequests.set(key,request);return request;
+}
 ipcMain.handle("krysta:game-news",(_event,id:unknown,title:unknown)=>getGameNews(id,title));
 
  
 // Local translation only: article text never leaves the computer.
 const translations = new Map<string, {title:string;content:string}>();
 let translationQueue: Promise<unknown> = Promise.resolve();
+const translationRequests=new Map<string,Promise<{title:string;content:string}|null>>();
 async function localTranslate(title:string,content:string):Promise<{title:string;content:string}>{
  const root=path.join(process.resourcesPath,"krysta-translate");
  const python=path.join(root,"python.exe");
@@ -70,11 +80,13 @@ ipcMain.handle("krysta:news-translate",(_event,title:unknown,content:unknown)=>{
  if(process.platform!=="win32"||typeof title!=="string"||typeof content!=="string"||title.length>1000||content.length>60000)return null;
  const cacheKey=JSON.stringify([title,content]),cached=translations.get(cacheKey);
  if(cached)return cached;
+ const running=translationRequests.get(cacheKey);if(running)return running;
+ if(translationRequests.size>=3)return null;
  const task=translationQueue.then(async()=>{
   const previous=translations.get(cacheKey);if(previous)return previous;
   const result=await localTranslate(title,content);
-  if(translations.size>=64)translations.delete(translations.keys().next().value!);
+  if(translations.size>=16)translations.delete(translations.keys().next().value!);
   translations.set(cacheKey,result);return result;
- }).catch(()=>null);
- translationQueue=task;return task;
+ }).catch(()=>null).finally(()=>translationRequests.delete(cacheKey));
+ translationRequests.set(cacheKey,task);translationQueue=task;return task;
 });
