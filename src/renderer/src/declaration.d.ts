@@ -205,6 +205,7 @@ declare global {
     krystaCloudProvider: (provider:string) => Promise<{provider:string;folder?:string}>;
     krystaCloudFolder: () => Promise<{provider:string;folder?:string}>;
     krystaCloudList: (shop:string,id:string) => Promise<{id:string;createdAt:string;files:number}[]>;
+    krystaCloudRestore: (shop:string,id:string,version:string) => Promise<boolean>;
     krystaCloudBackup: (shop:string,id:string) => Promise<boolean>;
     krystaFpsStatus: () => Promise<{available:boolean;status:string}>;
     krystaFpsSelectTool: () => Promise<boolean>;
