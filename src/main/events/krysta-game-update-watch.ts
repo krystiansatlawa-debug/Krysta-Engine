@@ -7,6 +7,7 @@ import { gamesSublevel, levelKeys } from "@main/level";
 import { getGameNews } from "./krysta-game-news";
 import { getSteamLibraryFolders } from "@main/services/steam";
 import { readSteamUpdateState } from "@main/services/steam-integration/steam-installation-core";
+import { hasTrackedGamesRunning } from "@main/services/game-running-state";
 import type { GameShop, Game } from "@types";
 
 type BuildChange={from:string;to:string;detectedAt:string};
@@ -20,8 +21,8 @@ function recordBuild(w:Watch|undefined,smart:Pick<Watch,"steamBuildId"|"updateSt
  return {lastKnownBuildId:current,buildHistory:[{from:previous,to:current,detectedAt:smart.updateCheckedAt??new Date().toISOString()},...history].slice(0,100)};
 }
 type Store=Record<string,Watch>;
-type Settings={enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean};
-const defaults:Settings={enabled:false,intervalHours:6,notifications:true,startup:true};
+type Settings={enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;pauseDuringPlay:boolean};
+const defaults:Settings={enabled:false,intervalHours:6,notifications:true,startup:true,pauseDuringPlay:true};
 const settingsFile=()=>path.join(app.getPath("userData"),"krysta-game-update-settings.json");
 async function readSettings():Promise<Settings>{
  try{return {...defaults,...JSON.parse(await fs.readFile(settingsFile(),"utf8"))};}
@@ -110,6 +111,7 @@ ipcMain.handle("krysta:game-watch-check",(_e,shop:unknown,id:unknown)=>check(key
 ipcMain.handle("krysta:game-watch-open-client",async(_e,shop:unknown,id:unknown)=>{
  const key=keyFor(shop,id),game=await gamesSublevel.get(key);
  if(!game||game.isDeleted)throw Error("Game not in library");
+ if((await serial(readSettings)).pauseDuringPlay&&hasTrackedGamesRunning())throw Error("Zamknij uruchomione gry przed przejściem do aktualizacji / Close running games before opening updates");
  if(game.shop==="steam"&&/^\d+$/.test(game.objectId)){
   const state=await smartState(game);
   if(state.updateState==="required")return shell.openExternal("steam://open/downloads");
@@ -145,12 +147,15 @@ ipcMain.handle("krysta:game-watch-dismiss",async(_e,shop:unknown,id:unknown)=>se
 }));
 let scanning=false,lastScan=0,lastFinished:string|null=null,lastError:string|null=null;
 async function scan(){
+ if(scanning)return;
+ if((await serial(readSettings)).pauseDuringPlay&&hasTrackedGamesRunning())return;
  if(scanning)return;scanning=true;lastScan=Date.now();lastError=null;
  try{
   const entries=await gamesSublevel.iterator().all();
   const all=await serial(read);
   for(const [key,game] of entries){
    const settings=await serial(readSettings);
+   if(settings.pauseDuringPlay&&hasTrackedGamesRunning()){lastScan=0;return;}
    if(game.isDeleted||game.shop==="launchbox"||!effective(all[key],settings))continue;
    await check(key);
    await new Promise(resolve=>setTimeout(resolve,350));
@@ -159,13 +164,13 @@ async function scan(){
  }catch(e){lastError=String(e);}
  finally{scanning=false;}
 }
-const status=async()=>({...await serial(readSettings),scanning,lastFinished,lastError});
+const status=async()=>({...await serial(readSettings),scanning,lastFinished,lastError,pausedDuringPlay:hasTrackedGamesRunning()});
 ipcMain.handle("krysta:game-watch-settings",status);
 ipcMain.handle("krysta:game-watch-settings-set",async(_e,value:unknown)=>{
  if(!value||typeof value!=="object")throw Error("Invalid settings");
  const v=value as Settings;
- if(typeof v.enabled!=="boolean"||typeof v.notifications!=="boolean"||typeof v.startup!=="boolean"||![1,3,6,12,24].includes(v.intervalHours))throw Error("Invalid settings");
- await serial(async()=>{const old=await readSettings();await fs.writeFile(settingsFile()+".tmp",JSON.stringify({enabled:v.enabled,intervalHours:v.intervalHours,notifications:v.notifications,startup:v.startup}),{mode:0o600});await fs.rename(settingsFile()+".tmp",settingsFile());if(v.enabled&&!old.enabled)lastScan=0;});
+ if(typeof v.enabled!=="boolean"||typeof v.notifications!=="boolean"||typeof v.startup!=="boolean"||(v.pauseDuringPlay!==undefined&&typeof v.pauseDuringPlay!=="boolean")||![1,3,6,12,24].includes(v.intervalHours))throw Error("Invalid settings");
+ await serial(async()=>{const old=await readSettings();await fs.writeFile(settingsFile()+".tmp",JSON.stringify({enabled:v.enabled,intervalHours:v.intervalHours,notifications:v.notifications,startup:v.startup,pauseDuringPlay:v.pauseDuringPlay??old.pauseDuringPlay}),{mode:0o600});await fs.rename(settingsFile()+".tmp",settingsFile());if(v.enabled&&!old.enabled)lastScan=0;});
  if(v.enabled&&lastScan===0)void scan();return status();
 });
 ipcMain.handle("krysta:game-watch-scan",async()=>{void scan();return status();});
