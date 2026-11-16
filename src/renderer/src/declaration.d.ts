@@ -201,9 +201,11 @@ declare global {
     nexusInstalled: () => Promise<{id:string;name:string;root:string;gameKey?:string;enabled:boolean;nexus?:{domain:string;modId:number;fileId:number;version:string}}[]>;
     krystaFpsPosition: () => Promise<"tl"|"tr"|"bl"|"br">;
     krystaFpsSetPosition: (position:"tl"|"tr"|"bl"|"br") => Promise<"tl"|"tr"|"bl"|"br">;
-    krystaCloudConfig: () => Promise<{provider:string;folder?:string}>;
-    krystaCloudProvider: (provider:string) => Promise<{provider:string;folder?:string}>;
-    krystaCloudFolder: () => Promise<{provider:string;folder?:string}>;
+    krystaCloudAuto: (enabled:boolean) => Promise<{provider:string;folder?:string;autoBackup?:boolean}>;
+    krystaCloudAutoStatus: (shop:string,id:string) => Promise<{state:"saved"|"skipped"|"error";at:string;message?:string}|null>;
+    krystaCloudConfig: () => Promise<{provider:string;folder?:string;autoBackup?:boolean}>;
+    krystaCloudProvider: (provider:string) => Promise<{provider:string;folder?:string;autoBackup?:boolean}>;
+    krystaCloudFolder: () => Promise<{provider:string;folder?:string;autoBackup?:boolean}>;
     krystaCloudList: (shop:string,id:string) => Promise<{id:string;createdAt:string;files:number}[]>;
     krystaCloudRestore: (shop:string,id:string,version:string) => Promise<boolean>;
     krystaCloudBackup: (shop:string,id:string) => Promise<boolean>;
