@@ -201,6 +201,11 @@ declare global {
     nexusInstalled: () => Promise<{id:string;name:string;root:string;gameKey?:string;enabled:boolean;nexus?:{domain:string;modId:number;fileId:number;version:string}}[]>;
     krystaFpsPosition: () => Promise<"tl"|"tr"|"bl"|"br">;
     krystaFpsSetPosition: (position:"tl"|"tr"|"bl"|"br") => Promise<"tl"|"tr"|"bl"|"br">;
+    krystaCloudConfig: () => Promise<{provider:string;folder?:string}>;
+    krystaCloudProvider: (provider:string) => Promise<{provider:string;folder?:string}>;
+    krystaCloudFolder: () => Promise<{provider:string;folder?:string}>;
+    krystaCloudList: (shop:string,id:string) => Promise<{id:string;createdAt:string;files:number}[]>;
+    krystaCloudBackup: (shop:string,id:string) => Promise<boolean>;
     krystaFpsStatus: () => Promise<{available:boolean;status:string}>;
     krystaFpsSelectTool: () => Promise<boolean>;
     krystaFpsPreference: () => Promise<boolean>;
