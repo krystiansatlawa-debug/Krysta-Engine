@@ -23,6 +23,14 @@ const {
 async function afterPack(context) {
   const platform = context.electronPlatformName;
   const arch = Arch[context.arch];
+  if (platform === "win32") {
+    const resources = context.packager.getResourcesDir(context.appOutDir);
+    for (const name of ["PresentMon.exe", "PresentMon-LICENSE.txt"]) {
+      const stat = await fs.stat(path.join(resources, name));
+      if (!stat.isFile() || stat.size === 0)
+        throw new Error(`Packaged PresentMon resource missing: ${name}`);
+    }
+  }
   if (
     platform === "linux" &&
     !(await verifyEpicPrerequisiteRunner({

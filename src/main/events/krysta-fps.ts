@@ -14,7 +14,7 @@ function placement(bounds:Electron.Rectangle,position:Position){return {x:bounds
 async function readPreference():Promise<Preference>{return readKrystaSettings<Preference>(app.getPath("userData"),"fps");}
 async function savePreference(value:Preference){await writeKrystaSettings(app.getPath("userData"),"fps",value);}
 async function findTool(p:Preference){
- for(const path of [p.tool,join(process.resourcesPath,"PresentMon.exe"),join(app.getPath("userData"),"PresentMon.exe")]){
+ for(const path of [p.tool,join(process.resourcesPath,"PresentMon.exe"),!app.isPackaged?join(app.getAppPath(),".cache","presentmon","PresentMon.exe"):undefined,join(app.getPath("userData"),"PresentMon.exe")]){
   if(path&&await fs.stat(path).then(s=>s.isFile()).catch(()=>false))return path;
  }
  return null;

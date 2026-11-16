@@ -46,6 +46,10 @@ win:
   icon: build/pobrane.ico
   executableName: Krysta
   extraResources:
+    - from: .cache/presentmon/PresentMon.exe
+      to: PresentMon.exe
+    - from: resources/presentmon/LICENSE.txt
+      to: PresentMon-LICENSE.txt
     - from: krysta-translate
       to: krysta-translate
     - from: legendary/win32/${arch}
