@@ -86,12 +86,14 @@ function check(key:string,force=false){const old=inflight.get(key);if(old)return
 ipcMain.handle("krysta:game-watch-get",async(_e,shop:unknown,id:unknown)=>{
  const key=keyFor(shop,id),game=await gamesSublevel.get(key);if(!game||game.isDeleted)return null;
  const detected=await detectVersion(game.executablePath);
+ const smart=await smartState(game);
  return serial(async()=>{const prior=(await read())[key],settings=await readSettings();return {...(prior??{shop:game.shop,id:game.objectId}),override:mode(prior),enabled:effective(prior,settings),...detected,...smart,versionSource:detected.versionSource};});
 });
 ipcMain.handle("krysta:game-watch-set",async(_e,shop:GameShop,id:string,override:unknown)=>{
  const key=keyFor(shop,id);if(override!=="inherit"&&override!=="on"&&override!=="off")throw Error("Invalid settings");
  const game=await gamesSublevel.get(key);if(!game||game.isDeleted)throw Error("Add this game to the library first");
  const detected=await detectVersion(game.executablePath);
+ const smart=await smartState(game);
  const w=await serial(async()=>{const all=await read(),settings=await readSettings(),old=all[key];const next:Watch={...old,shop,id,override,enabled:override==="on"||(override==="inherit"&&settings.enabled),...detected,...smart,versionSource:detected.versionSource};if(override==="off")next.pendingPatch=undefined;all[key]=next;await write(all);return next;});
  if(w.enabled&&!w.seen)void check(key).catch(()=>{});return w;
 });
