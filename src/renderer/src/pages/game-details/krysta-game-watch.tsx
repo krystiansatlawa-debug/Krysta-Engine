@@ -17,12 +17,12 @@ export function KrystaGameWatch({shop,id}:{shop:string;id:string}){
  {watch?.versionSource&&<small>{pl?"Źródło: metadane EXE":"Source: EXE metadata"} ({watch.versionSource==="product"?"ProductVersion":"FileVersion"})</small>}
  <p>{pl?"Stan aktualizacji (Steam)":"Update state (Steam)"}: <strong>{watch?.updateState==="required"?(pl?"Aktualizacja wymagana":"Update required"):watch?.updateState==="not-reported"?(pl?"Steam nie zgłasza aktualizacji":"Steam reports no update"):(pl?"Niepotwierdzony":"Unconfirmed")}</strong></p>
  {watch?.steamBuildId&&<small>Steam Build ID: {watch.steamBuildId}</small>}
- <p>{pl?"Najnowsza wykryta wersja":"Latest detected version"}: {watch?.latestVersion??"—"}</p>
+ <p>{pl?"Wersja z ogłoszenia o patchu":"Version from patch announcement"}: {watch?.latestVersion??"—"}</p>
  {watch?.pendingPatch&&<div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><strong>{pl?"Nowy patch":"New patch"}: {watch.pendingPatch}</strong><button type="button" disabled={busy} onClick={()=>{void window.electron.krystaGameWatchDismiss(shop,id).then(()=>{setWatch(w=>w?{...w,pendingPatch:undefined}:w);window.dispatchEvent(new Event("krysta:patch-badges"));}).catch(e=>setNotice(String(e)));}}>{pl?"Oznacz jako przeczytany":"Mark as read"}</button></div>}
  {watch?.latestTitle&&<p>{watch.latestTitle}</p>}
  {watch?.lastChecked&&<p>{pl?"Ostatnie sprawdzenie":"Last checked"}: {new Date(watch.lastChecked).toLocaleString(i18n.language)}</p>}
  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button type="button" disabled={!ready||busy} onClick={()=>void act(false)}>{pl?"Zapisz ustawienia":"Save settings"}</button><button type="button" disabled={!ready||busy} onClick={()=>void act(true)}>{pl?"Sprawdź teraz":"Check now"}</button>
- {official&&<button type="button" onClick={()=>void window.electron.krystaGameWatchOpenClient(shop,id).catch(e=>setNotice(String(e)))}>{pl?"Otwórz oficjalny klient":"Open official client"}</button>}</div>
+ {official&&<button type="button" onClick={()=>void window.electron.krystaGameWatchOpenClient(shop,id).catch(e=>setNotice(String(e)))}>{shop==="steam"&&watch?.updateState==="required"?(pl?"Przejdź do aktualizacji Steam":"Go to Steam downloads"):(pl?"Otwórz oficjalny klient":"Open official client")}</button>}</div>
  <small>{pl?"Częstotliwość sprawdzania określają ustawienia globalne. Wersja lokalna pochodzi z metadanych EXE i może różnić się od numeracji patchy. Najnowszy numer wersji pochodzi z tytułu wpisu Steam i nie potwierdza dostępności instalatora. Aktualizacje instaluje oficjalny klient.":"Check interval follows global settings. Local version comes from EXE metadata and may differ from patch numbering. Latest version is inferred from Steam post titles, not installer availability. Official clients handle installation."}</small>
  {watch?.error&&<p role="alert">{watch.error}</p>}{notice&&<p role="status">{notice}</p>}
  </section>;
