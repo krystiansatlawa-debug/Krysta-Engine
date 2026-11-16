@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { LinkExternalIcon, SyncIcon, PersonIcon } from "@primer/octicons-react";
+import { useLibrary } from "@renderer/hooks";
 import { Button } from "@renderer/components";
 import { SettingsIntegrationCard, SettingsIntegrationLastSynced } from "./settings-integration-card";
 
 export function SettingsUbisoft() {
   const { i18n } = useTranslation("settings");
   const pl = i18n.language.startsWith("pl");
+  const {updateLibrary}=useLibrary();
   const [state, setState] = useState<Awaited<ReturnType<typeof window.electron.getUbisoftAccount>> | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -21,6 +23,7 @@ export function SettingsUbisoft() {
     try {
       const result = await (action === "connect" ? window.electron.connectUbisoftAccount() : action === "sync" ? window.electron.syncUbisoftAccount() : window.electron.disconnectUbisoftAccount());
       setState(result);
+      await updateLibrary();
       if(action !== "disconnect") setNotice(pl ? "Gry na koncie: " + result.games.length : "Games on account: " + result.games.length);
     } catch {
       setNotice(pl ? "Operacja nie powiodła się. Spróbuj ponownie po zalogowaniu." : "Operation failed. Try signing in again.");
