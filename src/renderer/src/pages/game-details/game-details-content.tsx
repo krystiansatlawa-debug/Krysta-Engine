@@ -123,6 +123,11 @@ export function GameDetailsContent() {
 
   const [detailTab, setDetailTab] = useState("description");
   useEffect(() => { setDetailTab("description"); }, [objectId]);
+  useEffect(() => {
+    const openUpdates = () => setDetailTab("updates");
+    window.addEventListener("krysta:open-game-updates",openUpdates);
+    return () => window.removeEventListener("krysta:open-game-updates",openUpdates);
+  }, []);
   const [backdropOpacity, setBackdropOpacity] = useState(1);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [isDescriptionOverflowing, setIsDescriptionOverflowing] =
