@@ -9,7 +9,16 @@ import { getSteamLibraryFolders } from "@main/services/steam";
 import { readSteamUpdateState } from "@main/services/steam-integration/steam-installation-core";
 import type { GameShop, Game } from "@types";
 
-type Watch={shop:GameShop;id:string;enabled:boolean;override?:"on"|"off"|"inherit";installedVersion:string;versionSource?:"product"|"file";seen?:string[];lastChecked?:string;latestTitle?:string;latestVersion?:string;error?:string;steamId?:string;pendingPatch?:string;steamBuildId?:string;updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string};
+type BuildChange={from:string;to:string;detectedAt:string};
+type Watch={buildHistory?:BuildChange[];lastKnownBuildId?:string;shop:GameShop;id:string;enabled:boolean;override?:"on"|"off"|"inherit";installedVersion:string;versionSource?:"product"|"file";seen?:string[];lastChecked?:string;latestTitle?:string;latestVersion?:string;error?:string;steamId?:string;pendingPatch?:string;steamBuildId?:string;updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string};
+function recordBuild(w:Watch|undefined,smart:Pick<Watch,"steamBuildId"|"updateState"|"updateCheckedAt">){
+ const previous=w?.lastKnownBuildId??w?.steamBuildId;
+ const current=smart.steamBuildId;
+ const history=w?.buildHistory??[];
+ if(!current||!/^\d+$/.test(current))return {lastKnownBuildId:previous,buildHistory:history};
+ if(!previous||previous===current||smart.updateState!=="not-reported")return {lastKnownBuildId:smart.updateState==="not-reported"?current:previous,buildHistory:history};
+ return {lastKnownBuildId:current,buildHistory:[{from:previous,to:current,detectedAt:smart.updateCheckedAt??new Date().toISOString()},...history].slice(0,100)};
+}
 type Store=Record<string,Watch>;
 type Settings={enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean};
 const defaults:Settings={enabled:false,intervalHours:6,notifications:true,startup:true};
@@ -76,10 +85,10 @@ async function perform(key:string,force=false){
  if(fresh.length)new Notification({title:game.title,body:"Nowy patch / New patch: "+fresh[0].title}).show();
  }
  const freshPatch=enabled&&snapshot.enabled&&w.seen?newItems.find(x=>!w.seen?.includes(x.id)):undefined;
- const next={...w,enabled,pendingPatch:enabled?(freshPatch?.title??w.pendingPatch):undefined,...detected,...smart,versionSource:detected.versionSource,steamId:result.appId??undefined,lastChecked:new Date().toISOString(),latestTitle:latest?.title,latestVersion:latest?version(latest.title)??undefined:undefined,seen:[...new Set([...patches.map(x=>x.id),...(w.seen??[])])].slice(0,500),error:undefined};
+ const next={...w,enabled,pendingPatch:enabled?(freshPatch?.title??w.pendingPatch):undefined,...detected,...smart,...recordBuild(w,smart),versionSource:detected.versionSource,steamId:result.appId??undefined,lastChecked:new Date().toISOString(),latestTitle:latest?.title,latestVersion:latest?version(latest.title)??undefined:undefined,seen:[...new Set([...patches.map(x=>x.id),...(w.seen??[])])].slice(0,500),error:undefined};
  all[key]=next;await write(all);return next;
  });
- }catch(e){return serial(async()=>{const all=await read(),w=all[key];if(!w)return null;all[key]={...w,...detected,...smart,versionSource:detected.versionSource,error:String(e)};await write(all);return all[key];});}
+ }catch(e){return serial(async()=>{const all=await read(),w=all[key];if(!w)return null;all[key]={...w,...detected,...smart,...recordBuild(w,smart),versionSource:detected.versionSource,error:String(e)};await write(all);return all[key];});}
 }
 const inflight=new Map<string,Promise<Watch|null>>();
 function check(key:string,force=false){const old=inflight.get(key);if(old)return old;const p=perform(key,force).finally(()=>inflight.delete(key));inflight.set(key,p);return p;}
@@ -94,7 +103,7 @@ ipcMain.handle("krysta:game-watch-set",async(_e,shop:GameShop,id:string,override
  const game=await gamesSublevel.get(key);if(!game||game.isDeleted)throw Error("Add this game to the library first");
  const detected=await detectVersion(game.executablePath);
  const smart=await smartState(game);
- const w=await serial(async()=>{const all=await read(),settings=await readSettings(),old=all[key];const next:Watch={...old,shop,id,override,enabled:override==="on"||(override==="inherit"&&settings.enabled),...detected,...smart,versionSource:detected.versionSource};if(override==="off")next.pendingPatch=undefined;all[key]=next;await write(all);return next;});
+ const w=await serial(async()=>{const all=await read(),settings=await readSettings(),old=all[key];const next:Watch={...old,shop,id,override,enabled:override==="on"||(override==="inherit"&&settings.enabled),...detected,...smart,...recordBuild(old,smart),versionSource:detected.versionSource};if(override==="off")next.pendingPatch=undefined;all[key]=next;await write(all);return next;});
  if(w.enabled&&!w.seen)void check(key).catch(()=>{});return w;
 });
 ipcMain.handle("krysta:game-watch-check",(_e,shop:unknown,id:unknown)=>check(keyFor(shop,id),true));
