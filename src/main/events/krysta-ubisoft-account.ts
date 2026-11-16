@@ -2,6 +2,8 @@ import { BrowserWindow, ipcMain, session, net, app, safeStorage } from "electron
 import { gamesSublevel, gamesShopAssetsSublevel, levelKeys } from "@main/level";
 import { readFileSync, writeFileSync, rmSync, renameSync } from "node:fs";
 import { join } from "node:path";
+import { getGameAssets } from "./catalogue/get-game-assets";
+import { updateGameRecord } from "@main/services/game-record-updater";
 import { scanUbisoft, findUbisoftExecutable } from "./krysta-ubisoft";
 import { randomUUID, createHash } from "node:crypto";
 
@@ -79,8 +81,9 @@ async function sync() {
     const matches=local.games.filter(g=>norm(g.title)===norm(item.title));
     const installed=matches.length===1?matches[0]:null;
     const exe=installed?findUbisoftExecutable(installed.path,item.title):null;
+    let catalogueGame=old?.catalogueGame;
     let cover=oldAssets?.coverImageUrl??"",hero=oldAssets?.libraryHeroImageUrl??"";
-    if(!cover||!hero){
+    if(!catalogueGame||!cover||!hero){
       try{
         const url=new URL("https://store.steampowered.com/api/storesearch/");
         url.searchParams.set("term",item.title);url.searchParams.set("l","english");url.searchParams.set("cc","US");
@@ -89,7 +92,10 @@ async function sync() {
           const data=await response.json();
           const candidates=(Array.isArray(data.items)?data.items:[]).filter((g:{name?:string;id?:number})=>typeof g.name==="string"&&norm(g.name)===norm(item.title)&&/^\d+$/.test(String(g.id)));
           if(candidates.length===1){
-            const prefix="https://cdn.cloudflare.steamstatic.com/steam/apps/"+candidates[0].id+"/";
+            const steamId=String(candidates[0].id);
+            const assets=await getGameAssets(steamId,"steam").catch(()=>null);
+            if(assets&&norm(assets.title)===norm(item.title)) catalogueGame={shop:"steam",objectId:steamId};
+            const prefix="https://cdn.cloudflare.steamstatic.com/steam/apps/"+steamId+"/";
             cover=cover||prefix+"library_600x900.jpg";hero=hero||prefix+"library_hero.jpg";
           }
         }
@@ -99,10 +105,12 @@ async function sync() {
       updatedAt:Date.now(),objectId,shop,title:item.title,iconUrl:null,libraryHeroImageUrl:hero,libraryImageUrl:cover,logoImageUrl:"",logoPosition:null,coverImageUrl:cover,downloadSources:[],...oldAssets,
       ...(cover?{coverImageUrl:cover,libraryImageUrl:cover}:{}),...(hero?{libraryHeroImageUrl:hero}:{})
     });
+    if(account!==current)throw Error("Account changed");
+    const patch={...(catalogueGame?{catalogueGame}:{}),...(exe&&!old?.executablePath?{executablePath:exe,executablePathUpdatedAt:new Date()}:{}),...(installed?{ubisoftInstallPath:installed.path,ubisoftLauncherId:installed.id}:{})};
+    if(old){await updateGameRecord(key,patch);continue;}
     await gamesSublevel.put(key,{
       title:item.title,iconUrl:null,logoImageUrl:null,libraryHeroImageUrl:hero||null,objectId,shop,remoteId:null,isDeleted:false,playTimeInMilliseconds:0,lastTimePlayed:null,addedToLibraryAt:new Date(),executablePath:null,launchOptions:null,favorite:false,automaticCloudSync:false,hasManuallyUpdatedPlaytime:false,
-      ...old,...(exe&&!old?.executablePath?{executablePath:exe,executablePathUpdatedAt:new Date()}:{}),
-      ...(installed?{ubisoftInstallPath:installed.path,ubisoftLauncherId:installed.id}:{})
+      ...patch
     });
 
   }
