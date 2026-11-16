@@ -4,11 +4,11 @@ import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { gamesSublevel, levelKeys } from "@main/level";
 import { Ludusavi } from "@main/services/ludusavi";
-import { isTrackedGameKeyRunning } from "@main/services/game-running-state";
+import { gamesPlaytime, onTrackedGamesRunningChange, isTrackedGameKeyRunning } from "@main/services/game-running-state";
 import type { GameShop } from "@types";
 
 type Provider="google"|"synology"|"local"|"hydra";
-type Config={provider:Provider;folder?:string};
+type Config={provider:Provider;folder?:string;autoBackup?:boolean};
 type Entry={id:string;createdAt:string;files:number};
 const cfgPath=()=>path.join(app.getPath("userData"),"krysta-cloud.json");
 async function config():Promise<Config>{try{return JSON.parse(await fs.readFile(cfgPath(),"utf8"));}catch(e){if((e as NodeJS.ErrnoException).code==="ENOENT")return {provider:"hydra"};throw e;}}
@@ -36,24 +36,27 @@ const locks=new Set<string>();
 async function locked<T>(key:string,fn:()=>Promise<T>){if(locks.has(key))throw Error("Backup operation already running");locks.add(key);try{return await fn();}finally{locks.delete(key);}}
 async function copyVerified(src:string,dst:string){const st=await fs.lstat(src);if(!st.isFile()||st.isSymbolicLink())throw Error("Invalid save file");await fs.copyFile(src,dst,1);const after=await fs.stat(src);if(st.size!==after.size||st.mtimeMs!==after.mtimeMs)throw Error("Save changed during backup");}
 ipcMain.handle("krysta:cloud-config",config);
-ipcMain.handle("krysta:cloud-provider",async(_e,p:unknown)=>{if(p!=="google"&&p!=="synology"&&p!=="local"&&p!=="hydra")throw Error("Invalid provider");return save({provider:p});});
+ipcMain.handle("krysta:cloud-provider",async(_e,p:unknown)=>{if(p!=="google"&&p!=="synology"&&p!=="local"&&p!=="hydra")throw Error("Invalid provider");return save({provider:p,autoBackup:false});});
 ipcMain.handle("krysta:cloud-folder",async()=>{const c=await config();if(c.provider==="hydra")return c;const result=await dialog.showOpenDialog({properties:["openDirectory","createDirectory"]});if(result.canceled||!result.filePaths[0])return c;return save({...c,folder:await fs.realpath(result.filePaths[0])});});
 ipcMain.handle("krysta:cloud-list",async(_e,shop:GameShop,id:string)=>{
  const {base,root}=await gameContext(shop,id);await safeDirectory(root,base);
  const list:Entry[]=[];for(const name of await fs.readdir(base)){if(!/^[0-9a-f-]{36}$/.test(name))continue;try{const dir=await fs.realpath(path.join(base,name));if(dir!==path.join(base,name))continue;const m=JSON.parse(await fs.readFile(path.join(dir,"manifest.json"),"utf8"));if(m.id===name&&Array.isArray(m.files)&&typeof m.createdAt==="string")list.push({id:name,createdAt:m.createdAt,files:m.files.length});}catch{continue;}}
  return list.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
 });
-ipcMain.handle("krysta:cloud-backup",async(_e,shop:GameShop,id:string)=>{
+async function backupGame(shop:GameShop,id:string,automatic=false,expected?:Config){
  const {key,base,root}=await gameContext(shop,id);
  return locked(key,async()=>{if(isTrackedGameKeyRunning(key))throw Error("Close the game before backing up");
- const files=await discover(shop,id);if(!files.length)throw Error("No save files detected by Ludusavi");
+ if(automatic){const c=await config();if(!c.autoBackup||c.provider!==expected?.provider||c.folder!==expected?.folder)return false;}
+ const files=await discover(shop,id);if(!files.length){if(automatic)return false;throw Error("No save files detected by Ludusavi");}
  if(files.length>5000)throw Error("Too many save files");
  if(files.some(p=>within(root,p)))throw Error("Save files overlap cloud folder");
- const answer=await dialog.showMessageBox({type:"question",buttons:["Cancel","Create backup"],defaultId:0,cancelId:0,message:"Create a copy of "+files.length+" detected save files in your selected cloud folder?"});if(answer.response!==1)return false;
+ if(!automatic){const answer=await dialog.showMessageBox({type:"question",buttons:["Cancel","Create backup"],defaultId:0,cancelId:0,message:"Create a copy of "+files.length+" detected save files in your selected cloud folder?"});if(answer.response!==1)return false;}
+ if(isTrackedGameKeyRunning(key))throw Error("Game started before backup");
  await safeDirectory(root,base);const uuid=randomUUID(),temp=path.join(base,".pending-"+uuid);await fs.mkdir(temp);
- try{const entries=[];let total=0;for(const [i,p] of files.entries()){const st=await fs.stat(p);total+=st.size;if(total>5*1024**3)throw Error("Backup exceeds 5 GB");const name=String(i);await copyVerified(p,path.join(temp,name));entries.push({name,original:p,size:st.size});}if(isTrackedGameKeyRunning(key))throw Error("Game started during backup");await fs.writeFile(path.join(temp,"manifest.json"),JSON.stringify({id:uuid,createdAt:new Date().toISOString(),files:entries}));await fs.rename(temp,path.join(base,uuid));return true;}catch(e){await fs.rm(temp,{recursive:true,force:true});throw e;}
+ try{const entries=[];let total=0;for(const [i,p] of files.entries()){const st=await fs.stat(p);total+=st.size;if(total>5*1024**3)throw Error("Backup exceeds 5 GB");const name=String(i);await copyVerified(p,path.join(temp,name));entries.push({name,original:p,size:st.size});}if(isTrackedGameKeyRunning(key))throw Error("Game started during backup");await fs.writeFile(path.join(temp,"manifest.json"),JSON.stringify({id:uuid,createdAt:new Date().toISOString(),kind:automatic?"automatic":"manual",files:entries}));await fs.rename(temp,path.join(base,uuid));return true;}catch(e){await fs.rm(temp,{recursive:true,force:true});throw e;}
  });
-});
+}
+ipcMain.handle("krysta:cloud-backup",(_e,shop:GameShop,id:string)=>backupGame(shop,id));
 
 /* Restore only files independently detected for this game on this PC.
  * The remote manifest is never trusted to choose a writable destination. */
@@ -125,3 +128,34 @@ ipcMain.handle("krysta:cloud-restore",async(_e,shop:GameShop,id:string,version:u
   }
  });
 });
+
+type AutoResult={state:"saved"|"skipped"|"error";at:string;message?:string};
+const autoResults=new Map<string,AutoResult>();
+const pendingAuto=new Map<string,ReturnType<typeof setTimeout>>();
+let previousRunning=new Set<string>();
+let shuttingDown=false;
+ipcMain.handle("krysta:cloud-auto",async(_e,enabled:unknown)=>{
+ if(typeof enabled!=="boolean")throw Error("Invalid automatic backup setting");
+ const c=await config();
+ if(enabled&&(c.provider==="hydra"||!c.folder))throw Error("Select a private cloud folder first");
+ if(enabled){const answer=await dialog.showMessageBox({type:"question",buttons:["Anuluj / Cancel","Włącz / Enable"],defaultId:0,cancelId:0,message:"Automatycznie kopiować wykryte zapisy wszystkich obsługiwanych gier do wybranego folderu? / Automatically back up detected saves for all supported games to the selected folder?"});if(answer.response!==1)return c;}
+ else{for(const timer of pendingAuto.values())clearTimeout(timer);pendingAuto.clear();}
+ return save({...c,autoBackup:enabled});
+});
+ipcMain.handle("krysta:cloud-auto-status",(_e,shop:GameShop,id:string)=>autoResults.get(levelKeys.game(shop,id))??null);
+onTrackedGamesRunningChange(()=>{
+ const now=new Set(gamesPlaytime.keys());
+ for(const key of now){const pending=pendingAuto.get(key);if(pending){clearTimeout(pending);pendingAuto.delete(key);}}
+ for(const key of previousRunning){
+  if(now.has(key)||shuttingDown||pendingAuto.has(key))continue;
+  const timer=setTimeout(()=>{pendingAuto.delete(key);void (async()=>{
+   const c=await config();if(shuttingDown||!c.autoBackup||c.provider==="hydra"||!c.folder||isTrackedGameKeyRunning(key))return;
+   const game=await gamesSublevel.get(key);if(!game)return;
+   const done=await backupGame(game.shop,game.objectId,true,c);
+   autoResults.set(key,{state:done?"saved":"skipped",at:new Date().toISOString()});
+  })().catch(e=>{autoResults.set(key,{state:"error",at:new Date().toISOString(),message:String(e)});});},15000);
+  pendingAuto.set(key,timer);
+ }
+ previousRunning=now;
+});
+app.on("before-quit",()=>{shuttingDown=true;for(const timer of pendingAuto.values())clearTimeout(timer);pendingAuto.clear();});
