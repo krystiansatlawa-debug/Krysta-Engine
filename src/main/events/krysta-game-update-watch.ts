@@ -7,8 +7,18 @@ import { gamesSublevel, levelKeys } from "@main/level";
 import { getGameNews } from "./krysta-game-news";
 import type { GameShop } from "@types";
 
-type Watch={shop:GameShop;id:string;enabled:boolean;installedVersion:string;versionSource?:"product"|"file";seen?:string[];lastChecked?:string;latestTitle?:string;latestVersion?:string;error?:string;steamId?:string;pendingPatch?:string};
+type Watch={shop:GameShop;id:string;enabled:boolean;override?:"on"|"off"|"inherit";installedVersion:string;versionSource?:"product"|"file";seen?:string[];lastChecked?:string;latestTitle?:string;latestVersion?:string;error?:string;steamId?:string;pendingPatch?:string};
 type Store=Record<string,Watch>;
+type Settings={enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean};
+const defaults:Settings={enabled:false,intervalHours:6,notifications:true,startup:true};
+const settingsFile=()=>path.join(app.getPath("userData"),"krysta-game-update-settings.json");
+async function readSettings():Promise<Settings>{
+ try{return {...defaults,...JSON.parse(await fs.readFile(settingsFile(),"utf8"))};}
+ catch(e){if((e as NodeJS.ErrnoException).code==="ENOENT")return {...defaults};throw e;}
+}
+function mode(w:Watch|undefined):"on"|"off"|"inherit"{return w?.override??(w?.enabled?"on":"inherit");}
+function effective(w:Watch|undefined,settings:Settings){const m=mode(w);return m==="on"||(m==="inherit"&&settings.enabled);}
+
 const filename=()=>path.join(app.getPath("userData"),"krysta-game-update-watch.json");
 let queue:Promise<unknown>=Promise.resolve();
 function serial<T>(fn:()=>Promise<T>):Promise<T>{const next=queue.then(fn,fn);queue=next.catch(()=>{});return next;}
@@ -30,38 +40,48 @@ async function detectVersion(exe:string|null|undefined):Promise<{installedVersio
  return unknown;
 }
 async function perform(key:string,force=false){
- const snapshot=await serial(async()=> (await read())[key]);
- if(!snapshot||(!snapshot.enabled&&!force))return snapshot??null;
  const game=await gamesSublevel.get(key);
- if(!game||game.isDeleted)return snapshot;
+ if(!game||game.isDeleted||game.shop==="launchbox")return null;
+ const snapshot=await serial(async()=>{
+  const all=await read(),settings=await readSettings(),old=all[key];
+  if(!effective(old,settings)&&!force)return null;
+  const w:Watch={...old,shop:game.shop,id:game.objectId,override:mode(old),enabled:effective(old,settings),installedVersion:old?.installedVersion??""};
+  all[key]=w;await write(all);return w;
+ });
+ if(!snapshot)return null;
  const detected=await detectVersion(game.executablePath);
  try{
- const result=await getGameNews(snapshot.shop==="steam"?snapshot.id:snapshot.steamId??"",game.title);
+ const result=await getGameNews(game.catalogueGame?.shop==="steam"?game.catalogueGame.objectId:snapshot.shop==="steam"?snapshot.id:snapshot.steamId??"",game.title);
  if(!result.appId)throw Error("No verified Steam match");
  const patches=result.items.filter(x=>x.category==="patch").sort((a,b)=>b.date-a.date);
  const latest=patches[0];
  const newItems=snapshot.seen?patches.filter(x=>!snapshot.seen!.includes(x.id)): [];
  return await serial(async()=>{
- const all=await read(),w=all[key];if(!w)return null;
- if(w.enabled&&snapshot.enabled&&newItems.length&&Notification.isSupported()){
+ const all=await read(),w=all[key],settings=await readSettings();if(!w)return null;
+ const enabled=effective(w,settings);
+ if(enabled&&snapshot.enabled&&settings.notifications&&newItems.length&&Notification.isSupported()){
  const fresh=newItems.filter(x=>!w.seen?.includes(x.id));
  if(fresh.length)new Notification({title:game.title,body:"Nowy patch / New patch: "+fresh[0].title}).show();
  }
- const freshPatch=w.enabled&&snapshot.enabled&&w.seen?newItems.find(x=>!w.seen?.includes(x.id)):undefined;
- const next={...w,pendingPatch:w.enabled?(freshPatch?.title??w.pendingPatch):undefined,...detected,versionSource:detected.versionSource,steamId:result.appId??undefined,lastChecked:new Date().toISOString(),latestTitle:latest?.title,latestVersion:latest?version(latest.title)??undefined:undefined,seen:[...new Set([...patches.map(x=>x.id),...(w.seen??[])])].slice(0,500),error:undefined};
+ const freshPatch=enabled&&snapshot.enabled&&w.seen?newItems.find(x=>!w.seen?.includes(x.id)):undefined;
+ const next={...w,enabled,pendingPatch:enabled?(freshPatch?.title??w.pendingPatch):undefined,...detected,versionSource:detected.versionSource,steamId:result.appId??undefined,lastChecked:new Date().toISOString(),latestTitle:latest?.title,latestVersion:latest?version(latest.title)??undefined:undefined,seen:[...new Set([...patches.map(x=>x.id),...(w.seen??[])])].slice(0,500),error:undefined};
  all[key]=next;await write(all);return next;
  });
  }catch(e){return serial(async()=>{const all=await read(),w=all[key];if(!w)return null;all[key]={...w,...detected,versionSource:detected.versionSource,error:String(e)};await write(all);return all[key];});}
 }
 const inflight=new Map<string,Promise<Watch|null>>();
 function check(key:string,force=false){const old=inflight.get(key);if(old)return old;const p=perform(key,force).finally(()=>inflight.delete(key));inflight.set(key,p);return p;}
-ipcMain.handle("krysta:game-watch-get",async(_e,shop:unknown,id:unknown)=>{const key=keyFor(shop,id);const game=await gamesSublevel.get(key);if(!game||game.isDeleted)return null;const detected=await detectVersion(game.executablePath);return serial(async()=>{const prior=(await read())[key];return {...(prior??{shop:game.shop,id:game.objectId,enabled:false}),...detected,versionSource:detected.versionSource};});});
-ipcMain.handle("krysta:game-watch-set",async(_e,shop:GameShop,id:string,enabled:unknown)=>{
- const key=keyFor(shop,id);if(typeof enabled!=="boolean")throw Error("Invalid settings");
+ipcMain.handle("krysta:game-watch-get",async(_e,shop:unknown,id:unknown)=>{
+ const key=keyFor(shop,id),game=await gamesSublevel.get(key);if(!game||game.isDeleted)return null;
+ const detected=await detectVersion(game.executablePath);
+ return serial(async()=>{const prior=(await read())[key],settings=await readSettings();return {...(prior??{shop:game.shop,id:game.objectId}),override:mode(prior),enabled:effective(prior,settings),...detected,versionSource:detected.versionSource};});
+});
+ipcMain.handle("krysta:game-watch-set",async(_e,shop:GameShop,id:string,override:unknown)=>{
+ const key=keyFor(shop,id);if(override!=="inherit"&&override!=="on"&&override!=="off")throw Error("Invalid settings");
  const game=await gamesSublevel.get(key);if(!game||game.isDeleted)throw Error("Add this game to the library first");
  const detected=await detectVersion(game.executablePath);
- const w=await serial(async()=>{const all=await read();const old=all[key];const next:Watch={...old,shop,id,enabled,...detected,versionSource:detected.versionSource,...(!old?.enabled&&enabled?{seen:undefined,pendingPatch:undefined}:{}),...(!enabled?{pendingPatch:undefined}:{})};all[key]=next;await write(all);return next;});
- if(w.enabled&&!w.seen) void check(key).catch(()=>{});return w;
+ const w=await serial(async()=>{const all=await read(),settings=await readSettings(),old=all[key];const next:Watch={...old,shop,id,override,enabled:override==="on"||(override==="inherit"&&settings.enabled),...detected,versionSource:detected.versionSource};if(override==="off")next.pendingPatch=undefined;all[key]=next;await write(all);return next;});
+ if(w.enabled&&!w.seen)void check(key).catch(()=>{});return w;
 });
 ipcMain.handle("krysta:game-watch-check",(_e,shop:unknown,id:unknown)=>check(keyFor(shop,id),true));
 ipcMain.handle("krysta:game-watch-open-client",async(_e,shop:unknown,id:unknown)=>{
@@ -73,13 +93,43 @@ ipcMain.handle("krysta:game-watch-open-client",async(_e,shop:unknown,id:unknown)
  throw Error("No supported official client");
 });
 ipcMain.handle("krysta:game-watch-badges",()=>serial(async()=>{
- const all=await read();
- return Object.values(all).filter(w=>w.enabled&&w.pendingPatch).map(w=>({shop:w.shop,id:w.id,title:w.pendingPatch!}));
+ const all=await read(),settings=await readSettings();
+ return Object.values(all).filter(w=>effective(w,settings)&&w.pendingPatch).map(w=>({shop:w.shop,id:w.id,title:w.pendingPatch!}));
 }));
 ipcMain.handle("krysta:game-watch-dismiss",async(_e,shop:unknown,id:unknown)=>serial(async()=>{
  const key=keyFor(shop,id),all=await read();
  if(all[key]){all[key]={...all[key],pendingPatch:undefined};await write(all);}
 }));
-let scanning=false;
-async function scan(){if(scanning)return;scanning=true;try{const all=await serial(read);for(const [key,w] of Object.entries(all)){if(w.enabled)await check(key);}}finally{scanning=false;}}
-void app.whenReady().then(()=>{setTimeout(()=>void scan().catch(()=>{}),60000);setInterval(()=>void scan().catch(()=>{}),6*60*60*1000);});
+let scanning=false,lastScan=0,lastFinished:string|null=null,lastError:string|null=null;
+async function scan(){
+ if(scanning)return;scanning=true;lastScan=Date.now();lastError=null;
+ try{
+  const entries=await gamesSublevel.iterator().all();
+  const all=await serial(read);
+  for(const [key,game] of entries){
+   const settings=await serial(readSettings);
+   if(game.isDeleted||game.shop==="launchbox"||!effective(all[key],settings))continue;
+   await check(key);
+   await new Promise(resolve=>setTimeout(resolve,350));
+  }
+  lastFinished=new Date().toISOString();
+ }catch(e){lastError=String(e);}
+ finally{scanning=false;}
+}
+const status=async()=>({...await serial(readSettings),scanning,lastFinished,lastError});
+ipcMain.handle("krysta:game-watch-settings",status);
+ipcMain.handle("krysta:game-watch-settings-set",async(_e,value:unknown)=>{
+ if(!value||typeof value!=="object")throw Error("Invalid settings");
+ const v=value as Settings;
+ if(typeof v.enabled!=="boolean"||typeof v.notifications!=="boolean"||typeof v.startup!=="boolean"||![1,3,6,12,24].includes(v.intervalHours))throw Error("Invalid settings");
+ await serial(async()=>{const old=await readSettings();await fs.writeFile(settingsFile()+".tmp",JSON.stringify({enabled:v.enabled,intervalHours:v.intervalHours,notifications:v.notifications,startup:v.startup}),{mode:0o600});await fs.rename(settingsFile()+".tmp",settingsFile());if(v.enabled&&!old.enabled)lastScan=0;});
+ if(v.enabled&&lastScan===0)void scan();return status();
+});
+ipcMain.handle("krysta:game-watch-scan",async()=>{void scan();return status();});
+let timer:ReturnType<typeof setInterval>|undefined;
+void app.whenReady().then(()=>{
+ lastScan=Date.now();
+ setTimeout(()=>void serial(readSettings).then(v=>{if(v.startup)void scan();}).catch(()=>{}),60000);
+ timer=setInterval(()=>void serial(readSettings).then(v=>{if(Date.now()-lastScan>=v.intervalHours*3600000)void scan();}).catch(()=>{}),60000);
+});
+app.on("before-quit",()=>{if(timer)clearInterval(timer);});
