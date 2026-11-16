@@ -42,6 +42,7 @@ asarUnpack:
   - node_modules/sharp/**
   - node_modules/@img/sharp-libvips-*/**
 win:
+  icon: build/pobrane.ico
   executableName: Krysta
   extraResources:
     - from: legendary/win32/${arch}
@@ -66,6 +67,8 @@ win:
     - nsis
     - portable
 nsis:
+  installerIcon: build/pobrane.ico
+  uninstallerIcon: build/pobrane.ico
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
