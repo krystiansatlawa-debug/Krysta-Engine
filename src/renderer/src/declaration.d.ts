@@ -186,8 +186,13 @@ declare global {
     isFile: boolean;
   };
 
+  interface UbisoftAccountState { connected: boolean; username: string | null; lastSync: string | null; games: {id:string; title:string}[] }
   interface Electron {
     importUbisoft: () => Promise<number>;
+    getUbisoftAccount: () => Promise<UbisoftAccountState>;
+    connectUbisoftAccount: () => Promise<UbisoftAccountState>;
+    syncUbisoftAccount: () => Promise<UbisoftAccountState>;
+    disconnectUbisoftAccount: () => Promise<UbisoftAccountState>;
     scanUbisoft: () => Promise<{supported:boolean; installed:boolean; games:{id:string; title:string; path:string}[]}>;
     launchUbisoft: (id:string) => Promise<void>;
     onCloudSaveAutomaticSyncModeChanged: (
