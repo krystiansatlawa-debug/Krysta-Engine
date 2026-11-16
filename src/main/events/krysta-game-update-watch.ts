@@ -53,7 +53,7 @@ async function detectVersion(exe:string|null|undefined):Promise<{installedVersio
 }
 async function smartState(game:Game):Promise<Pick<Watch,"steamBuildId"|"updateState"|"updateCheckedAt">>{
  const unknown={steamBuildId:undefined,updateState:"unknown" as const,updateCheckedAt:new Date().toISOString()};
- if(game.shop!=="steam"||!game.executablePath)return unknown;
+ if(game.shop!=="steam")return unknown;
  try{
  const found=await readSteamUpdateState(game.objectId,await getSteamLibraryFolders(),game.executablePath);
  return found?{steamBuildId:found.buildId??undefined,updateState:found.updateRequired?"required":"not-reported",updateCheckedAt:unknown.updateCheckedAt}:unknown;
@@ -130,7 +130,7 @@ ipcMain.handle("krysta:game-watch-badges",()=>serial(async()=>{
   if(!game||game.isDeleted)continue;
   let downloadPercent:number|null=null;
   let required=w.updateState==="required";
-  if(required&&game.shop==="steam"&&game.executablePath){
+  if(required&&game.shop==="steam"){
    try{
     const live=await readSteamUpdateState(game.objectId,await getSteamLibraryFolders(),game.executablePath);
     if(live){required=live.updateRequired;downloadPercent=live.downloadPercent;}
