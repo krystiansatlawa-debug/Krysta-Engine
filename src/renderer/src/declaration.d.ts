@@ -188,6 +188,9 @@ declare global {
 
   interface UbisoftAccountState { connected: boolean; username: string | null; lastSync: string | null; games: {id:string; title:string}[] }
   interface Electron {
+    scanRockstar: () => Promise<{supported:boolean;installed:boolean;launcher:string|null;games:{id:string;title:string;folder:string;executablePath:string;steamId:string;aliases:string[]}[];lastSync:string|null}>;
+    importRockstar: () => Promise<{added:number;linked:number;existing:number;skipped:number;lastSync:string;detected:number}>;
+    openRockstarLauncher: () => Promise<void>;
     importUbisoft: () => Promise<number>;
     getUbisoftAccount: () => Promise<UbisoftAccountState>;
     connectUbisoftAccount: () => Promise<UbisoftAccountState>;
