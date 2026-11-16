@@ -9,6 +9,22 @@ export function KrystaGameWatch({shop,id}:{shop:string;id:string}){
  return()=>{active=false;};},[shop,id]);
  const act=async(check:boolean)=>{setBusy(true);setNotice("");try{const w=await window.electron.krystaGameWatchSet(shop,id,override);setWatch(w);if(check)setWatch(await window.electron.krystaGameWatchCheck(shop,id));else setNotice(pl?"Zapisano ustawienia.":"Settings saved.");}catch(e){setNotice(String(e));}finally{setBusy(false);window.dispatchEvent(new Event("krysta:patch-badges"));}};
  const official=shop==="steam"||shop==="epic"||(shop==="custom"&&/^(ubi-owned-|ubisoft-)/.test(id));
+ const prepareUpdate=async()=>{
+  setBusy(true);setNotice("");
+  try{
+   const cfg=await window.electron.krystaCloudConfig();
+   if(cfg.provider==="hydra"||!cfg.folder){
+    setNotice(pl?"Najpierw wybierz prywatny folder kopii w Ustawienia → Krysta Cloud.":"First select a private backup folder in Settings → Krysta Cloud.");
+    return;
+   }
+   const saved=await window.electron.krystaCloudBackup(shop,id);
+   if(!saved){setNotice(pl?"Anulowano kopię; Steam nie został otwarty przez Krystę.":"Backup cancelled; Krysta did not open Steam.");return;}
+   setNotice(pl?"Kopia zapisana. Otwieranie Steam…":"Backup saved. Opening Steam…");
+   await window.electron.krystaGameWatchOpenClient(shop,id);
+   setNotice(pl?"Kopia zapisana; aktualizację wykonaj w Steam.":"Backup saved; complete the update in Steam.");
+  }catch(e){setNotice(String(e));}
+  finally{setBusy(false);}
+ };
  return <section style={{padding:16,border:"1px solid #444",borderRadius:8,display:"flex",flexDirection:"column",gap:10}}>
  <h3>{pl?"Monitor aktualizacji gry":"Game update monitor"}</h3>
  <label>{pl?"Monitorowanie tej gry":"Monitor this game"} <select value={override} disabled={!ready||busy} onChange={e=>setOverride(e.target.value as "inherit"|"on"|"off")} style={{background:"#202020",color:"inherit",padding:6,border:"1px solid #555",borderRadius:4}}><option value="inherit">{pl?"Ustawienia globalne":"Global settings"}</option><option value="on">{pl?"Zawsze włączone":"Always enabled"}</option><option value="off">{pl?"Wyłączone":"Disabled"}</option></select></label>
@@ -27,7 +43,9 @@ export function KrystaGameWatch({shop,id}:{shop:string;id:string}){
  </details>
  {watch?.lastChecked&&<p>{pl?"Ostatnie sprawdzenie":"Last checked"}: {new Date(watch.lastChecked).toLocaleString(i18n.language)}</p>}
  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button type="button" disabled={!ready||busy} onClick={()=>void act(false)}>{pl?"Zapisz ustawienia":"Save settings"}</button><button type="button" disabled={!ready||busy} onClick={()=>void act(true)}>{pl?"Sprawdź teraz":"Check now"}</button>
- {official&&<button type="button" onClick={()=>void window.electron.krystaGameWatchOpenClient(shop,id).catch(e=>setNotice(String(e)))}>{shop==="steam"&&watch?.updateState==="required"?(pl?"Przejdź do aktualizacji Steam":"Go to Steam downloads"):(pl?"Otwórz oficjalny klient":"Open official client")}</button>}</div>
+ {shop==="steam"&&watch?.updateState==="required"&&<button type="button" disabled={busy} onClick={()=>void prepareUpdate()}>{pl?"Zrób kopię i przejdź do aktualizacji":"Back up saves and go to update"}</button>}
+ {official&&<button type="button" disabled={busy} onClick={()=>void window.electron.krystaGameWatchOpenClient(shop,id).catch(e=>setNotice(String(e)))}>{shop==="steam"&&watch?.updateState==="required"?(pl?"Przejdź do aktualizacji Steam":"Go to Steam downloads"):(pl?"Otwórz oficjalny klient":"Open official client")}</button>}</div>
+ {shop==="steam"&&watch?.updateState==="required"&&<small>{pl?"Kopia obejmuje wykryte zapisy; Steam może aktualizować gry niezależnie od Krysty.":"Backup covers detected saves; Steam may update games independently of Krysta."}</small>}
  <small>{pl?"Częstotliwość sprawdzania określają ustawienia globalne. Wersja lokalna pochodzi z metadanych EXE i może różnić się od numeracji patchy. Najnowszy numer wersji pochodzi z tytułu wpisu Steam i nie potwierdza dostępności instalatora. Aktualizacje instaluje oficjalny klient.":"Check interval follows global settings. Local version comes from EXE metadata and may differ from patch numbering. Latest version is inferred from Steam post titles, not installer availability. Official clients handle installation."}</small>
  {watch?.error&&<p role="alert">{watch.error}</p>}{notice&&<p role="status">{notice}</p>}
  </section>;
