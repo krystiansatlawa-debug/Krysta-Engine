@@ -6,7 +6,10 @@ import { createInterface } from "node:readline";
 import { gamesSublevel } from "@main/level";
 import { gamesPlaytime, onTrackedGamesRunningChange } from "@main/services/game-running-state";
 
-type Preference={enabled:boolean;tool?:string};
+type Position="tl"|"tr"|"bl"|"br";
+type Preference={enabled:boolean;tool?:string;position?:Position};
+function normalizePosition(value:unknown):Position{return value==="tr"||value==="bl"||value==="br"?value:"tl";}
+function placement(bounds:Electron.Rectangle,position:Position){return {x:bounds.x+(position.endsWith("r")?bounds.width-116:16),y:bounds.y+(position.startsWith("b")?bounds.height-42:16)};}
 const preferencePath=()=>join(app.getPath("userData"),"krysta-fps.json");
 async function readPreference():Promise<Preference>{
  try{return JSON.parse(await fs.readFile(preferencePath(),"utf8"));}
@@ -41,10 +44,10 @@ async function reconcile(){
  }
  if(generation!==revision)return;
  if(!p.enabled||!tool||!target){stop();status=!p.enabled?"disabled":!tool?"missing-tool":"waiting-game";return;}
- if(activeKey===target.key&&child)return;
+ if(activeKey===target.key&&child){if(overlay&&!overlay.isDestroyed()){const display=screen.getDisplayMatching(overlay.getBounds());const point=placement(display.bounds,normalizePosition(p.position));overlay.setPosition(point.x,point.y);}return;}
  stop();activeKey=target.key;status="starting";
  const display=screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
- const w=new BrowserWindow({x:display.bounds.x+16,y:display.bounds.y+16,width:100,height:26,transparent:true,frame:false,focusable:false,skipTaskbar:true,alwaysOnTop:true,resizable:false,show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});
+ const w=new BrowserWindow({...placement(display.bounds,normalizePosition(p.position)),width:100,height:26,transparent:true,frame:false,focusable:false,skipTaskbar:true,alwaysOnTop:true,resizable:false,show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});
  overlay=w;w.setIgnoreMouseEvents(true);
  const html='<html><body style="margin:0;background:transparent"><div id="fps" style="display:inline-block;color:#d7d7d7;background:rgba(40,40,40,.78);border:1px solid rgba(255,255,255,.10);border-radius:3px;padding:3px 6px;font: 12px Arial,sans-serif;font-weight:500">FPS: --</div></body></html>';
  await w.loadURL("data:text/html;charset=utf-8,"+encodeURIComponent(html)).catch(()=>{});
@@ -72,6 +75,11 @@ ipcMain.handle("krysta:fps-preference",async()=> (await readPreference()).enable
 ipcMain.handle("krysta:fps-set-preference",async(_event,enabled:unknown)=>{
  if(typeof enabled!=="boolean"||process.platform!=="win32")throw new Error("Invalid FPS preference");
  await savePreference({...await readPreference(),enabled});refresh();return enabled;
+});
+ipcMain.handle("krysta:fps-position",async()=>normalizePosition((await readPreference()).position));
+ipcMain.handle("krysta:fps-set-position",async(_event,position:unknown)=>{
+ if(position!=="tl"&&position!=="tr"&&position!=="bl"&&position!=="br")throw new Error("Invalid FPS position");
+ await savePreference({...await readPreference(),position});refresh();return position;
 });
 ipcMain.handle("krysta:fps-status",async()=>({available:!!await findTool(await readPreference()),status}));
 ipcMain.handle("krysta:fps-select-tool",async()=>{
