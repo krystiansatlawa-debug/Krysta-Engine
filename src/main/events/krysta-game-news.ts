@@ -8,7 +8,7 @@ function category(x:{title:string;tags?:unknown}):"patch"|"news" {
   if(/\b(patch notes|release notes|changelog|hotfix(?:es)?|bug fixes|maintenance patch|patch\s+v?\d|(?:game |title )update\s+v?\d|version\s+v?\d+(?:\.\d+)+|update\s+v?\d+(?:\.\d+)+)\b|lista zmian|poprawki błędów|aktualizacja\s+\d/i.test(title)) return "patch";
   return "news";
 }
-async function getNews(_event: Electron.IpcMainInvokeEvent, id: unknown, title: unknown) {
+export async function getGameNews(id: unknown, title: unknown) {
   let appId = typeof id === "string" && /^\d{1,10}$/.test(id) ? id : "";
   if (!appId && typeof title === "string" && title.trim()) {
     const q = new URL("https://store.steampowered.com/api/storesearch/");
@@ -31,4 +31,4 @@ async function getNews(_event: Electron.IpcMainInvokeEvent, id: unknown, title: 
   const items:News[]=raw.filter((x:any)=>typeof x.title==="string" && typeof x.contents==="string").map((x:any)=>({id:String(x.gid),title:x.title,date:Number(x.date)||0,contents:x.contents.slice(0,60000),url:typeof x.url==="string"?x.url:"",author:String(x.author||""),category:category(x)}));
   return {appId,items};
 }
-ipcMain.handle("krysta:game-news",getNews);
+ipcMain.handle("krysta:game-news",(_event,id:unknown,title:unknown)=>getGameNews(id,title));
