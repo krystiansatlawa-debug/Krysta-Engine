@@ -253,6 +253,8 @@ const getGameShopDetails = async (
   language: string,
   options?: GameArtworkOptions
 ): Promise<ShopDetailsWithAssets | null> => {
+  // Normalize Polish locale variants for localized catalogue providers.
+  if (/^pl(?:[-_]|$)/i.test(language)) language = "pl";
   if (shop === "custom") return null;
 
   if (shop === "launchbox") {
