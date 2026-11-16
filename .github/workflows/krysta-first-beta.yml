@@ -27,7 +27,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install dependencies
         run: yarn --frozen-lockfile
-      - name: Test Krysta settings recovery
+      - name: Run recovery regression tests
         run: node --import ./scripts/register-ts-node.mjs --test src/main/services/krysta-settings-recovery.test.ts
       - uses: actions/setup-python@v5
         with:
