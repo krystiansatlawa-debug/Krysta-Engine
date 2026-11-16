@@ -1,3 +1,4 @@
+import { readKrystaSettings, writeKrystaSettings } from "@main/services/krysta-settings-recovery";
 import { app, ipcMain, shell, net } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -29,11 +30,7 @@ function recordBuild(w:Watch|undefined,smart:Pick<Watch,"steamBuildId"|"updateSt
 type Store=Record<string,Watch>;
 type Settings={enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;pauseDuringPlay:boolean;autoOpenSteamQueue:boolean;autoDownloadEpic:boolean;backupBeforeUpdate:boolean};
 const defaults:Settings={enabled:false,intervalHours:6,notifications:true,startup:true,pauseDuringPlay:true,autoOpenSteamQueue:false,autoDownloadEpic:false,backupBeforeUpdate:true};
-const settingsFile=()=>path.join(app.getPath("userData"),"krysta-game-update-settings.json");
-async function readSettings():Promise<Settings>{
- try{return {...defaults,...JSON.parse(await fs.readFile(settingsFile(),"utf8"))};}
- catch(e){if((e as NodeJS.ErrnoException).code==="ENOENT")return {...defaults};throw e;}
-}
+async function readSettings():Promise<Settings>{return {...defaults,...await readKrystaSettings<Settings>(app.getPath("userData"),"game-updates")};}
 function mode(w:Watch|undefined):"on"|"off"|"inherit"{return w?.override??(w?.enabled?"on":"inherit");}
 function effective(w:Watch|undefined,settings:Settings){const m=mode(w);return m==="on"||(m==="inherit"&&settings.enabled);}
 
@@ -396,7 +393,7 @@ ipcMain.handle("krysta:game-watch-settings-set",async(_e,value:unknown)=>{
  if(!value||typeof value!=="object")throw Error("Invalid settings");
  const v=value as Settings;
  if(typeof v.enabled!=="boolean"||typeof v.notifications!=="boolean"||typeof v.startup!=="boolean"||(v.backupBeforeUpdate!==undefined&&typeof v.backupBeforeUpdate!=="boolean")||(v.autoDownloadEpic!==undefined&&typeof v.autoDownloadEpic!=="boolean")||(v.autoOpenSteamQueue!==undefined&&typeof v.autoOpenSteamQueue!=="boolean")||(v.pauseDuringPlay!==undefined&&typeof v.pauseDuringPlay!=="boolean")||![1,3,6,12,24].includes(v.intervalHours))throw Error("Invalid settings");
- await serial(async()=>{const old=await readSettings();await fs.writeFile(settingsFile()+".tmp",JSON.stringify({enabled:v.enabled,intervalHours:v.intervalHours,notifications:v.notifications,startup:v.startup,pauseDuringPlay:v.pauseDuringPlay??old.pauseDuringPlay,autoOpenSteamQueue:v.autoOpenSteamQueue??old.autoOpenSteamQueue,autoDownloadEpic:v.autoDownloadEpic??old.autoDownloadEpic,backupBeforeUpdate:v.backupBeforeUpdate??old.backupBeforeUpdate}),{mode:0o600});await fs.rename(settingsFile()+".tmp",settingsFile());if(v.enabled&&!old.enabled)lastScan=0;});
+ await serial(async()=>{const old=await readSettings();await writeKrystaSettings(app.getPath("userData"),"game-updates",{enabled:v.enabled,intervalHours:v.intervalHours,notifications:v.notifications,startup:v.startup,pauseDuringPlay:v.pauseDuringPlay??old.pauseDuringPlay,autoOpenSteamQueue:v.autoOpenSteamQueue??old.autoOpenSteamQueue,autoDownloadEpic:v.autoDownloadEpic??old.autoDownloadEpic,backupBeforeUpdate:v.backupBeforeUpdate??old.backupBeforeUpdate});if(v.enabled&&!old.enabled)lastScan=0;});
  if(v.enabled&&lastScan===0)void scan();return status();
 });
 ipcMain.handle("krysta:game-watch-scan",async()=>{void scan();return status();});
