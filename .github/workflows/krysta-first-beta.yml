@@ -27,8 +27,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install dependencies
         run: yarn --frozen-lockfile
-      - name: Run recovery regression tests
-        run: node --import ./scripts/register-ts-node.mjs --test src/main/services/krysta-settings-recovery.test.ts
+      - name: Run Beta 4 regression tests
+        run: node --import ./scripts/register-ts-node.mjs --test src/main/services/krysta-settings-recovery.test.ts src/main/services/achievements/ubisoft-recording-baseline.test.ts
+      - name: Prepare verified PresentMon
+        run: node scripts/prepare-presentmon.cjs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -53,13 +55,13 @@ jobs:
           "MAIN_VITE_KRYSTA_HYDRA_BASE=$base" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Set Krysta beta 4 version
         run: npm version 1.0.0-beta.4 --no-git-tag-version --ignore-scripts
-      - name: Check desktop Google OAuth configuration
+      - name: Check optional desktop Google OAuth configuration
         shell: pwsh
         env:
           GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.KRYSTA_GOOGLE_CLIENT_ID }}
           GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.KRYSTA_GOOGLE_CLIENT_SECRET }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:GOOGLE_DESKTOP_CLIENT_ID) -or (-not $env:GOOGLE_DESKTOP_CLIENT_ID.EndsWith('.apps.googleusercontent.com')) -or [string]::IsNullOrWhiteSpace($env:GOOGLE_DESKTOP_CLIENT_SECRET)) { throw 'Desktop Google OAuth client configuration is missing' }
+          if ([string]::IsNullOrWhiteSpace($env:GOOGLE_DESKTOP_CLIENT_ID) -or (-not $env:GOOGLE_DESKTOP_CLIENT_ID.EndsWith('.apps.googleusercontent.com')) -or [string]::IsNullOrWhiteSpace($env:GOOGLE_DESKTOP_CLIENT_SECRET)) { Write-Warning 'Bundled desktop Google OAuth configuration is missing; Google Drive requires manual Desktop client JSON import.' }
       - name: Build Windows without publishing
         run: yarn build:win --publish never
         env:
@@ -79,6 +81,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # Publish only after the regression tests and both Windows packages succeed.
       - name: Publish Krysta beta 4 release
         shell: pwsh
         env:
