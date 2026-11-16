@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button, CheckboxField } from "@renderer/components";
 export function SettingsContextKrystaCloud(){
  const {i18n}=useTranslation();const pl=i18n.language.startsWith("pl");
- const [cfg,setCfg]=useState<{provider:string;folder?:string;autoBackup?:boolean}|null>(null);
+ const [cfg,setCfg]=useState<{provider:string;folder?:string;autoBackup?:boolean;syncBeforeLaunch?:boolean}|null>(null);
  const [busy,setBusy]=useState(false);const [error,setError]=useState(false);
  const [accounts,setAccounts]=useState<{google:boolean;synology:boolean}|null>(null);
  const [nasUrl,setNasUrl]=useState("");
@@ -23,7 +23,7 @@ export function SettingsContextKrystaCloud(){
  };
 
  useEffect(()=>{let active=true;void window.electron.krystaCloudConfig().then(c=>{if(active)setCfg(c);}).catch(()=>{if(active)setError(true);});return()=>{active=false;};},[]);
- const run=async(fn:()=>Promise<{provider:string;folder?:string;autoBackup?:boolean}>)=>{setBusy(true);setError(false);try{setCfg(await fn());}catch{setError(true);}finally{setBusy(false);}};
+ const run=async(fn:()=>Promise<{provider:string;folder?:string;autoBackup?:boolean;syncBeforeLaunch?:boolean}>)=>{setBusy(true);setError(false);try{setCfg(await fn());}catch{setError(true);}finally{setBusy(false);}};
  return <div className="settings-context-panel"><div className="settings-context-panel__group">
  <h3>{pl?"Dostawca chmury":"Cloud provider"}</h3>
  <select aria-label={pl?"Dostawca chmury":"Cloud provider"} value={cfg?.provider??"hydra"} disabled={!cfg||busy} onChange={e=>{const value=e.target.value;void run(()=>window.electron.krystaCloudProvider(value));}} style={{background:"#202020",color:"inherit",padding:10,border:"1px solid #555",borderRadius:4}}>
@@ -33,7 +33,8 @@ export function SettingsContextKrystaCloud(){
  <p style={{overflowWrap:"anywhere"}}>{cfg?.folder??(pl?"Nie wybrano folderu":"No folder selected")}</p>
  <Button theme="outline" disabled={busy||!cfg} onClick={()=>void run(()=>window.electron.krystaCloudFolder())}>{pl?"Wybierz folder":"Choose folder"}</Button></>:<p>{pl?"Zapisy wykryte przez Ludusavi są przesyłane bezpośrednio na konto. Nie wybierasz folderu lokalnego.":"Ludusavi-detected saves are uploaded directly to your account. No local folder selection is required."}</p>}
  <CheckboxField checked={cfg?.autoBackup===true} disabled={busy||!(cfg?.provider==="local"?cfg.folder:cfg?.provider==="google"?accounts?.google:accounts?.synology)} label={pl?"Automatyczna kopia po zakończeniu gry":"Automatically back up after exiting a game"} onChange={()=>void run(()=>window.electron.krystaCloudAuto(!cfg?.autoBackup))}/>
- <p>{pl?"Kopia jest tworzona 15 sekund po wykryciu zakończenia gry. Krysta przesyła kopię bezpośrednio przy połączonym koncie. Przywracanie kopii z innego komputera nie jest jeszcze dostępne.":"A backup is created 15 seconds after a tracked game ends. Krysta uploads directly for connected accounts. Restoring snapshots from another computer is not yet available."}</p>
+ {(cfg?.provider==="google"||cfg?.provider==="synology")&&<><CheckboxField checked={cfg.syncBeforeLaunch===true} disabled={busy||!(cfg.provider==="google"?accounts?.google:accounts?.synology)} label={pl?"Synchronizuj zapisy przed uruchomieniem gry":"Sync saves before launching a game"} onChange={()=>void run(()=>window.electron.krystaCloudSyncBeforeLaunch(!cfg.syncBeforeLaunch))}/><p>{pl?"Krysta sprawdzi najnowszą kopię w chmurze. Jeśli zapisy się różnią, wybierzesz wersję przed startem gry.":"Krysta checks the latest cloud backup. If saves differ, choose which version to use before launching."}</p></>}
+ <p>{pl?"Kopia jest tworzona 15 sekund po wykryciu zakończenia gry. Krysta przesyła kopię bezpośrednio przy połączonym koncie. Przywracanie wymaga zgodnych, wykrytych ścieżek zapisów.":"A backup is created 15 seconds after a tracked game ends. Krysta uploads directly for connected accounts. Restoring requires matching detected save paths."}</p>
  </>}
  {(cfg?.provider==="google"||cfg?.provider==="synology")&&<><h3>{pl?"Połączenia z chmurą":"Cloud connections"}</h3>
  <p>{pl?"Połącz wybranego dostawcę. Kopie z tego komputera są przesyłane bezpośrednio; lokalna historia pozostaje dostępna.":"Connect your provider. Backups from this computer upload directly; local history remains available."}</p>
