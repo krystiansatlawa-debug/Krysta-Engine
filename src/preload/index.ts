@@ -182,6 +182,8 @@ contextBridge.exposeInMainWorld("electron", {
   connectUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-connect"),
   syncUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-sync"),
   disconnectUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-disconnect"),
+  krystaFpsHotkey: () => ipcRenderer.invoke("krysta:fps-hotkey"),
+  krystaFpsSetHotkey: (value:string) => ipcRenderer.invoke("krysta:fps-set-hotkey",value),
   krystaFpsPosition: () => ipcRenderer.invoke("krysta:fps-position"),
   krystaFpsSetPosition: (position:"tl"|"tr"|"bl"|"br") => ipcRenderer.invoke("krysta:fps-set-position",position),
   krystaCloudAuto: (enabled:boolean) => ipcRenderer.invoke("krysta:cloud-auto",enabled),
