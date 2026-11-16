@@ -5,10 +5,10 @@ type Settings=Awaited<ReturnType<typeof window.electron.krystaGameWatchSettings>
 export function KrystaGameUpdateSettings(){
  const {i18n}=useTranslation();const pl=i18n.language.startsWith("pl");
  const [cfg,setCfg]=useState<Settings|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
- useEffect(()=>{let active=true;const refresh=()=>void window.electron.krystaGameWatchSettings().then(v=>{if(active)setCfg(v);}).catch(e=>{if(active)setError(String(e));});refresh();const timer=setInterval(refresh,3000);return()=>{active=false;clearInterval(timer);};},[]);
+ useEffect(()=>{let active=true;const refresh=()=>{if(document.hidden)return;void window.electron.krystaGameWatchSettings().then(v=>{if(active)setCfg(v);}).catch(e=>{if(active)setError(String(e));});};refresh();const timer=setInterval(refresh,6000);document.addEventListener("visibilitychange",refresh);return()=>{active=false;clearInterval(timer);document.removeEventListener("visibilitychange",refresh);};},[]);
  const change=async(patch:Partial<Settings>)=>{if(!cfg)return;setBusy(true);setError("");try{setCfg(await window.electron.krystaGameWatchSettingsSet({...cfg,...patch}));window.dispatchEvent(new Event("krysta:patch-badges"));}catch(e){setError(String(e));}finally{setBusy(false);}};
  const [history,setHistory]=useState<Awaited<ReturnType<typeof window.electron.krystaGameWatchHistory>>>([]),[historyOpen,setHistoryOpen]=useState(false),[search,setSearch]=useState("");
- useEffect(()=>{if(!historyOpen)return;let active=true;const refresh=()=>void window.electron.krystaGameWatchHistory().then(v=>{if(active)setHistory(v);}).catch(e=>{if(active)setError(String(e));});refresh();const timer=setInterval(refresh,5000);return()=>{active=false;clearInterval(timer);};},[historyOpen]);
+ useEffect(()=>{if(!historyOpen)return;let active=true;const refresh=()=>{if(document.hidden)return;void window.electron.krystaGameWatchHistory().then(v=>{if(active)setHistory(v);}).catch(e=>{if(active)setError(String(e));});};refresh();const timer=setInterval(refresh,15000);document.addEventListener("visibilitychange",refresh);return()=>{active=false;clearInterval(timer);document.removeEventListener("visibilitychange",refresh);};},[historyOpen]);
  const scan=async()=>{setBusy(true);setError("");try{setCfg(await window.electron.krystaGameWatchScan());}catch(e){setError(String(e));}finally{setBusy(false);}};
  return <div className="settings-context-panel__group">
  <h3>{pl?"Aktualizacje gier":"Game updates"}</h3>
