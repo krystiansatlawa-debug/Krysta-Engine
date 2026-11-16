@@ -2,6 +2,7 @@ import { BrowserWindow, ipcMain, session, net, app, safeStorage } from "electron
 import { gamesSublevel, gamesShopAssetsSublevel, levelKeys } from "@main/level";
 import { readFileSync, writeFileSync, rmSync, renameSync } from "node:fs";
 import { join } from "node:path";
+import { scanUbisoft, findUbisoftExecutable } from "./krysta-ubisoft";
 import { randomUUID, createHash } from "node:crypto";
 
 const appId = "f68a4bb5-608a-4ff2-8123-be8ef797e0a6";
@@ -65,20 +66,45 @@ async function sync() {
   if (!Array.isArray(nodes) || account !== current) throw new Error("Invalid Ubisoft library response");
   games = nodes.filter((g: {id?:unknown;name?:unknown}) => typeof g?.id === "string" && typeof g?.name === "string").map((g:{id:string;name:string})=>({id:g.id,title:g.name}));
   const existing = await gamesSublevel.iterator().all();
-  const keys = new Set(existing.map(([key]) => key));
+  const records = new Map(existing);
+  const local = await scanUbisoft();
+  const norm=(s:string)=>s.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]/g,"");
   for (const item of games) {
     if(account !== current) throw new Error("Account changed");
     const shop = "custom" as const;
     const objectId = "ubi-owned-" + createHash("sha256").update(current.userId + ":" + item.id).digest("hex").slice(0,32);
     const key = levelKeys.game(shop, objectId);
-    if(keys.has(key)) continue;
+    const old=records.get(key);
+    const oldAssets=await gamesShopAssetsSublevel.get(key);
+    const matches=local.games.filter(g=>norm(g.title)===norm(item.title));
+    const installed=matches.length===1?matches[0]:null;
+    const exe=installed?findUbisoftExecutable(installed.path,item.title):null;
+    let cover=oldAssets?.coverImageUrl??"",hero=oldAssets?.libraryHeroImageUrl??"";
+    if(!cover||!hero){
+      try{
+        const url=new URL("https://store.steampowered.com/api/storesearch/");
+        url.searchParams.set("term",item.title);url.searchParams.set("l","english");url.searchParams.set("cc","US");
+        const response=await net.fetch(url.toString(),{signal:AbortSignal.timeout(7000)});
+        if(response.ok){
+          const data=await response.json();
+          const candidates=(Array.isArray(data.items)?data.items:[]).filter((g:{name?:string;id?:number})=>typeof g.name==="string"&&norm(g.name)===norm(item.title)&&/^\d+$/.test(String(g.id)));
+          if(candidates.length===1){
+            const prefix="https://cdn.cloudflare.steamstatic.com/steam/apps/"+candidates[0].id+"/";
+            cover=cover||prefix+"library_600x900.jpg";hero=hero||prefix+"library_hero.jpg";
+          }
+        }
+      }catch{/* artwork not available */}
+    }
     await gamesShopAssetsSublevel.put(key, {
-      updatedAt:Date.now(),objectId,shop,title:item.title,iconUrl:null,libraryHeroImageUrl:"",libraryImageUrl:"",logoImageUrl:"",logoPosition:null,coverImageUrl:"",downloadSources:[]
+      updatedAt:Date.now(),objectId,shop,title:item.title,iconUrl:null,libraryHeroImageUrl:hero,libraryImageUrl:cover,logoImageUrl:"",logoPosition:null,coverImageUrl:cover,downloadSources:[],...oldAssets,
+      ...(cover?{coverImageUrl:cover,libraryImageUrl:cover}:{}),...(hero?{libraryHeroImageUrl:hero}:{})
     });
     await gamesSublevel.put(key,{
-      title:item.title,iconUrl:null,logoImageUrl:null,libraryHeroImageUrl:null,objectId,shop,remoteId:null,isDeleted:false,playTimeInMilliseconds:0,lastTimePlayed:null,addedToLibraryAt:new Date(),executablePath:null,launchOptions:null,favorite:false,automaticCloudSync:false,hasManuallyUpdatedPlaytime:false
+      title:item.title,iconUrl:null,logoImageUrl:null,libraryHeroImageUrl:hero||null,objectId,shop,remoteId:null,isDeleted:false,playTimeInMilliseconds:0,lastTimePlayed:null,addedToLibraryAt:new Date(),executablePath:null,launchOptions:null,favorite:false,automaticCloudSync:false,hasManuallyUpdatedPlaytime:false,
+      ...old,...(exe&&!old?.executablePath?{executablePath:exe,executablePathUpdatedAt:new Date()}:{}),
+      ...(installed?{ubisoftInstallPath:installed.path,ubisoftLauncherId:installed.id}:{})
     });
-    keys.add(key);
+
   }
   lastSync = new Date().toISOString();
   persist();
