@@ -229,6 +229,7 @@ declare global {
     krystaFpsSelectTool: () => Promise<boolean>;
     krystaFpsPreference: () => Promise<boolean>;
     krystaSetFpsPreference: (enabled:boolean) => Promise<boolean>;
+    translateKrystaNews: (title:string,content:string) => Promise<{title:string;content:string}|null>;
     getKrystaGameNews: (id: string, title: string) => Promise<{appId:string|null;items:{id:string;title:string;date:number;contents:string;url:string;author:string;category:"patch"|"news"}[]}>;
     scanUbisoft: () => Promise<{supported:boolean; installed:boolean; games:{id:string; title:string; path:string}[]}>;
     launchUbisoft: (id:string) => Promise<void>;
