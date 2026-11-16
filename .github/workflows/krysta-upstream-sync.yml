@@ -1,0 +1,109 @@
+name: Krysta Upstream Sync
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 7 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: krysta-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      candidate: ${{ steps.merge.outputs.candidate }}
+      commit: ${{ steps.merge.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Find latest stable Hydra release and prepare isolated merge
+        id: merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$(gh api repos/hydralauncher/hydra/releases/latest --jq '.tag_name')"
+          if [[ ! "$tag" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Unsupported release tag" >&2
+            exit 1
+          fi
+          git fetch --no-tags https://github.com/hydralauncher/hydra.git "refs/tags/$tag:refs/krysta-upstream/latest" --force
+          upstream="$(git rev-parse 'refs/krysta-upstream/latest^{commit}')"
+          if git merge-base --is-ancestor "$upstream" HEAD; then
+            echo "Hydra $tag is already included." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          base="$(git rev-parse HEAD)"
+          branch="upstream-test/$tag-${base:0:10}-${upstream:0:10}"
+          if git ls-remote --exit-code --heads origin "refs/heads/$branch" >/dev/null; then
+            echo "Candidate already exists: $branch" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name "krysta-upstream[bot]"
+          git config user.email "krysta-upstream[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          if ! git -c core.hooksPath=/dev/null merge --no-ff --no-edit "$upstream"; then
+            {
+              echo "### Merge conflicts for Hydra $tag"
+              echo 'Resolve manually; main was not changed.'
+              echo '~~~'
+              git diff --name-only --diff-filter=U
+              echo '~~~'
+            } >> "$GITHUB_STEP_SUMMARY"
+            git merge --abort || true
+            exit 1
+          fi
+          # Never propagate upstream workflow changes into an automated branch.
+          if ! git diff --quiet "$base" HEAD -- .github/workflows; then
+            echo "Upstream changed GitHub workflows; manual security review required." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          candidate="$(git rev-parse HEAD)"
+          git push origin "HEAD:refs/heads/$branch"
+          echo "candidate=$branch" >> "$GITHUB_OUTPUT"
+          echo "commit=$candidate" >> "$GITHUB_OUTPUT"
+          echo "Candidate $branch created. Main unchanged." >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    needs: prepare
+    if: needs.prepare.outputs.commit != ''
+    runs-on: windows-2022
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.21.0'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        run: yarn --frozen-lockfile
+      - name: Build test installer without publishing
+        run: yarn build:win --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          MAIN_VITE_API_URL: 'https://hydra-api-us-east-1.losbroxas.org'
+          MAIN_VITE_AUTH_URL: 'https://auth.hydra.losbroxas.org'
+          MAIN_VITE_CHECKOUT_URL: 'https://checkout.hydralauncher.gg'
+          MAIN_VITE_NIMBUS_API_URL: 'https://api.hydranimbus.com'
+          MAIN_VITE_EXTERNAL_RESOURCES_URL: 'https://assets.hydralauncher.gg'
+          RENDERER_VITE_EXTERNAL_RESOURCES_URL: 'https://assets.hydralauncher.gg'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Krysta-upstream-test-windows
+          path: dist/*.exe
+          if-no-files-found: error
+          retention-days: 7
