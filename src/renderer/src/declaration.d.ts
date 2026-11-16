@@ -198,7 +198,8 @@ declare global {
     disconnectUbisoftAccount: () => Promise<UbisoftAccountState>;
     krystaRecordingsState: () => Promise<{supported:boolean;settings:{enabled:boolean;seconds:number;audio:boolean;preSeconds:number;quality:number;fps:number;limitGb:number;hotkey:string;folder?:string};folder:string;recording:boolean;buffering:boolean;shortcutError:boolean;usedBytes:number;lastError:string;clips:{id:string;game:string;achievement:string;createdAt:string;duration:number;audio:boolean;size:number;thumbnail?:string;before?:number}[]}>;
     krystaRecordingsSettings: (value:{enabled:boolean;seconds:number;audio:boolean;preSeconds:number;quality:number;fps:number;limitGb:number;hotkey:string;folder?:string}) => Promise<void>;
-    krystaRecordingRead: (id:string) => Promise<string>;
+    krystaRecordingRead: (id:string) => Promise<Uint8Array>;
+    krystaRecordingTrimSave: (id:string,start:number,end:number,data:Uint8Array,duration:number,audio:boolean) => Promise<void>;
     krystaRecordingsChooseFolder: (reset?:boolean) => Promise<void>;
     krystaRecordingOpen: (id:string) => Promise<void>;
     krystaRecordingDelete: (id:string) => Promise<void>;

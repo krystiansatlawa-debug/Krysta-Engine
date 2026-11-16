@@ -179,6 +179,7 @@ const invokeGameArtifactExport = async (
 contextBridge.exposeInMainWorld("electron", {
   krystaRecordingsState: () => ipcRenderer.invoke("krysta:recordings-state"),
   krystaRecordingsSettings: (value: { enabled:boolean;seconds:number;audio:boolean;preSeconds:number;quality:number;fps:number;limitGb:number;hotkey:string;folder?:string }) => ipcRenderer.invoke("krysta:recordings-settings",value),
+  krystaRecordingTrimSave: (id:string,start:number,end:number,data:Uint8Array,duration:number,audio:boolean) => ipcRenderer.invoke("krysta:recording-trim-save",id,start,end,data,duration,audio),
   krystaRecordingRead: (id:string) => ipcRenderer.invoke("krysta:recording-read",id),
   krystaRecordingsChooseFolder: (reset=false) => ipcRenderer.invoke("krysta:recordings-choose-folder",reset),
   krystaRecordingOpen: (id:string) => ipcRenderer.invoke("krysta:recording-open",id),

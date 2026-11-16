@@ -36,12 +36,30 @@ async function settings():Promise<Settings>{
 let settingsQueue:Promise<unknown>=Promise.resolve();
 let current:Active|null=null,opening:Promise<Active|null>|null=null,epoch=0,quitting=false,checking=false,lastError="",registered="",shortcutError=false,pausedWindow="",retryAt=0;
 let timer:ReturnType<typeof setInterval>|undefined;
+let storageQueue:Promise<unknown>=Promise.resolve();
+let spaceCache:{dir:string;limit:number;checked:number;ok:boolean}|null=null;
+function serializeStorage<T>(operation:()=>Promise<T>):Promise<T>{
+ const task=storageQueue.then(operation,operation);storageQueue=task.catch(()=>{});return task;
+}
+async function enoughSpace(s:Settings,bytes:number,cache=false){
+ const dir=folder(s);
+ if(cache&&spaceCache?.dir===dir&&spaceCache.limit===s.limitGb&&Date.now()-spaceCache.checked<10000)return spaceCache.ok;
+ await fs.mkdir(dir,{recursive:true});
+ const used=(await list(dir)).reduce((n,c)=>n+c.size,0);
+ const disk=await fs.statfs(dir);
+ const ok=used+bytes<=s.limitGb*1024**3&&disk.bavail*disk.bsize>=bytes+32*1024**2;
+ if(cache)spaceCache={dir,limit:s.limitGb,checked:Date.now(),ok};
+ return ok;
+}
+
 const signature=(handle:string,pid:number)=>handle+":"+pid;
 function dispose(a:Active){
  if(current===a)current=null;
  a.stopped=true;
  if(!a.win.isDestroyed())a.win.destroy();
  a.session.setDisplayMediaRequestHandler(null);
+ a.session.setPermissionCheckHandler(null);
+ a.session.setPermissionRequestHandler(null);
 }
 function end(a:Active){
  if(a.stopped)return;
@@ -60,7 +78,7 @@ async function saveSettings(next:Settings){
   const tmp=settingsPath()+"."+randomUUID()+".tmp";
   try{await fs.writeFile(tmp,JSON.stringify(next),{flag:"wx",mode:0o600});await fs.rename(tmp,settingsPath());}
   finally{await fs.rm(tmp,{force:true});}
-  preferences=next;pausedWindow="";retryAt=0;cancel();applyHotkey(next);
+  preferences=next;pausedWindow="";retryAt=0;spaceCache=null;cancel();applyHotkey(next);
  });
  settingsQueue=job.catch(()=>{});await job;
 }
@@ -114,19 +132,45 @@ async function persist(a:Active,result:Result,names:string[]){
  const bytes=Buffer.from(result.data,"base64");
  if(!bytes.length||bytes.length>maxBytes||bytes.subarray(0,4).toString("hex")!=="1a45dfa3")throw Error("Invalid WebM recording");
  const dir=folder(a.prefs);
- await fs.mkdir(dir,{recursive:true});
- const used=(await list(dir)).reduce((n,c)=>n+c.size,0);
- if(used+bytes.length>a.prefs.limitGb*1024**3)throw Error("Limit nagrań osiągnięty / Recording storage limit reached");
- const id=randomUUID(),file=path.join(dir,id+".webm"),info=path.join(dir,id+".json");
+ const id=randomUUID();
  const clip:Clip={id,game:a.game.title.slice(0,300),achievement:names.join(" · ").slice(0,500),createdAt:new Date(Date.now()-result.duration*1000).toISOString(),duration:Math.round(result.duration*10)/10,before:Math.round(Math.max(0,Math.min(result.before,a.prefs.preSeconds))*10)/10,audio:result.audio===true,size:bytes.length,thumbnail:thumbnail(result.thumbnail)?result.thumbnail:undefined};
- try{await fs.writeFile(file,bytes,{flag:"wx"});await fs.writeFile(info,JSON.stringify(clip),{flag:"wx",mode:0o600});}
- catch(e){await fs.rm(file,{force:true}).catch(()=>{});await fs.rm(info,{force:true}).catch(()=>{});throw e;}
+ await serializeStorage(async()=>{
+  if(!await enoughSpace(a.prefs,bytes.length))throw Error("Limit nagrań lub brak miejsca / Recording limit or insufficient disk space");
+  await writeClip(dir,clip,bytes);
+ });
 }
+async function writeClip(dir:string,clip:Clip,bytes:Uint8Array){
+ const file=path.join(dir,clip.id+".webm"),info=path.join(dir,clip.id+".json");
+ let wroteVideo=false,wroteInfo=false;
+ try{
+  await fs.writeFile(file,bytes,{flag:"wx"});wroteVideo=true;
+  await fs.writeFile(info,JSON.stringify(clip),{flag:"wx",mode:0o600});wroteInfo=true;
+ }catch(e){
+  if(wroteVideo)await fs.rm(file,{force:true}).catch(()=>{});
+  if(wroteInfo)await fs.rm(info,{force:true}).catch(()=>{});
+  throw e;
+ }finally{spaceCache=null;}
+}
+export async function saveTrimmedRecording(id:unknown,start:unknown,end:unknown,data:unknown,duration:unknown,audio:unknown){
+ if(typeof start!=="number"||typeof end!=="number"||typeof duration!=="number"||![start,end,duration].every(Number.isFinite)||start<0||end-start<1||duration<1||Math.abs(duration-(end-start))>1.5||typeof audio!=="boolean")throw Error("Invalid trim range");
+ if(!(data instanceof Uint8Array)||data.byteLength>maxBytes||data.byteLength<4||Buffer.from(data.subarray(0,4)).toString("hex")!=="1a45dfa3")throw Error("Invalid video data");
+ const prefs=await settings(),dir=folder(prefs);
+ await serializeStorage(async()=>{
+  await safeClip(id,dir);
+  const original=(await list(dir)).find(c=>c.id===id);
+  if(!original||end>original.duration+0.1||original.audio!==audio)throw Error("Original clip or audio unavailable");
+  if(!await enoughSpace(prefs,data.byteLength))throw Error("Limit nagrań lub brak miejsca / Recording limit or insufficient disk space");
+  const clip:Clip={id:randomUUID(),game:original.game,achievement:original.achievement+" · Trim",createdAt:new Date(Date.parse(original.createdAt)+start*1000).toISOString(),duration:Math.round(duration*10)/10,audio,size:data.byteLength,before:original.before===undefined?undefined:Math.max(0,Math.min(duration,original.before-start))};
+  await writeClip(dir,clip,data);
+ });
+}
+
 async function sameForeground(a:Active){
  const f=await resolveForegroundWindow();
  return !!f&&f.processId===a.pid&&f.windowHandle===a.handle;
 }
 async function openCapture(prefs:Settings,expected:string|null,generation:number):Promise<Active|null>{
+ if(!await enoughSpace(prefs,8*1024**2,true)){lastError="Limit nagrań lub brak miejsca / Recording limit or insufficient disk space";return null;}
  const match=await resolveForegroundGame("deeplink");
  if(match.status!=="resolved"||!match.game||!match.foreground?.windowHandle||match.foreground.processId==null||(expected&&match.target.gameKey!==expected))return null;
  const handle=match.foreground.windowHandle,pid=match.foreground.processId;
@@ -172,25 +216,29 @@ async function ensure(expected:string|null=null):Promise<Active|null>{
  return opening;
 }
 let triggering=false;
+let pendingNames:string[]|null=null;
+let pendingKey:string|null=null;
 async function trigger(expected:string|null,names:string[]){
- if(triggering||quitting||process.platform!=="win32"||!app.isReady())return;
- triggering=true;
+ if(quitting||process.platform!=="win32"||!app.isReady())return;
+ if(triggering){if(expected&&expected===pendingKey&&pendingNames)for(const name of names)if(!pendingNames.includes(name)&&pendingNames.length<20)pendingNames.push(name);return;}
+ triggering=true;pendingNames=[...names];pendingKey=expected;
  let a:Active|null=null,deadline:ReturnType<typeof setTimeout>|undefined;
  try{
   const s=await settings();if(!s.enabled)return;
   a=await ensure(expected);
   if(!a||a.stopped||a.saving||(expected&&a.key!==expected)||!await sameForeground(a))return;
-  a.saving=true;
+  if(!await enoughSpace(a.prefs,8*1024**2,true))throw Error("Recording storage limit or insufficient space");
+  a.saving=true;pendingKey=a.key;
   const result=await Promise.race([
    a.win.webContents.executeJavaScript("globalThis.krystaSave()") as Promise<Result>,
    new Promise<never>((_,reject)=>{deadline=setTimeout(()=>reject(Error("Recording timed out")), (a!.prefs.seconds+20)*1000);})
   ]);
-  await persist(a,result,names);lastError="";
+  await persist(a,result,pendingNames??names);lastError="";
  }catch(e){lastError=String(e).slice(0,500);if(a&&current===a)end(a);}
  finally{
   if(deadline)clearTimeout(deadline);
   if(a){a.saving=false;if(a.stopped||a.prefs.preSeconds===0){if(current===a)dispose(a);}}
-  triggering=false;
+  triggering=false;pendingNames=null;pendingKey=null;
  }
 }
 export async function recordAchievementClip(game:Game,achievementNames:string[]){
@@ -214,8 +262,8 @@ export async function recordingState(){
  return {supported:process.platform==="win32",settings:s,folder:dir,recording:!!current?.saving,buffering:!!current&&!current.stopped&&!current.saving&&s.preSeconds>0,shortcutError,lastError,usedBytes:clips.reduce((n,c)=>n+c.size,0),clips};
 }
 export async function openRecording(id:unknown){const {file}=await safeClip(id,folder(await settings()));const error=await shell.openPath(file);if(error)throw Error(error);}
-export async function readRecording(id:unknown){const {file}=await safeClip(id,folder(await settings()));return (await fs.readFile(file)).toString("base64");}
-export async function deleteRecording(id:unknown){const dir=folder(await settings()),{file}=await safeClip(id,dir);await fs.unlink(file);await fs.rm(path.join(dir,String(id)+".json"),{force:true});}
+export async function readRecording(id:unknown){const {file}=await safeClip(id,folder(await settings()));return new Uint8Array(await fs.readFile(file));}
+export async function deleteRecording(id:unknown){const dir=folder(await settings()),{file}=await safeClip(id,dir);await serializeStorage(async()=>{await fs.unlink(file);await fs.rm(path.join(dir,String(id)+".json"),{force:true});spaceCache=null;});}
 export async function openRecordingsFolder(){const dir=folder(await settings());await fs.mkdir(dir,{recursive:true});const error=await shell.openPath(dir);if(error)throw Error(error);}
 export {stopRecording};
 void app.whenReady().then(async()=>{if(process.platform!=="win32")return;applyHotkey(await settings());timer=setInterval(()=>void reconcile(),500);timer.unref?.();}).catch(()=>{});
