@@ -25,7 +25,7 @@ export function SteamIcon({ size = 14, className }: SteamIconProps) {
 }
 
 interface SteamLibraryBadgeProps {
-  source?: "steam" | "epic";
+  source?: "steam" | "epic" | "ubisoft";
   availableShops?: readonly string[];
   hasActiveSteamImport?: boolean;
   hasActiveEpicImport?: boolean;
@@ -59,7 +59,7 @@ export function SteamLibraryBadge({
     labelKey =
       badgeSource === "epic" ? "imported_from_epic" : "imported_from_steam";
   }
-  const label = t(labelKey);
+  const label = badgeSource === "ubisoft" ? "Ubisoft Connect" : t(labelKey);
   const classes = [
     "steam-library-badge",
     `steam-library-badge--${variant}`,
@@ -78,7 +78,7 @@ export function SteamLibraryBadge({
         aria-label={label}
         role="img"
       >
-        {badgeSource === "epic" ? (
+        {badgeSource === "ubisoft" ? (<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M4 8c9-10 21 3 11 10-6 4-13-4-7-8 4-3 9 2 5 5"/></svg>) : badgeSource === "epic" ? (
           <EpicLogo
             width={variant === "sidebar" ? 8 : 13}
             height={variant === "sidebar" ? 8 : 13}
