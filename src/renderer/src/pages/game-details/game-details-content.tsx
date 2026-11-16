@@ -508,7 +508,7 @@ export function GameDetailsContent() {
         </nav>
         {detailTab === "screenshots" && <div className="krysta-game-extra"><GallerySlider /></div>}
         {detailTab === "updates" && <KrystaGameUpdates appId={catalogueGame?.shop === "steam" ? String(catalogueGame.objectId) : shop === "steam" ? String(objectId ?? "") : ""} title={game?.title ?? shopDetails?.name ?? ""} />}
-        {detailTab === "mods" && <KrystaGameMods title={game?.title ?? shopDetails?.name ?? ""} />}
+        {detailTab === "mods" && <KrystaGameMods gameKey={`${shop}:${objectId}`} title={game?.title ?? shopDetails?.name ?? ""} />}
         <div className="game-details__description-container" style={detailTab !== "description" ? {display:"none"} : undefined}>
           <div className="game-details__description-content">
             <DescriptionHeader />
