@@ -2,7 +2,7 @@ import { useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowDownIcon } from "@primer/octicons-react";
 import type { LibraryGame } from "@types";
-type Patch={shop:string;id:string;title:string;kind?:"required"|"patch"};
+type Patch={shop:string;id:string;title:string;kind?:"required"|"patch";gameTitle?:string;downloadPercent?:number|null};
 const listeners=new Set<()=>void>();
 let snapshot:Patch[]=[];
 let timer:ReturnType<typeof setInterval>|undefined;
@@ -40,6 +40,13 @@ export function KrystaUpdateCenterActions({patches}:{patches:Patch[]}) {
  return <>
   <button type="button" disabled={busy} onClick={()=>void act(true)}>{pl?"Sprawdź aktualizacje":"Check updates"}</button>
   <button type="button" disabled={busy||!required} onClick={()=>void act(false)}>{pl?"Otwórz kolejkę Steam":"Open Steam queue"}</button>
+  <div style={{flexBasis:"100%",display:"grid",gap:8}}>
+   {patches.filter(p=>p.kind==="required"&&p.shop==="steam").map(p=><div key={p.shop+":"+p.id} style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+    <strong>{p.gameTitle??p.id}</strong>
+    {p.downloadPercent==null?<small>{pl?"Postęp niedostępny":"Progress unavailable"}</small>:<><progress max={100} value={p.downloadPercent} aria-label={pl?"Postęp pobierania":"Download progress"}/><small>{p.downloadPercent}%</small></>}
+   </div>)}
+   {patches.filter(p=>p.kind==="required"&&p.shop==="steam").length>0&&<small>{pl?"Postęp pobierania według lokalnych danych Steam; 100% nie oznacza zakończenia instalacji.":"Download progress from local Steam data; 100% does not mean installation is complete."}</small>}
+  </div>
   {notice&&<small role="status">{notice}</small>}
  </>;
 }
