@@ -34,6 +34,7 @@ import "./library/transfer-game-files";
 import "./emulators";
 import "./retroarch";
 import "./epic";
+import "./krysta-ubisoft";
 import "./screenshot-input";
 
 ipcMain.handle("ping", () => "pong");
