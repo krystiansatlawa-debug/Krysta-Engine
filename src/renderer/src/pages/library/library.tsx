@@ -121,6 +121,7 @@ import "./library.scss";
 
 const FAVORITES_COLLECTION_ID = "__favorites__";
 const HIDDEN_COLLECTION_ID = "__hidden__";
+const UNCATEGORIZED_COLLECTION_ID = "__uncategorized__";
 const EMPTY_HIDDEN_GAMES: LibraryGame[] = [];
 const GAP = 16;
 const LARGE_CARD_ESTIMATED_HEIGHT = 300;
@@ -537,7 +538,7 @@ export default function Library() {
 
   useEffect(() => {
     if (!selectedCollectionId) return;
-    if (selectedCollectionId === FAVORITES_COLLECTION_ID) return;
+    if (selectedCollectionId === FAVORITES_COLLECTION_ID || selectedCollectionId === UNCATEGORIZED_COLLECTION_ID) return;
     if (selectedCollectionId === HIDDEN_COLLECTION_ID) {
       if (!userDetails) handleCollectionSelect(null);
       return;
@@ -581,7 +582,8 @@ export default function Library() {
   const orderCollectionId =
     selectedCollectionId &&
     selectedCollectionId !== FAVORITES_COLLECTION_ID &&
-    selectedCollectionId !== HIDDEN_COLLECTION_ID
+    selectedCollectionId !== HIDDEN_COLLECTION_ID &&
+    selectedCollectionId !== UNCATEGORIZED_COLLECTION_ID
       ? selectedCollectionId
       : null;
   const collectionGames = useMemo(
@@ -803,6 +805,8 @@ export default function Library() {
     if (selectedCollectionId) {
       if (selectedCollectionId === FAVORITES_COLLECTION_ID) {
         filtered = filtered.filter((game) => game.favorite);
+      } else if (selectedCollectionId === UNCATEGORIZED_COLLECTION_ID) {
+        filtered = filtered.filter((game) => getGameCollectionIds(game).length === 0);
       } else if (selectedCollectionId === HIDDEN_COLLECTION_ID) {
         // Hidden games are populated by the authenticated owner's private list.
       } else {
@@ -890,6 +894,11 @@ export default function Library() {
             },
           ]
         : []),
+      {
+        id: UNCATEGORIZED_COLLECTION_ID,
+        name: document.documentElement.lang.startsWith("pl") ? "Gry bez kategorii" : "Uncategorized games",
+        gamesCount: groupedLibrary.filter((game) => getGameCollectionIds(game).length === 0).length,
+      },
       ...collections.map((collection) => ({
         ...collection,
         gamesCount: groupedLibrary.filter((game) =>
@@ -1254,6 +1263,7 @@ export default function Library() {
                 selectedCollectionId={selectedCollectionId}
                 favoritesCollectionId={FAVORITES_COLLECTION_ID}
                 hiddenCollectionId={HIDDEN_COLLECTION_ID}
+                uncategorizedCollectionId={UNCATEGORIZED_COLLECTION_ID}
                 onCollectionSelect={handleCollectionSelect}
                 onCollectionCreate={handleCreateCollectionButtonClick}
                 onCollectionContextMenu={openCollectionContextMenu}
