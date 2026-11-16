@@ -14,14 +14,14 @@ import { hasTrackedGamesRunning } from "@main/services/game-running-state";
 import type { GameShop, Game } from "@types";
 
 type BuildChange={from:string;to:string;detectedAt:string};
-type Watch={localVersionHistory?:BuildChange[];lastLocalVersion?:string;lastLocalSource?:string;updateProvider?:"steam"|"epic"|"gog";buildHistory?:BuildChange[];lastKnownBuildId?:string;shop:GameShop;id:string;enabled:boolean;override?:"on"|"off"|"inherit";installedVersion:string;versionSource?:"product"|"file"|"epic-manifest"|"version-file"|"gog-manifest";seen?:string[];lastChecked?:string;latestTitle?:string;latestVersion?:string;error?:string;steamId?:string;pendingPatch?:string;steamBuildId?:string;updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string};
+type Watch={gameTitle?:string;installedBuild?:string;installedBuildSource?:"epic"|"gog";platformBuildHistory?:(BuildChange&{source:"epic"|"gog"})[];lastPlatformBuild?:string;lastPlatformSource?:"epic"|"gog";localVersionHistory?:BuildChange[];lastLocalVersion?:string;lastLocalSource?:string;updateProvider?:"steam"|"epic"|"gog";buildHistory?:BuildChange[];lastKnownBuildId?:string;shop:GameShop;id:string;enabled:boolean;override?:"on"|"off"|"inherit";installedVersion:string;versionSource?:"product"|"file"|"epic-manifest"|"version-file"|"gog-manifest";seen?:string[];lastChecked?:string;latestTitle?:string;latestVersion?:string;error?:string;steamId?:string;pendingPatch?:string;steamBuildId?:string;updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string};
 function recordBuild(w:Watch|undefined,smart:Pick<Watch,"steamBuildId"|"updateState"|"updateCheckedAt">){
  const previous=w?.lastKnownBuildId??w?.steamBuildId;
  const current=smart.steamBuildId;
  const history=w?.buildHistory??[];
  if(!current||!/^\d+$/.test(current))return {lastKnownBuildId:previous,buildHistory:history};
  if(!previous||previous===current||smart.updateState!=="not-reported")return {lastKnownBuildId:smart.updateState==="not-reported"?current:previous,buildHistory:history};
- return {lastKnownBuildId:current,buildHistory:[{from:previous,to:current,detectedAt:smart.updateCheckedAt??new Date().toISOString()},...history].slice(0,100)};
+ return {lastKnownBuildId:current,buildHistory:[{from:previous,to:current,detectedAt:smart.updateCheckedAt??new Date().toISOString()},...history].slice(0,1000)};
 }
 type Store=Record<string,Watch>;
 type Settings={enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;pauseDuringPlay:boolean;autoOpenSteamQueue:boolean;autoDownloadEpic:boolean;backupBeforeUpdate:boolean};
@@ -130,14 +130,20 @@ async function gogLocal(game:Game){
  }
  return null;
 }
+function platformHistory(w:Watch|undefined,s:Pick<Watch,"installedBuild"|"installedBuildSource">){
+ const history=w?.platformBuildHistory??[];
+ if(!s.installedBuild||!s.installedBuildSource)return {platformBuildHistory:history,lastPlatformBuild:w?.lastPlatformBuild,lastPlatformSource:w?.lastPlatformSource};
+ const changed=w?.lastPlatformBuild&&w.lastPlatformSource===s.installedBuildSource&&w.lastPlatformBuild!==s.installedBuild;
+ return {platformBuildHistory:changed?[{from:w!.lastPlatformBuild!,to:s.installedBuild,source:s.installedBuildSource,detectedAt:new Date().toISOString()},...history].slice(0,1000):history,lastPlatformBuild:s.installedBuild,lastPlatformSource:s.installedBuildSource};
+}
 function localHistory(w:Watch|undefined,v:LocalVersion){
  const history=w?.localVersionHistory??[];
  if(!v.installedVersion||!v.versionSource)return {localVersionHistory:history,lastLocalVersion:w?.lastLocalVersion,lastLocalSource:w?.lastLocalSource};
  const changed=w?.lastLocalVersion&&w.lastLocalVersion!==v.installedVersion&&w.lastLocalSource===v.versionSource;
- return {localVersionHistory:changed?[{from:w!.lastLocalVersion!,to:v.installedVersion,detectedAt:new Date().toISOString()},...history].slice(0,100):history,lastLocalVersion:v.installedVersion,lastLocalSource:v.versionSource};
+ return {localVersionHistory:changed?[{from:w!.lastLocalVersion!,to:v.installedVersion,detectedAt:new Date().toISOString()},...history].slice(0,1000):history,lastLocalVersion:v.installedVersion,lastLocalSource:v.versionSource};
 }
-async function smartState(game:Game):Promise<Pick<Watch,"steamBuildId"|"updateState"|"updateCheckedAt"|"updateProvider">>{
- const unknown={updateProvider:undefined,steamBuildId:undefined,updateState:"unknown" as const,updateCheckedAt:new Date().toISOString()};
+async function smartState(game:Game):Promise<Pick<Watch,"steamBuildId"|"updateState"|"updateCheckedAt"|"updateProvider"|"installedBuild"|"installedBuildSource">>{
+ const unknown={installedBuild:undefined,installedBuildSource:undefined,updateProvider:undefined,steamBuildId:undefined,updateState:"unknown" as const,updateCheckedAt:new Date().toISOString()};
  if(game.shop==="epic"&&game.epicInstallation&&game.executablePath){
   try{
    const result=await getEpicGameInstallOptions(game.objectId,AbortSignal.timeout(25000));
@@ -146,22 +152,23 @@ async function smartState(game:Game):Promise<Pick<Watch,"steamBuildId"|"updateSt
    const matches=result.options.filter(o=>o.artifactId===installation.artifactId&&o.platform===installation.platform&&o.installed&&o.installedVersion&&o.publishedVersion);
    if(matches.length!==1)return unknown;
    const option=matches[0];
-   return {...unknown,updateProvider:"epic",updateState:option.installedVersion!==option.publishedVersion?"required":"not-reported"};
+   return {...unknown,installedBuild:option.installedVersion??undefined,installedBuildSource:"epic",updateProvider:"epic",updateState:option.installedVersion!==option.publishedVersion?"required":"not-reported"};
   }catch{return unknown;}
  }
  const gog=await gogLocal(game);
  if(gog){
+  const local={...unknown,installedBuild:gog.build,installedBuildSource:"gog" as const};
   try{
    const response=await net.fetch("https://content-system.gog.com/products/"+gog.id+"/os/windows/builds?generation=2",{signal:AbortSignal.timeout(12000),redirect:"error"});
-   if(!response.ok)return unknown;
+   if(!response.ok)return local;
    const data=await response.json();
-   if(!Array.isArray(data.items))return unknown;
+   if(!Array.isArray(data.items))return local;
    const items=data.items.filter((b:any)=>b.public===true&&b.branch===null&&b.os==="windows"&&String(b.product_id)===gog.id&&typeof b.build_id==="string"&&/^\d+$/.test(b.build_id)&&Number.isFinite(Date.parse(b.date_published))).sort((a:any,b:any)=>Date.parse(b.date_published)-Date.parse(a.date_published));
-   if(!items.length)return unknown;
-   if(items[0].build_id===gog.build)return {...unknown,updateProvider:"gog",updateState:"not-reported"};
-   if(items.some((b:any)=>b.build_id===gog.build&&Date.parse(b.date_published)<Date.parse(items[0].date_published)))return {...unknown,updateProvider:"gog",updateState:"required"};
-   return unknown;
-  }catch{return unknown;}
+   if(!items.length)return local;
+   if(items[0].build_id===gog.build)return {...local,updateProvider:"gog",updateState:"not-reported"};
+   if(items.some((b:any)=>b.build_id===gog.build&&Date.parse(b.date_published)<Date.parse(items[0].date_published)))return {...local,updateProvider:"gog",updateState:"required"};
+   return local;
+  }catch{return local;}
  }
  if(game.shop!=="steam")return unknown;
  try{
@@ -175,7 +182,7 @@ async function perform(key:string,force=false){
  const snapshot=await serial(async()=>{
   const all=await read(),settings=await readSettings(),old=all[key];
   if(!effective(old,settings)&&!force)return null;
-  const w:Watch={...old,shop:game.shop,id:game.objectId,override:mode(old),enabled:effective(old,settings),installedVersion:old?.installedVersion??""};
+  const w:Watch={...old,gameTitle:game.title,shop:game.shop,id:game.objectId,override:mode(old),enabled:effective(old,settings),installedVersion:old?.installedVersion??""};
   all[key]=w;await write(all);return w;
  });
  if(!snapshot)return null;
@@ -196,10 +203,10 @@ async function perform(key:string,force=false){
  if(fresh.length)new Notification({title:game.title,body:"Nowy patch / New patch: "+fresh[0].title}).show();
  }
  const freshPatch=enabled&&snapshot.enabled&&w.seen?newItems.find(x=>!w.seen?.includes(x.id)):undefined;
- const next={...w,enabled,pendingPatch:enabled?(freshPatch?.title??w.pendingPatch):undefined,...detected,...smart,...recordBuild(w,smart),...localHistory(w,detected),versionSource:detected.versionSource,steamId:result.appId??undefined,lastChecked:new Date().toISOString(),latestTitle:latest?.title,latestVersion:latest?version(latest.title)??undefined:undefined,seen:[...new Set([...patches.map(x=>x.id),...(w.seen??[])])].slice(0,500),error:undefined};
+ const next={...w,enabled,pendingPatch:enabled?(freshPatch?.title??w.pendingPatch):undefined,...detected,...smart,...recordBuild(w,smart),...platformHistory(w,smart),...localHistory(w,detected),versionSource:detected.versionSource,steamId:result.appId??undefined,lastChecked:new Date().toISOString(),latestTitle:latest?.title,latestVersion:latest?version(latest.title)??undefined:undefined,seen:[...new Set([...patches.map(x=>x.id),...(w.seen??[])])].slice(0,500),error:undefined};
  all[key]=next;await write(all);return next;
  });
- }catch(e){return serial(async()=>{const all=await read(),w=all[key];if(!w)return null;if(effective(w,await readSettings())&&snapshot.enabled&&smart.updateState==="required"&&w.updateState!=="required"&&(await readSettings()).notifications&&Notification.isSupported())new Notification({title:game.title,body:(smart.updateProvider==="gog"?"GOG":game.shop==="epic"?"Epic Games":"Steam")+": aktualizacja wymagana / Update required"}).show();all[key]={...w,...detected,...smart,...recordBuild(w,smart),...localHistory(w,detected),versionSource:detected.versionSource,error:String(e)};await write(all);return all[key];});}
+ }catch(e){return serial(async()=>{const all=await read(),w=all[key];if(!w)return null;if(effective(w,await readSettings())&&snapshot.enabled&&smart.updateState==="required"&&w.updateState!=="required"&&(await readSettings()).notifications&&Notification.isSupported())new Notification({title:game.title,body:(smart.updateProvider==="gog"?"GOG":game.shop==="epic"?"Epic Games":"Steam")+": aktualizacja wymagana / Update required"}).show();all[key]={...w,...detected,...smart,...recordBuild(w,smart),...platformHistory(w,smart),...localHistory(w,detected),versionSource:detected.versionSource,error:String(e)};await write(all);return all[key];});}
 }
 const inflight=new Map<string,Promise<Watch|null>>();
 function check(key:string,force=false){const old=inflight.get(key);if(old)return old;const p=perform(key,force).finally(()=>inflight.delete(key));inflight.set(key,p);return p;}
@@ -214,7 +221,7 @@ ipcMain.handle("krysta:game-watch-set",async(_e,shop:GameShop,id:string,override
  const game=await gamesSublevel.get(key);if(!game||game.isDeleted)throw Error("Add this game to the library first");
  const detected=await detectVersion(game);
  const smart=await smartState(game);
- const w=await serial(async()=>{const all=await read(),settings=await readSettings(),old=all[key];const next:Watch={...old,shop,id,override,enabled:override==="on"||(override==="inherit"&&settings.enabled),...detected,...smart,...recordBuild(old,smart),...localHistory(old,detected),versionSource:detected.versionSource};if(override==="off")next.pendingPatch=undefined;all[key]=next;await write(all);return next;});
+ const w=await serial(async()=>{const all=await read(),settings=await readSettings(),old=all[key];const next:Watch={...old,gameTitle:game.title,shop,id,override,enabled:override==="on"||(override==="inherit"&&settings.enabled),...detected,...smart,...recordBuild(old,smart),...platformHistory(old,smart),...localHistory(old,detected),versionSource:detected.versionSource};if(override==="off")next.pendingPatch=undefined;all[key]=next;await write(all);return next;});
  if(w.enabled&&!w.seen)void check(key).catch(()=>{});return w;
 });
 ipcMain.handle("krysta:game-watch-check",(_e,shop:unknown,id:unknown)=>check(keyFor(shop,id),true));
@@ -250,6 +257,18 @@ ipcMain.handle("krysta:game-watch-badges",()=>serial(async()=>{
   badges.push({shop:w.shop,id:w.id,gameTitle:game.title,title:required?(w.updateProvider==="gog"?"GOG: update required":game.shop==="epic"?"Epic Games: update required":"Steam: update required"):w.pendingPatch!,kind:required?"required":"patch",downloadPercent});
  }
  return badges;
+}));
+ipcMain.handle("krysta:game-watch-history",()=>serial(async()=>{
+ const all=await read();
+ const rows=[];
+ for(const w of Object.values(all)){
+  const game=await gamesSublevel.get(keyFor(w.shop,w.id)).catch(()=>undefined);
+  const title=game?.title??w.gameTitle??w.id;
+  for(const entry of w.buildHistory??[])rows.push({...entry,source:"steam",shop:w.shop,id:w.id,title});
+  for(const entry of w.platformBuildHistory??[])rows.push({...entry,shop:w.shop,id:w.id,title});
+  for(const entry of w.localVersionHistory??[])rows.push({...entry,source:"local",shop:w.shop,id:w.id,title});
+ }
+ return rows.sort((a,b)=>b.detectedAt.localeCompare(a.detectedAt));
 }));
 ipcMain.handle("krysta:game-watch-dismiss",async(_e,shop:unknown,id:unknown)=>serial(async()=>{
  const key=keyFor(shop,id),all=await read();
