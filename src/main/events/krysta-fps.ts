@@ -24,7 +24,7 @@ async function findTool(p:Preference){
 }
 let overlay:BrowserWindow|null=null, child:ChildProcess|null=null, timer:ReturnType<typeof setInterval>|null=null, activeKey="", revision=0, status="idle";
 let hidden=false, registered="", shortcutError=false, lastError="", poll:ReturnType<typeof setInterval>|undefined;
-let reconciling=false;
+let reconciling=false,refreshPending=false,quitting=false;
 const defaultHotkey="Control+Shift+F10";
 function registerHotkey(value:string){if(registered===value)return true;if(!value){if(registered)globalShortcut.unregister(registered);registered="";return true;}try{if(!globalShortcut.register(value,()=>{hidden=!hidden;if(overlay&&!overlay.isDestroyed()){if(hidden)overlay.hide();else overlay.showInactive();}refresh();}))return false;if(registered)globalShortcut.unregister(registered);registered=value;return true;}catch{return false;}}
 function stop(){
@@ -39,7 +39,9 @@ function show(value:string){
 async function reconcile(){
  const generation=++revision;
  const p=await readPreference();
- shortcutError=!registerHotkey(p.hotkey??defaultHotkey);
+ shortcutError=!registerHotkey(p.enabled?(p.hotkey??defaultHotkey):"");
+ if(!p.enabled){stop();status="disabled";return;}
+ if(hidden){stop();status="hidden";return;}
  const tool=await findTool(p);
  const keys=Array.from(gamesPlaytime.keys());
  let target:{key:string;exe:string}|null=null;
@@ -75,7 +77,7 @@ async function reconcile(){
  const ended=()=>{if(child===proc){stop();status="capture-error";}};
  proc.once("error",e=>{lastError=String(e);ended();});proc.once("exit",ended);
 }
-function refresh(){if(process.platform==="win32"&&app.isReady()&&!reconciling){reconciling=true;void reconcile().catch(e=>{stop();status="capture-error";lastError=String(e);}).finally(()=>{reconciling=false;});}}
+function refresh(){if(process.platform!=="win32"||!app.isReady()||quitting)return;if(reconciling){refreshPending=true;return;}reconciling=true;void reconcile().catch(e=>{stop();status="capture-error";lastError=String(e);}).finally(()=>{reconciling=false;if(refreshPending){refreshPending=false;refresh();}});}
 ipcMain.handle("krysta:fps-preference",async()=> (await readPreference()).enabled===true);
 ipcMain.handle("krysta:fps-set-preference",async(_event,enabled:unknown)=>{
  if(typeof enabled!=="boolean"||process.platform!=="win32")throw new Error("Invalid FPS preference");
@@ -98,7 +100,7 @@ ipcMain.handle("krysta:fps-hotkey",async()=> (await readPreference()).hotkey??de
 ipcMain.handle("krysta:fps-set-hotkey",async(_e,value:unknown)=>{
  if(typeof value!=="string"||! /^(?:(?:Control|Alt|Shift)\+){0,3}(?:F(?:[1-9]|1[0-2])|[A-Z0-9])$/.test(value)&&value!=="")throw Error("Invalid shortcut");
  if(value&&!value.includes("+")&&!/^F\d+$/.test(value))throw Error("Use a modifier with letters or numbers");
- if(!registerHotkey(value))throw Error("Shortcut already in use");
+ const pref=await readPreference();if(pref.enabled&&!registerHotkey(value))throw Error("Shortcut already in use");
  await savePreference({...await readPreference(),hotkey:value});shortcutError=false;return value;
 });
-if(process.platform==="win32"){onTrackedGamesRunningChange(refresh);void app.whenReady().then(()=>{refresh();poll=setInterval(()=>{if(status!=="capture-error")refresh();},3000);});app.on("before-quit",()=>{revision++;if(poll)clearInterval(poll);if(registered)globalShortcut.unregister(registered);stop();});}
+if(process.platform==="win32"){onTrackedGamesRunningChange(refresh);void app.whenReady().then(()=>{refresh();poll=setInterval(()=>{if(status!=="capture-error"&&status!=="disabled"&&status!=="hidden")refresh();},3000);});app.on("before-quit",()=>{quitting=true;revision++;if(poll)clearInterval(poll);if(registered)globalShortcut.unregister(registered);stop();});}
