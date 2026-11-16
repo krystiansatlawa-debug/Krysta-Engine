@@ -205,11 +205,11 @@ declare global {
     krystaCloudSynologyConnect: (url:string,username:string,password:string) => Promise<boolean>;
     krystaCloudAccountDisconnect: (provider:string) => Promise<boolean>;
     installUbisoftGame: (id:string) => Promise<"client"|"launched">;
-    krystaGameWatchBadges: () => Promise<{shop:string;id:string;title:string}[]>;
+    krystaGameWatchBadges: () => Promise<{shop:string;id:string;title:string;kind?:"required"|"patch"}[]>;
     krystaGameWatchDismiss: (shop:string,id:string) => Promise<void>;
-    krystaGameWatchGet: (shop:string,id:string) => Promise<{enabled:boolean;override?:"inherit"|"on"|"off";installedVersion:string;versionSource?:"product"|"file";pendingPatch?:string;latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}|null>;
-    krystaGameWatchSet: (shop:string,id:string,override:"inherit"|"on"|"off") => Promise<{enabled:boolean;override?:"inherit"|"on"|"off";installedVersion:string;versionSource?:"product"|"file";pendingPatch?:string;latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}>;
-    krystaGameWatchCheck: (shop:string,id:string) => Promise<{enabled:boolean;override?:"inherit"|"on"|"off";installedVersion:string;versionSource?:"product"|"file";pendingPatch?:string;latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}|null>;
+    krystaGameWatchGet: (shop:string,id:string) => Promise<{enabled:boolean;override?:"inherit"|"on"|"off";installedVersion:string;versionSource?:"product"|"file";pendingPatch?:string;steamBuildId?:string;updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string;latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}|null>;
+    krystaGameWatchSet: (shop:string,id:string,override:"inherit"|"on"|"off") => Promise<{enabled:boolean;override?:"inherit"|"on"|"off";installedVersion:string;versionSource?:"product"|"file";pendingPatch?:string;steamBuildId?:string;updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string;latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}>;
+    krystaGameWatchCheck: (shop:string,id:string) => Promise<{enabled:boolean;override?:"inherit"|"on"|"off";installedVersion:string;versionSource?:"product"|"file";pendingPatch?:string;steamBuildId?:string;updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string;latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}|null>;
     krystaGameWatchSettings: () => Promise<{enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;scanning:boolean;lastFinished:string|null;lastError:string|null}>;
     krystaGameWatchSettingsSet: (value:{enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean}) => ReturnType<Window["electron"]["krystaGameWatchSettings"]>;
     krystaGameWatchScan: () => ReturnType<Window["electron"]["krystaGameWatchSettings"]>;
