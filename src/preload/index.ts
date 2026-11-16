@@ -177,6 +177,9 @@ const invokeGameArtifactExport = async (
 };
 
 contextBridge.exposeInMainWorld("electron", {
+  scanRockstar: () => ipcRenderer.invoke("krysta:rockstar-scan"),
+  importRockstar: () => ipcRenderer.invoke("krysta:rockstar-import"),
+  openRockstarLauncher: () => ipcRenderer.invoke("krysta:rockstar-open"),
   importUbisoft: (): Promise<number> => ipcRenderer.invoke("krysta:ubisoft-import"),
   getUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-state"),
   connectUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-connect"),
