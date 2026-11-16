@@ -41,6 +41,7 @@ async function recover(root:string,name:Name,initial?:RecordValue):Promise<{valu
   const current=await inspect(file,s.validate);
   if(current.kind==="valid"){
    const b=await inspect(backup,s.validate);
+   if(b.kind==="invalid")await fs.copyFile(backup,backup+".corrupt-"+randomUUID(),1);
    if(b.kind!=="valid")await atomic(backup,current.value);
    return {value:{...s.defaults,...current.value},result:{name,state:"valid"}};
   }
