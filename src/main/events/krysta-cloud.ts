@@ -54,3 +54,74 @@ ipcMain.handle("krysta:cloud-backup",async(_e,shop:GameShop,id:string)=>{
  try{const entries=[];let total=0;for(const [i,p] of files.entries()){const st=await fs.stat(p);total+=st.size;if(total>5*1024**3)throw Error("Backup exceeds 5 GB");const name=String(i);await copyVerified(p,path.join(temp,name));entries.push({name,original:p,size:st.size});}if(isTrackedGameKeyRunning(key))throw Error("Game started during backup");await fs.writeFile(path.join(temp,"manifest.json"),JSON.stringify({id:uuid,createdAt:new Date().toISOString(),files:entries}));await fs.rename(temp,path.join(base,uuid));return true;}catch(e){await fs.rm(temp,{recursive:true,force:true});throw e;}
  });
 });
+
+/* Restore only files independently detected for this game on this PC.
+ * The remote manifest is never trusted to choose a writable destination. */
+ipcMain.handle("krysta:cloud-restore",async(_e,shop:GameShop,id:string,version:unknown)=>{
+ if(typeof version!=="string"||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(version))throw Error("Invalid backup version");
+ const {key,base,root}=await gameContext(shop,id);
+ return locked(key,async()=>{
+  if(isTrackedGameKeyRunning(key))throw Error("Close the game before restoring");
+  await safeDirectory(root,base);
+  const dir=path.join(base,version);
+  if(await fs.realpath(dir)!==dir)throw Error("Unsafe backup directory");
+  const manifestPath=path.join(dir,"manifest.json");
+  const manifestStat=await fs.lstat(manifestPath);
+  if(!manifestStat.isFile()||manifestStat.isSymbolicLink()||manifestStat.size>8*1024**2)throw Error("Invalid backup manifest");
+  const m=JSON.parse(await fs.readFile(manifestPath,"utf8"));
+  if(m.id!==version||!Array.isArray(m.files)||!m.files.length||m.files.length>5000)throw Error("Invalid backup manifest");
+  const current=await discover(shop,id);
+  const allowed=new Set(current.map(p=>process.platform==="win32"?p.toLowerCase():p));
+  const seen=new Set<string>();
+  const files:{src:string;dst:string;size:number}[]=[];
+  let total=0;
+  for(const entry of m.files){
+   if(!entry||typeof entry.original!=="string"||typeof entry.name!=="string"||!/^[0-9]+$/.test(entry.name)||!Number.isSafeInteger(entry.size)||entry.size<0)throw Error("Invalid backup entry");
+   const candidate=path.normalize(entry.original);
+   const destKey=process.platform==="win32"?candidate.toLowerCase():candidate;
+   if(!allowed.has(destKey)||seen.has(destKey)||within(root,candidate))throw Error("Save destination not recognized on this computer. Restore requires matching detected local files.");
+   seen.add(destKey);
+   const dst=current.find(p=>(process.platform==="win32"?p.toLowerCase():p)===destKey)!;
+   const src=path.join(dir,entry.name);
+   const st=await fs.lstat(src);
+   if(!st.isFile()||st.isSymbolicLink()||st.size!==entry.size||await fs.realpath(src)!==src)throw Error("Backup file missing, incomplete or unsafe");
+   total+=st.size;if(total>5*1024**3)throw Error("Backup exceeds 5 GB");
+   files.push({src,dst,size:st.size});
+  }
+  const answer=await dialog.showMessageBox({type:"warning",buttons:["Cancel / Anuluj","Restore / Przywróć"],defaultId:0,cancelId:0,message:"Restore selected save version? / Przywrócić wybraną wersję zapisów?",detail:"Existing save files will be backed up before replacement. Close the game first. / Aktualne pliki zostaną skopiowane przed nadpisaniem. Zamknij grę."});
+  if(answer.response!==1)return false;
+  if(isTrackedGameKeyRunning(key))throw Error("Close the game before restoring");
+  const safetyId=randomUUID(),pending=path.join(base,".pending-"+safetyId);
+  await fs.mkdir(pending);
+  try{
+   const entries=[];
+   for(const [i,f] of files.entries()){
+    const st=await fs.lstat(f.dst);
+    if(!st.isFile()||st.isSymbolicLink()||await fs.realpath(f.dst)!==f.dst)throw Error("Save destination changed");
+    const name=String(i);await copyVerified(f.dst,path.join(pending,name));entries.push({name,original:f.dst,size:st.size});
+   }
+   await fs.writeFile(path.join(pending,"manifest.json"),JSON.stringify({id:safetyId,createdAt:new Date().toISOString(),kind:"before-restore",files:entries}));
+   await fs.rename(pending,path.join(base,safetyId));
+  }catch(e){await fs.rm(pending,{recursive:true,force:true});throw e;}
+  const safety=path.join(base,safetyId);
+  const changed:number[]=[];
+  async function replace(src:string,dst:string){
+   if(await fs.realpath(dst)!==dst)throw Error("Unsafe destination");
+   const tmp=path.join(path.dirname(dst),".krysta-restore-"+randomUUID()+".tmp");
+   try{await copyVerified(src,tmp);if(await fs.realpath(dst)!==dst)throw Error("Destination changed");await fs.rename(tmp,dst);}
+   finally{await fs.rm(tmp,{force:true}).catch(()=>{});}
+  }
+  try{
+   for(const [i,f] of files.entries()){
+    if(isTrackedGameKeyRunning(key))throw Error("Game started during restore");
+    await replace(f.src,f.dst);changed.push(i);
+   }
+   return true;
+  }catch(e){
+   const failures=[];
+   for(const i of changed.reverse()){try{await replace(path.join(safety,String(i)),files[i].dst);}catch{failures.push(i);}}
+   if(failures.length)throw Error("Restore failed; rollback incomplete. Safety backup: "+safetyId);
+   throw e;
+  }
+ });
+});
