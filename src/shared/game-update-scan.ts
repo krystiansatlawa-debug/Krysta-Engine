@@ -8,7 +8,7 @@ export async function runBoundedGameUpdateScan<T>(
   mayContinue: ()=>Promise<boolean>,
   concurrency=3
 ):Promise<boolean>{
-  const lanes=Math.min(targets.length,Math.max(1,Math.min(3,Math.floor(concurrency)||1)));
+  const lanes=Math.min(targets.length,Math.max(1,Math.min(4,Math.floor(concurrency)||1)));
   let cursor=0;
   let interrupted=false;
   await Promise.all(Array.from({length:lanes},async()=>{
