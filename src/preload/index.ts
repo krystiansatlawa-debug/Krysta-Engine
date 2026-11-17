@@ -1700,6 +1700,7 @@ contextBridge.exposeInMainWorld("electron", {
   getScreenshotsFolderPath: () =>
     ipcRenderer.invoke("getScreenshotsFolderPath"),
   getLocalScreenshots: () => ipcRenderer.invoke("getLocalScreenshots"),
+  getKrystaSouvenirGallery: () => ipcRenderer.invoke("krysta:souvenir-gallery"),
   getLocalScreenshotsForGame: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("getLocalScreenshotsForGame", shop, objectId),
   deleteLocalScreenshotsForGame: (shop: GameShop, objectId: string) =>

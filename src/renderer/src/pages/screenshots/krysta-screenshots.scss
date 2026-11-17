@@ -15,3 +15,5 @@
 .krysta-screenshots__tile small{font-size:12px}
 .krysta-screenshots__more{align-self:center}
 @media(max-width:600px){.krysta-screenshots{padding:14px}.krysta-screenshots__grid{grid-template-columns:repeat(2,minmax(0,1fr))}.krysta-screenshots__tile img{height:105px}}
+
+.krysta-screenshots__kind{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#acc4bc}
