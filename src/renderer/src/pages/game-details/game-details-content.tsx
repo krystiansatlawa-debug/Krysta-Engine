@@ -13,6 +13,7 @@ import { useSearchParams } from "react-router-dom";
 import { HeroPanel } from "./hero";
 import { KrystaGameUpdates } from "./krysta-game-updates";
 import { KrystaUbisoftAchievements } from "./krysta-ubisoft-achievements";
+import { KrystaRockstarAchievements } from "./krysta-rockstar-achievements";
 import { KrystaGameCloud } from "./krysta-game-cloud";
 import { DescriptionHeader } from "./description-header/description-header";
 import { GallerySlider } from "./gallery-slider/gallery-slider";
@@ -508,11 +509,12 @@ export function GameDetailsContent() {
         </div>
 
         <nav className="krysta-game-tabs" aria-label="Game details">
-          { [["description","Opis","Description"],["updates","Aktualizacje","Updates"],["cloud","Zapisy w chmurze","Cloud saves"],...(game?.shop==="custom"&&/^(ubi-owned-|ubisoft-)/.test(game.objectId)?[["ubisoft-achievements","Osiągnięcia","Achievements"]]:[])].map(([id,pl,en]) => (
+          { [["description","Opis","Description"],["updates","Aktualizacje","Updates"],["cloud","Zapisy w chmurze","Cloud saves"],...(game?.shop==="custom"&&/^(ubi-owned-|ubisoft-)/.test(game.objectId)?[["ubisoft-achievements","Osiągnięcia","Achievements"]]:[]),...(game?.shop==="custom"&&/^rockstar-/.test(game.objectId)?[["rockstar-achievements","Osiągnięcia Rockstar","Rockstar achievements"]]:[])].map(([id,pl,en]) => (
             <button type="button" key={id} aria-pressed={detailTab === id} onClick={() => setDetailTab(id)}>{document.documentElement.lang.startsWith("pl") ? pl : en}</button>
           ))}
         </nav>
         {detailTab === "ubisoft-achievements" && game && <KrystaUbisoftAchievements key={game.objectId} objectId={game.objectId}/>}
+        {detailTab === "rockstar-achievements" && game && <KrystaRockstarAchievements/>}
         {detailTab === "updates" && <KrystaGameUpdates shop={game?.shop} objectId={game?.objectId} executablePath={game?.executablePath} appId={catalogueGame?.shop === "steam" ? String(catalogueGame.objectId) : shop === "steam" ? String(objectId ?? "") : ""} title={game?.title ?? shopDetails?.name ?? ""} />}
         {detailTab === "cloud" && (game && shop && objectId ? <KrystaGameCloud key={`${shop}:${objectId}`} shop={shop} objectId={String(objectId)} /> : <div className="krysta-game-extra">Dodaj grę do biblioteki / Add game to library</div>)}
         <div className="game-details__description-container" style={detailTab !== "description" ? {display:"none"} : undefined}>
