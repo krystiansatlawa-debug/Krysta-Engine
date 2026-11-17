@@ -42,11 +42,11 @@ const newsRequests=new Map<string,Promise<NewsResult>>();
 const metadataCache=new Map<string,{until:number;result:NewsResult}>();
 const METADATA_CACHE_MS=3*60_000;
 const METADATA_CACHE_MAX=128;
-export async function getGameNews(id:unknown,title:unknown,metadataOnly=false):Promise<NewsResult>{
+export async function getGameNews(id:unknown,title:unknown,metadataOnly=false,forceRefresh=false):Promise<NewsResult>{
  const key=JSON.stringify([typeof id==="string"?id.slice(0,40):"",typeof title==="string"?title.slice(0,200):"",metadataOnly]);
  // Reading the same game's patch metadata on successive views should not hit
  // Steam again; full article bodies are intentionally never cached here.
- if(metadataOnly){
+ if(metadataOnly&&!forceRefresh){
   const cached=metadataCache.get(key);
   if(cached&&cached.until>Date.now())return cached.result;
   if(cached)metadataCache.delete(key);
