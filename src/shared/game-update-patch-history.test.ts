@@ -1,6 +1,6 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {mergePublishedPatches,providerStatusIsStale,isLikelyGamePatchAnnouncement,announcedGamePatchVersion} from "./game-update-patch-history.js";
+import {mergePublishedPatches,providerStatusIsStale,isLikelyGamePatchAnnouncement,announcedGamePatchVersion,isRecentGamePatchAnnouncement} from "./game-update-patch-history.js";
 test("patch timeline deduplicates, orders and preserves older posts",()=>{
  const now=Date.UTC(2026,10,17);
  const old={id:"first",title:"Patch 1",date:(now-100000)/1000},latest={id:"latest",title:"Patch 2",date:(now-50000)/1000};
@@ -54,4 +54,14 @@ test("extracts announced versions but never treats dates or news as installed up
  assert.equal(announcedGamePatchVersion("Update 2026.11.17"),null);
  assert.equal(announcedGamePatchVersion("New Update: improvements"),null);
  assert.equal(announcedGamePatchVersion("v1.8.7 Hotfix"),"1.8.7");
+});
+
+test("recent patch alerts exclude old posts while the patch history keeps them",()=>{
+ const now=Date.UTC(2026,10,17);
+ assert.equal(isRecentGamePatchAnnouncement((now-2*86400000)/1000,now),true);
+ assert.equal(isRecentGamePatchAnnouncement((now-31*86400000)/1000,now),false);
+ assert.equal(isRecentGamePatchAnnouncement((now+2*86400000)/1000,now),false);
+ assert.equal(isRecentGamePatchAnnouncement(NaN,now),false);
+ const old={id:"old",title:"Patch 1.2",date:(now-45*86400000)/1000};
+ assert.deepEqual(mergePublishedPatches(undefined,[old],now).map(p=>p.id),["old"]);
 });
