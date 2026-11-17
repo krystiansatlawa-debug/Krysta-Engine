@@ -40,4 +40,5 @@ jobs:
           src/main/events/krysta-steam-update-action.test.ts
           src/main/services/screenshots/screenshot-folder-match.test.ts
           src/main/services/screenshots/local-screenshot-disk-recovery.test.ts
+          src/main/services/screenshots/achievement-screenshot-policy.test.ts
           src/renderer/src/helpers/ubisoft-achievements.test.ts
