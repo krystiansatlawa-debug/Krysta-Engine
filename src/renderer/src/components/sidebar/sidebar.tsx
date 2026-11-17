@@ -79,7 +79,7 @@ const readStoredSidebarPlatforms = (): string[] => {
 };
 
 export function Sidebar() {
-  const { t } = useTranslation(["sidebar", "library"]);
+  const { t, i18n } = useTranslation(["sidebar", "library"]);
   const { isEnabled: isGlobalLeaderboardsEnabled } =
     useGlobalLeaderboardsFeature();
   const { library, updateLibrary } = useLibrary();
@@ -520,7 +520,7 @@ export function Sidebar() {
                       onClick={() => handleSidebarItemClick(path)}
                     >
                       {render()}
-                      <span>{nameKey === "multimedia" ? (t("home") === "Início" ? "Mídia" : (document.documentElement.lang.startsWith("pl") ? "Multimedia" : "Media")) : t(nameKey)}</span>
+                      <span>{nameKey === "multimedia" ? (i18n.language.startsWith("pl") ? "Multimedia" : "Media") : t(nameKey)}</span>
                     </button>
                   </li>
                 ))}
