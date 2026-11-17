@@ -14,8 +14,9 @@ type DesktopClient={client_id:string;client_secret:string};
 const desktopClient=validateGoogleDesktopClient;
 function builtInClient(){return desktopClient(import.meta.env.MAIN_VITE_KRYSTA_GOOGLE_CLIENT_ID,import.meta.env.MAIN_VITE_KRYSTA_GOOGLE_CLIENT_SECRET);}
 function getSavedClient(c:Credentials):DesktopClient|null{
- if(!c.googleClient)return null;
- try{return desktopClient(c.googleClient.clientId,c.googleClient.clientSecret);}catch{return null;}
+ const client=c.googleClient??c.google; // Accounts connected before this update already contain the working Desktop client.
+ if(!client)return null;
+ try{return desktopClient(client.clientId,client.clientSecret);}catch{return null;}
 }
 async function preferredClient():Promise<DesktopClient|null>{
  const stored=getSavedClient(await read());
@@ -44,7 +45,9 @@ async function tokenRequest(params:Record<string,string>){
 }
 ipcMain.handle("krysta:cloud-account-status",async()=>{
  const c=await read();
- return {google:!!c.google,synology:!!c.synology,googleConfigured:!!getSavedClient(c)||!!(await preferredClient())};
+ let configured=!!getSavedClient(c);
+ if(!configured){try{builtInClient();configured=true;}catch{}}
+ return {google:!!c.google,synology:!!c.synology,googleConfigured:configured};
 });
 async function probeGoogleDrive(accessToken:string){
  const probe=await fetch("https://www.googleapis.com/drive/v3/files?pageSize=1&fields=files(id)",{headers:{Authorization:"Bearer "+accessToken},signal:AbortSignal.timeout(15000),redirect:"error"});
@@ -107,7 +110,10 @@ ipcMain.handle("krysta:cloud-synology-connect",(_e,url:unknown,username:unknown,
  const r=await fetch(u,{method:"PROPFIND",headers:{Authorization:authorization,Depth:"0"},redirect:"error",signal:AbortSignal.timeout(15000)});await r.body?.cancel();if(r.status!==207)throw Error("WebDAV connection failed ("+r.status+")");
  await write({...await read(),synology:{url:u.toString(),username,password}});return true;
 }));
-ipcMain.handle("krysta:cloud-account-disconnect",(_e,provider:unknown)=>exclusive(async()=>{const c=await read();if(provider==="google")delete c.google;else if(provider==="synology")delete c.synology;else throw Error("Invalid provider");await write(c);return true;}));
+ipcMain.handle("krysta:cloud-account-disconnect",(_e,provider:unknown)=>exclusive(async()=>{const c=await read();if(provider==="google"){
+  if(c.google&&!c.googleClient)c.googleClient={clientId:c.google.clientId,clientSecret:c.google.clientSecret};
+  delete c.google;
+ }else if(provider==="synology")delete c.synology;else throw Error("Invalid provider");await write(c);return true;}));
 
 type DirectProvider="google"|"synology";
 export async function directCloudIdentity(provider:DirectProvider){

@@ -1,7 +1,7 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
 import {googleOAuthTokenError,googleOAuthCallbackError,validateGoogleDesktopClient} from "./krysta-google-oauth.js";
-test("Desktop OAuth configuration requires a valid ID and secret from the same client",()=>{
+test("Desktop OAuth configuration rejects invalid ID and malformed secret",()=>{
  assert.deepEqual(validateGoogleDesktopClient(" 123-ab.apps.googleusercontent.com ","abc"),{client_id:"123-ab.apps.googleusercontent.com",client_secret:"abc"});
  assert.throws(()=>validateGoogleDesktopClient("https://untrusted.example","abc"));
  assert.throws(()=>validateGoogleDesktopClient("valid.apps.googleusercontent.com",""));
