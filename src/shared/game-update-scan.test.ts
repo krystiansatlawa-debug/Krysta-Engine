@@ -42,3 +42,23 @@ test("empty library does not attempt provider requests",async()=>{
  assert.equal(called,false);
  assert.equal(result,true);
 });
+
+test("the full library scanner can process four updates in parallel without a fifth",async()=>{
+ let active=0,peak=0;
+ let release!:()=>void;
+ const blocked=new Promise<void>(resolve=>{release=resolve;});
+ let started=0;
+ const run=runBoundedGameUpdateScan(
+  [0,1,2,3,4,5],
+  async()=>{started++;active++;peak=Math.max(peak,active);await blocked;active--;},
+  async()=>true,
+  4
+ );
+ await new Promise<void>(resolve=>setImmediate(resolve));
+ assert.equal(started,4);
+ assert.equal(peak,4);
+ release();
+ assert.equal(await run,true);
+ assert.equal(started,6);
+ assert.equal(peak,4);
+});
