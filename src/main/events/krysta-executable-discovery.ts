@@ -110,10 +110,18 @@ let activeAutomaticScans=0;
 async function withAutoScanSlot<T>(work:()=>Promise<T>):Promise<T>{
  // Prevent automatic background scans from saturating disk I/O when many
  // games are added or imported at once.
- if(activeAutomaticScans>=2)await new Promise<void>(resolve=>scanWaiters.push(resolve));
- activeAutomaticScans++;
+ if(activeAutomaticScans>=2){
+  // The slot is reserved by the completion handler before this waiter resumes.
+  await new Promise<void>(resolve=>scanWaiters.push(resolve));
+ }else{
+  activeAutomaticScans++;
+ }
  try{return await work();}
- finally{activeAutomaticScans--;scanWaiters.shift()?.();}
+ finally{
+  const next=scanWaiters.shift();
+  if(next)next();
+  else activeAutomaticScans--;
+ }
 }
 export function autoLinkKrystaGameExecutable(shop:"steam"|"epic"|"custom",id:string):Promise<string|null>{
  if(process.platform!=="win32")return Promise.resolve(null);
