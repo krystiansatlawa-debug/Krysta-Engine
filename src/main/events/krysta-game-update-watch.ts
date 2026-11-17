@@ -145,7 +145,9 @@ function localHistory(w:Watch|undefined,v:LocalVersion){
 }
 async function smartState(game:Game):Promise<Pick<Watch,"steamBuildId"|"updateState"|"updateCheckedAt"|"updateProvider"|"installedBuild"|"installedBuildSource">>{
  const unknown={installedBuild:undefined,installedBuildSource:undefined,updateProvider:undefined,steamBuildId:undefined,updateState:"unknown" as const,updateCheckedAt:new Date().toISOString()};
- if(game.shop==="epic"&&game.epicInstallation&&game.executablePath){
+ // An Epic manifest is sufficient to identify its installed build. A missing
+ // manually assigned EXE must not hide a confirmed Epic update.
+ if(game.shop==="epic"&&game.epicInstallation){
   try{
    const result=await getEpicGameInstallOptions(game.objectId,AbortSignal.timeout(25000));
    if(result.error)return unknown;
