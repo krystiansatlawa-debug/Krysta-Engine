@@ -86,7 +86,7 @@ it("refreshes grouped progress on member changes and preserves known offline tot
   }).outputText;
   const exported: Record<string, React.ElementType> = {};
   new Function("exports", "require", output)(exported, (name: string) =>
-    name.endsWith(".scss") ? {} : (stubs[name] ?? requireModule(name))
+    name.endsWith(".scss") ? {} : (name.endsWith("/krysta-patch-badge") ? { KrystaPatchBadge: () => null, KrystaUpdateCenterActions: () => null, useKrystaPendingPatches: () => [], findKrystaPendingPatch: () => null } : (stubs[name] ?? requireModule(name)))
   );
   const root = createRoot(dom.window.document.getElementById("root")!);
   const member = {
