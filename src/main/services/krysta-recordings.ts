@@ -187,7 +187,7 @@ async function openCapture(prefs:Settings,expected:string|null,generation:number
  current=a;
  const allowed=()=>current===a&&!a.stopped&&!win.isDestroyed()&&generation===epoch;
  captureSession.setPermissionRequestHandler((contents,permission,callback)=>callback(allowed()&&contents===win.webContents&&String(permission)==="display-capture"));
- captureSession.setPermissionCheckHandler((contents,permission)=>allowed()&&contents===win.webContents&&permission==="display-capture");
+ captureSession.setPermissionCheckHandler((contents,permission)=>allowed()&&contents===win.webContents&&String(permission)==="display-capture");
  captureSession.setDisplayMediaRequestHandler((request,callback)=>{
   if(!allowed()||request.frame!==win.webContents.mainFrame||!request.videoRequested){callback({});return;}
   void sameForeground(a).then(ok=>{if(!ok||!allowed())callback({});else callback(prefs.audio&&request.audioRequested?{video:source,audio:"loopback"}:{video:source});}).catch(()=>callback({}));

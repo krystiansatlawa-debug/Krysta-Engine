@@ -1,4 +1,5 @@
 import {ipcMain} from "electron";
+import type {Download} from "@types";
 import fs from "node:fs/promises";
 import path from "node:path";
 import {downloadsSublevel,gamesSublevel,levelKeys} from "@main/level";
@@ -33,11 +34,11 @@ async function listExe(root:string,budgetMs=MAX_MS):Promise<string[]>{
  }
  return files;
 }
-async function detectedRoots(game:{shop:string;objectId:string;title:string;executablePath?:string|null;catalogueGame?:{shop?:string;objectId?:string}|null},download:{folderName?:string}|null){
+async function detectedRoots(game:{shop:string;objectId:string;title:string;executablePath?:string|null;catalogueGame?:{shop?:string;objectId?:string}|null},download:Download|null){
  const out:string[]=[];
  const add=(root:unknown)=>{if(typeof root==="string"&&path.isAbsolute(root)&&!out.some(v=>v.toLowerCase()===root.toLowerCase()))out.push(root);};
  if(game.executablePath)add(path.dirname(game.executablePath));
- if(download)add(await getDownloadFolderPath(download as Parameters<typeof getDownloadFolderPath>[0]));
+ if(download)add(await getDownloadFolderPath(download));
  const steamId=game.shop==="steam"?game.objectId:game.catalogueGame?.shop==="steam"?game.catalogueGame.objectId:null;
  if(steamId&&/^\d{1,10}$/.test(steamId)){
   const installation=await getSteamLibraryFolders().then(folders=>findInstalledSteamApp(steamId,folders)).catch(()=>null);
