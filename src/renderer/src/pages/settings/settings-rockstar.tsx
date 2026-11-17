@@ -25,6 +25,7 @@ export function SettingsRockstar(){
  loading={loading} status={state?.installed?(pl?"Wykryto":"Detected"):state?.supported===false?(pl?"Tylko Windows":"Windows only"):(pl?"Nie wykryto":"Not detected")} statusTone={state?.installed?"success":"neutral"}
  actions={<><Button theme="outline" disabled={busy||state?.supported===false} onClick={()=>void run("sync")}><SyncIcon size={14}/>{pl?"Synchronizuj":"Sync"}</Button><Button theme="outline" disabled={busy||!state?.installed} onClick={()=>void run("open")}><LinkExternalIcon size={14}/>{pl?"Otwórz":"Open"}</Button></>}>
  <p>{pl?"Import zainstalowanych gier. Logowanie i aktualizacje pozostają w Rockstar Games Launcher.":"Import installed games. Login and updates remain in Rockstar Games Launcher."}</p>
+ <p role="status">{pl?"Osiągnięcia Rockstar Social Club nie są jeszcze synchronizowane. Przycisk Synchronizuj importuje wyłącznie zainstalowane gry; nie zmienia ani nie zeruje osiągnięć.":"Rockstar Social Club achievements are not synced yet. Sync imports installed games only; it does not modify or reset achievements."}</p>
  {state?.installed&&<><p>{pl?"Wykryte gry":"Detected games"}: {state.games.length}</p><SettingsIntegrationLastSynced lastSyncedAt={state.lastSync}/></>}
  {notice&&<p role="status">{notice}</p>}
  </SettingsIntegrationCard>;
