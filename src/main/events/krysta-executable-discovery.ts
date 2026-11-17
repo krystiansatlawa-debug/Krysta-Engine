@@ -127,4 +127,8 @@ export function autoLinkKrystaGameExecutable(shop:"steam"|"epic"|"custom",id:str
  return task;
 }
 ipcMain.handle("krysta:discover-game-exe",(_e,shop:unknown,id:unknown,folder?:unknown)=>discoverKrystaGameExecutable(shop,id,folder));
+ipcMain.handle("krysta:auto-link-game-exe",(_e,shop:unknown,id:unknown)=>{
+ if((shop!=="steam"&&shop!=="epic"&&shop!=="custom")||typeof id!=="string"||!id||id.length>200)throw Error("Invalid game");
+ return autoLinkKrystaGameExecutable(shop,id);
+});
 
