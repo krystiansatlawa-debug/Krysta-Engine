@@ -38,7 +38,7 @@ test("pauses pending checks when a game starts, without losing completed work",a
 
 test("empty library does not attempt provider requests",async()=>{
  let called=false;
- const result=await runBoundedGameUpdateScan([],async()=>{called=true;},async()=>{called=true;});
+ const result=await runBoundedGameUpdateScan([],async()=>{called=true;},async()=>{called=true;return true;});
  assert.equal(called,false);
  assert.equal(result,true);
 });
