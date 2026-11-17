@@ -4,8 +4,9 @@ import {
   SettingsContextProvider,
 } from "@renderer/context";
 import { SettingsAccount } from "./settings-account";
-import { useFeature, useUserDetails } from "@renderer/hooks";
+import { useUserDetails } from "@renderer/hooks";
 import { Fragment, useMemo, useState } from "react";
+import type { SettingsCategoryId } from "@renderer/context/settings/settings.context";
 import "./settings.scss";
 import {
   BellIcon,
@@ -17,7 +18,7 @@ import {
   VideoIcon,
   ShieldCheckIcon,
 } from "@primer/octicons-react";
-import { Camera, Gamepad2, Wrench, RefreshCw } from "lucide-react";
+import { Camera, Gamepad2, Wrench, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { SettingsContextKrystaUpdates } from "./settings-context-krysta-updates";
 import { SettingsContextKrystaCloud } from "./settings-context-krysta-cloud";
 import { SettingsContextGame } from "./settings-context-game";
@@ -34,26 +35,19 @@ import { SettingsContextEmulation } from "./emulation/settings-context-emulation
 
 const BASIC_SETTINGS = new Set([
   "general", "downloads", "krysta_updates", "screenshots",
-  "notifications", "krysta_cloud", "integrations", "account_privacy",
+  "notifications", "krysta_cloud", "integrations", "account_privacy", "advanced",
 ]);
-const ADVANCED_VISIBILITY_KEY = "krysta.settings.show-advanced";
+const ADVANCED_SETTINGS: SettingsCategoryId[] = [
+  "download_sources", "content_gameplay", "game", "compatibility", "big_picture", "emulation",
+];
 
 export default function Settings() {
   const { t, i18n } = useTranslation("settings");
   const pl = i18n.language.startsWith("pl");
-  const [showAdvanced,setShowAdvanced] = useState<boolean>(() => {
-    try { return localStorage.getItem(ADVANCED_VISIBILITY_KEY)==="true"; }
-    catch { return false; }
-  });
   const [categorySearch,setCategorySearch] = useState("");
-  const changeAdvanced=(next:boolean)=>{
-    setShowAdvanced(next);
-    try{localStorage.setItem(ADVANCED_VISIBILITY_KEY,String(next));}catch{}
-  };
+  const [advancedCategoryId,setAdvancedCategoryId] = useState<SettingsCategoryId>("content_gameplay");
 
   const { userDetails } = useUserDetails();
-  const { isFeatureEnabled, Feature } = useFeature();
-  const isScreenshotsEnabled = isFeatureEnabled(Feature.Screenshots);
 
   const categories = useMemo(
     () => [
@@ -66,6 +60,11 @@ export default function Settings() {
         id: "downloads" as const,
         label: t("downloads"),
         icon: <DownloadIcon size={16} />,
+      },
+      {
+        id: "advanced" as const,
+        label: pl ? "Zaawansowane" : "Advanced",
+        icon: <SlidersHorizontal size={16} />,
       },
       {
         id: "download_sources" as const,
@@ -85,15 +84,11 @@ export default function Settings() {
       { id: "krysta_updates" as const, label: i18n.language.startsWith("pl") ? "Aktualizacje" : "Updates", icon: <RefreshCw size={16} /> },
       { id: "krysta_cloud" as const, label: "Krysta Cloud", icon: <CloudIcon size={16} /> },
       { id: "game" as const, label: t("krysta_game_category", { defaultValue: "Game" }), icon: <Gamepad2 size={16} /> },
-      ...(isScreenshotsEnabled
-        ? [
-            {
-              id: "screenshots" as const,
-              label: t("screenshots_category"),
-              icon: <Camera size={16} />,
-            },
-          ]
-        : []),
+      {
+        id: "screenshots" as const,
+        label: pl ? "Nagrania i zrzuty ekranu" : "Recordings & screenshots",
+        icon: <Camera size={16} />,
+      },
       {
         id: "integrations" as const,
         label: t("integrations"),
@@ -125,7 +120,7 @@ export default function Settings() {
         group: "classics" as const,
       },
     ],
-    [t, i18n.language, userDetails, isScreenshotsEnabled]
+    [t, i18n.language, userDetails, pl]
   );
 
   return (
@@ -136,57 +131,66 @@ export default function Settings() {
             categories.find((category) => category.id === currentCategoryId) ??
             categories[0];
           const selectedCategoryId = currentCategory.id;
-          const searchedCategories = categories.filter(category =>
-            category.label.toLocaleLowerCase(i18n.language).includes(categorySearch.toLocaleLowerCase(i18n.language))
+          const effectiveCategoryId = selectedCategoryId === "advanced"
+            ? advancedCategoryId : selectedCategoryId;
+          const normalizedSearch=categorySearch.toLocaleLowerCase(i18n.language).trim();
+          // Advanced categories never enter the main menu even when searching.
+          const displayedCategories = categories.filter(category =>
+            BASIC_SETTINGS.has(category.id) &&
+            (!normalizedSearch ||
+              category.label.toLocaleLowerCase(i18n.language).includes(normalizedSearch) ||
+              (category.id === "advanced" && categories.some(child =>
+                ADVANCED_SETTINGS.includes(child.id) &&
+                child.label.toLocaleLowerCase(i18n.language).includes(normalizedSearch)
+              )))
           );
-          const displayedCategories = searchedCategories.filter(category =>
-            categorySearch.trim().length > 0 || showAdvanced ||
-            BASIC_SETTINGS.has(category.id) || category.id === selectedCategoryId
+          const advancedCategories=categories.filter(category =>
+            ADVANCED_SETTINGS.includes(category.id) &&
+            (!normalizedSearch || category.label.toLocaleLowerCase(i18n.language).includes(normalizedSearch))
           );
-          const hiddenCategories = categories.length - displayedCategories.length;
 
           const renderCategory = () => {
-            if (selectedCategoryId === "general") {
+            if (effectiveCategoryId === "general") {
               return <SettingsContextGeneral appearance={appearance} />;
             }
 
-            if (selectedCategoryId === "downloads") {
+            if (effectiveCategoryId === "downloads") {
               return <SettingsContextDownloads />;
             }
 
-            if (selectedCategoryId === "download_sources") {
+            if (effectiveCategoryId === "download_sources") {
               return <SettingsContextDownloadSources />;
             }
 
-            if (selectedCategoryId === "notifications") {
+            if (effectiveCategoryId === "notifications") {
               return <SettingsContextNotifications />;
             }
 
-            if (selectedCategoryId === "content_gameplay") {
+            if (effectiveCategoryId === "content_gameplay") {
               return <SettingsContextContentGameplay />;
             }
 
-            if (selectedCategoryId === "krysta_updates") return <SettingsContextKrystaUpdates />;
-            if (selectedCategoryId === "krysta_cloud") return <SettingsContextKrystaCloud />;
-            if (selectedCategoryId === "game") return <SettingsContextGame />;
+            if (effectiveCategoryId === "krysta_updates") return <SettingsContextKrystaUpdates />;
+            if (effectiveCategoryId === "krysta_cloud") return <SettingsContextKrystaCloud />;
+            if (effectiveCategoryId === "game") return <SettingsContextGame />;
 
-            if (selectedCategoryId === "screenshots") {
+            if (effectiveCategoryId === "screenshots") {
               return <SettingsContextScreenshots />;
             }
 
-            if (selectedCategoryId === "integrations") {
+            if (effectiveCategoryId === "integrations") {
               return <SettingsContextIntegrations />;
             }
 
-            if (selectedCategoryId === "compatibility") {
+            if (effectiveCategoryId === "compatibility") {
               return <SettingsContextCompatibility />;
             }
 
-            if (selectedCategoryId === "big_picture") {
+            if (effectiveCategoryId === "big_picture") {
               return <SettingsContextBigPicture />;
             }
 
-            if (selectedCategoryId === "emulation") {
+            if (effectiveCategoryId === "emulation") {
               return <SettingsContextEmulation />;
             }
 
@@ -199,10 +203,6 @@ export default function Settings() {
                 <aside className="settings__sidebar">
                   <label className="settings__sidebar-search-label" htmlFor="krysta-settings-search">{pl?"Znajdź ustawienie":"Find a setting"}</label>
                   <input id="krysta-settings-search" type="search" className="settings__sidebar-search" value={categorySearch} onChange={e=>setCategorySearch(e.target.value)} placeholder={pl?"Szukaj kategorii…":"Search categories…"} />
-                  <button type="button" className="settings__sidebar-expand" aria-expanded={showAdvanced} onClick={()=>changeAdvanced(!showAdvanced)}>
-                    {showAdvanced?(pl?"Pokaż mniej opcji":"Show fewer options"):(pl?"Pokaż zaawansowane":"Show advanced settings")}
-                    {!showAdvanced&&hiddenCategories>0&&<span aria-hidden="true"> ({hiddenCategories})</span>}
-                  </button>
                   {!displayedCategories.length&&<p className="settings__sidebar-empty">{pl?"Brak wyników":"No matching settings"}</p>}
                   {displayedCategories.map((category, index) => {
                     const prevGroup =
@@ -249,6 +249,21 @@ export default function Settings() {
                 <div className="settings__panel">
                   {selectedCategoryId !== "emulation" && (
                     <h2>{currentCategory.label}</h2>
+                  )}
+                  {selectedCategoryId === "advanced" && (
+                    <nav className="settings__advanced-tabs" aria-label={pl?"Kategorie zaawansowane":"Advanced settings sections"}>
+                      <p>{pl?"Dodatkowe ustawienia są tutaj, oddzielone od podstawowych opcji.":"Extra options are here, separate from basic settings."}</p>
+                      <div className="settings__advanced-tab-list">
+                        {advancedCategories.map(category=>(
+                          <button key={category.id} type="button"
+                            className={`settings__advanced-tab ${advancedCategoryId===category.id?"settings__advanced-tab--active":""}`}
+                            aria-current={advancedCategoryId===category.id?"page":undefined}
+                            onClick={()=>setAdvancedCategoryId(category.id)}>
+                            {category.icon} {category.label}
+                          </button>
+                        ))}
+                      </div>
+                    </nav>
                   )}
                   {renderCategory()}
                 </div>

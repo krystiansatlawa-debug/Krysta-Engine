@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "./krysta-game-updates.scss";
 import { providerStatusIsStale } from "../../../../shared/game-update-patch-history";
+import { needsAutomaticGameUpdateRefresh } from "../../../../shared/game-update-refresh-policy";
 type Watch=Awaited<ReturnType<typeof window.electron.krystaGameWatchGet>>;
 export function KrystaGameWatch({shop,id,executablePath}:{shop:string;id:string;executablePath?:string|null}){
  const {i18n}=useTranslation();const pl=i18n.language.startsWith("pl");
@@ -15,7 +16,7 @@ export function KrystaGameWatch({shop,id,executablePath}:{shop:string;id:string;
     const local=await window.electron.krystaGameWatchGet(shop,id);
     if(!active)return;
     setWatch(local);setOverride(local?.override??"inherit");setReady(true);
-    if(!local||shop==="launchbox")return;
+    if(!local||shop==="launchbox"||!needsAutomaticGameUpdateRefresh(local))return;
     const checked=await window.electron.krystaGameWatchCheck(shop,id);
     if(active&&checked){setWatch(checked);setOverride(checked.override??"inherit");}
    }catch(e){if(active)setNotice(String(e));}
@@ -38,7 +39,7 @@ export function KrystaGameWatch({shop,id,executablePath}:{shop:string;id:string;
    else setIntegrity(pl?"Otworzono "+result.provider+". Wybierz opcję weryfikacji plików gry.":"Opened "+result.provider+". Select the game's file verification option.");
   }catch(e){setIntegrity(String(e));}finally{setBusy(false);}
  };
- const openClient=async()=>{setBusy(true);setNotice("");try{await window.electron.krystaGameWatchOpenClient(shop,id);}catch(e){setNotice(String(e));}finally{setBusy(false);}};
+ const openClient=async()=>{setBusy(true);setNotice("");try{await window.electron.krystaGameWatchOpenClient(shop,id);if(shop==="steam"&&required)setNotice(pl?"Zlecono Steam sprawdzenie plików tej gry. Steam może pobrać brakujące lub nieaktualne pliki. Postęp sprawdź w Steam.":"Steam game-file validation requested. Steam may download missing or outdated files. Check progress in Steam.");}catch(e){setNotice(String(e));}finally{setBusy(false);}};
  const stale=watch?.updateState!=="unknown"&&watch?.updateState!==undefined&&providerStatusIsStale(watch.updateCheckedAt);
  const required=watch?.updateState==="required"&&!stale,noUpdate=watch?.updateState==="not-reported"&&!stale;
  const displayedVersion=watch?.installedVersion||(watch?.installedBuild?((watch.installedBuildSource??"").toUpperCase()+" Build: "+watch.installedBuild):watch?.steamBuildId?"Steam Build ID: "+watch.steamBuildId:null);
@@ -51,7 +52,7 @@ export function KrystaGameWatch({shop,id,executablePath}:{shop:string;id:string;
  {stale&&<small>{pl?"Poprzedni wynik platformy może być nieaktualny; użyj Sprawdź teraz.":"The previous provider result may be outdated; check again."}</small>}
  {watch?.patchHistory&&watch.patchHistory.length>0&&<details><summary>{pl?"Historia ogłoszonych patchy Steam":"Steam patch announcements"} ({watch.patchHistory.length})</summary><ul>{watch.patchHistory.map(p=><li key={p.id}>{new Date(p.publishedAt).toLocaleDateString(i18n.language)} — {p.title}</li>)}</ul><small>{pl?"Ogłoszenie patcha nie jest potwierdzeniem dostępności aktualizacji dla Twojej instalacji.":"A patch announcement does not confirm that an update is available for this installation."}</small></details>}
  {watch?.pendingPatch&&<div className="krysta-watch__actions"><small>{pl?"Nowy wpis: ":"New post: "}{watch.pendingPatch}</small><button type="button" disabled={busy||autoChecking} onClick={()=>{setBusy(true);void window.electron.krystaGameWatchDismiss(shop,id).then(()=>{setWatch(w=>w?{...w,pendingPatch:undefined}:w);window.dispatchEvent(new Event("krysta:patch-badges"));}).catch(e=>setNotice(String(e))).finally(()=>setBusy(false));}}>{pl?"Oznacz jako przeczytany":"Mark as read"}</button></div>}
- {official&&<div className="krysta-watch__actions"><button type="button" disabled={busy||autoChecking||!ready||!watch} onClick={()=>void openClient()}>{required&&shop==="steam"?(pl?"Aktualizuj w Steam":"Update in Steam"):(pl?"Otwórz klienta":"Open client")}</button>{required&&shop==="steam"&&<small>{pl?"Krysta sprawdzi kopię zapisów zgodnie z ustawieniami.":"Krysta checks save protection according to settings."}</small>}</div>}
+ {official&&<div className="krysta-watch__actions"><button type="button" disabled={busy||autoChecking||!ready||!watch} onClick={()=>void openClient()}>{required&&shop==="steam"?(pl?"Sprawdź i zaktualizuj w Steam":"Verify and update in Steam"):(pl?"Otwórz klienta":"Open client")}</button>{required&&shop==="steam"&&<small>{pl?"Krysta sprawdzi kopię zapisów. Steam zweryfikuje pliki gry i może zastąpić zmodyfikowane pliki; wynik i pobieranie sprawdź w Steam.":"Krysta checks save protection. Steam will verify game files and may replace modified files; check the result and any downloads in Steam."}</small>}</div>}
  <details><summary>{pl?"Ustawienia i szczegóły":"Settings and details"}</summary><div className="krysta-watch__details">
  <label>{pl?"Monitorowanie":"Monitoring"} <select value={override} disabled={!ready||busy||autoChecking||!watch} onChange={e=>void changeMonitor(e.target.value as "inherit"|"on"|"off")}><option value="inherit">{pl?"Ustawienia globalne":"Global settings"}</option><option value="on">{pl?"Włączone":"Enabled"}</option><option value="off">{pl?"Wyłączone":"Disabled"}</option></select></label>
  <small>{watch?.enabled?(pl?"Monitorowanie aktywne":"Monitoring enabled"):(pl?"Monitorowanie nieaktywne":"Monitoring disabled")}</small>

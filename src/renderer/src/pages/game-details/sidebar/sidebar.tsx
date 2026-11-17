@@ -37,6 +37,7 @@ import { RetroAchievementsConnectBanner } from "@renderer/components/retro-achie
 import "./sidebar.scss";
 import { GameLanguageSection } from "./game-language-section";
 import { isAchievementConcealed } from "@shared";
+import { isUbisoftLibraryGame } from "@renderer/helpers/ubisoft-achievements";
 import { ControllerSupportSection } from "./controller-support-section";
 import { GameScreenshots } from "../game-screenshots/game-screenshots";
 import { LeaderboardSection } from "../leaderboard/leaderboard-section";
@@ -157,7 +158,9 @@ export function Sidebar() {
   const { isEnabled: isGlobalLeaderboardsEnabled } =
     useGlobalLeaderboardsFeature();
   const achievementsCount = achievements?.length ?? 0;
+  const isUbisoftAchievements = isUbisoftLibraryGame(shop, objectId ?? "");
   const shouldRenderAchievementsSection =
+    (isUbisoftAchievements && achievementsCount > 0) ||
     (!!userDetails && achievementsCount > 0) ||
     (shop === "launchbox" &&
       !!shopDetails?.retroAchievementsGameId &&
@@ -169,9 +172,9 @@ export function Sidebar() {
   const STEAM_ACHIEVEMENTS_CATEGORY_ID = 22;
   const isAchievementsSectionPending =
     !shouldRenderAchievementsSection &&
-    !!userDetails &&
+    (!!userDetails || isUbisoftAchievements) &&
     achievements === null &&
-    ((shop === "steam" &&
+    (isUbisoftAchievements || (shop === "steam" &&
       !!shopDetails?.categories?.some(
         (category) => category.id === STEAM_ACHIEVEMENTS_CATEGORY_ID
       )) ||
@@ -241,7 +244,7 @@ export function Sidebar() {
         </Suspense>
       )}
 
-      {userDetails === null && !shouldRenderAchievementsSection && (
+      {userDetails === null && !shouldRenderAchievementsSection && !isUbisoftAchievements && (
         <SidebarSection title={t("achievements")}>
           <div className="achievements-placeholder">
             <LockIcon size={36} />
@@ -291,9 +294,12 @@ export function Sidebar() {
           }
         >
           <ul className="list">
-            <RetroAchievementsConnectBanner />
+            {!isUbisoftAchievements && <RetroAchievementsConnectBanner />}
+            {isUbisoftAchievements && (
+              <li><small>Ubisoft Connect · {t("achievements")}. Dane z konta Ubisoft, bez zapisu na serwery Hydry.</small></li>
+            )}
 
-            {!hasActiveSubscription && achievementsCount > 0 && (
+            {!isUbisoftAchievements && !hasActiveSubscription && achievementsCount > 0 && (
               <button
                 type="button"
                 className="subscription-required-button"

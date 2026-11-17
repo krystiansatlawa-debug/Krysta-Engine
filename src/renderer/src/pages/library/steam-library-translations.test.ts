@@ -99,7 +99,7 @@ describe("Steam Library translations", () => {
         readLibrary("en").library_hydra,
         readLibrary("en").library_steam,
       ],
-      ["All Libraries", "Hydra", "Steam"]
+      ["All Libraries", "Krysta Launcher", "Steam"]
     );
 
     const readSettings = (locale: string) => {

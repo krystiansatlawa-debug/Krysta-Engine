@@ -31,6 +31,7 @@ import {
   isLocalScreenshotVisibleToSignedInOwner,
 } from "./local-screenshot-owner";
 import { LocalScreenshotStore } from "./local-screenshot-store";
+import { recoverGameScreenshotsFromDisk } from "./local-screenshot-disk-recovery";
 import {
   pruneMissingLocalScreenshots,
   removeLocalScreenshotIfMissing,
@@ -185,20 +186,24 @@ export const applyScreenshotsEnabledPreference = async (
   );
 };
 
-export const getLocalScreenshots = async () =>
-  pruneMissingLocalScreenshots(
+export const getLocalScreenshots = async () => {
+  await recoverGameScreenshotsFromDisk();
+  return pruneMissingLocalScreenshots(
     filterLocalScreenshotsForSignedInOwner(await LocalScreenshotStore.list())
   );
+};
 
 export const getLocalScreenshotsForGame = async (
   shop: GameShop,
   objectId: string
-) =>
-  pruneMissingLocalScreenshots(
+) => {
+  await recoverGameScreenshotsFromDisk();
+  return pruneMissingLocalScreenshots(
     filterLocalScreenshotsForSignedInOwner(
       await LocalScreenshotStore.listForGame(shop, objectId)
     )
   );
+};
 
 export const getScreenshotsFolderPath = () => getScreenshotsFolder();
 

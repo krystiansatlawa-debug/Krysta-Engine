@@ -267,6 +267,8 @@ export interface UserPreferences {
   autoplayAnimatedArtwork?: boolean;
   persistFiltersAndSorting?: boolean;
   screenshotsEnabled?: boolean;
+  /** Optional local screenshot on achievement unlock; independent of video clips and cloud souvenirs. */
+  screenshotOnAchievementEnabled?: boolean;
   screenshotsFolderPath?: string;
   screenshotHotkey?: ScreenshotHotkeyBinding;
   screenshotGamepadEnabled?: boolean;

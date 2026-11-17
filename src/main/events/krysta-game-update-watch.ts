@@ -16,7 +16,8 @@ import { getSteamLibraryFolders } from "@main/services/steam";
 import { readSteamUpdateState, findInstalledSteamApp, isPathInsideSteamInstallDirectory } from "@main/services/steam-integration/steam-installation-core";
 import { hasTrackedGamesRunning } from "@main/services/game-running-state";
 import type { GameShop, Game } from "@types";
-import { mergePublishedPatches, type PatchAnnouncement } from "../../shared/game-update-patch-history";
+import { mergePublishedPatches, announcedGamePatchVersion, isRecentGamePatchAnnouncement, type PatchAnnouncement } from "../../shared/game-update-patch-history";
+import { runBoundedGameUpdateScan } from "../../shared/game-update-scan";
 
 type BuildChange={from:string;to:string;detectedAt:string};
 type Watch={gameTitle?:string;installedBuild?:string;installedBuildSource?:"epic"|"gog";platformBuildHistory?:(BuildChange&{source:"epic"|"gog"})[];lastPlatformBuild?:string;lastPlatformSource?:"epic"|"gog";localVersionHistory?:BuildChange[];lastLocalVersion?:string;lastLocalSource?:string;updateProvider?:"steam"|"epic"|"gog";buildHistory?:BuildChange[];lastKnownBuildId?:string;shop:GameShop;id:string;enabled:boolean;override?:"on"|"off"|"inherit";installedVersion:string;versionSource?:"product"|"file"|"epic-manifest"|"version-file"|"gog-manifest";seen?:string[];lastChecked?:string;latestTitle?:string;latestPublishedAt?:string;patchHistory?:PatchAnnouncement[];latestVersion?:string;error?:string;steamId?:string;pendingPatch?:string;steamBuildId?:string;updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string};
@@ -41,17 +42,37 @@ function serial<T>(fn:()=>Promise<T>):Promise<T>{const next=queue.then(fn,fn);qu
 async function read():Promise<Store>{try{return JSON.parse(await fs.readFile(filename(),"utf8"));}catch(e){if((e as NodeJS.ErrnoException).code==="ENOENT")return {};throw e;}}
 async function write(s:Store){await fs.writeFile(filename()+".tmp",JSON.stringify(s),{mode:0o600});await fs.rename(filename()+".tmp",filename());}
 function keyFor(shop:unknown,id:unknown){if((shop!=="steam"&&shop!=="epic"&&shop!=="custom"&&shop!=="launchbox")||typeof id!=="string"||!id||id.length>200)throw Error("Invalid game");return levelKeys.game(shop,id);}
-function version(title:string){return title.match(/\b(?:patch|hotfix|update|version|v)\s*v?(\d+(?:\.\d+){1,4})\b/i)?.[1]??null;}
 const exec=promisify(execFile);
-async function detectExeVersion(exe:string|null|undefined):Promise<{installedVersion:string;versionSource?:"product"|"file"}>{
+// Games in the same scan share Steam libraries: avoid resolving them again
+// for every appmanifest read. Official modifying actions still use fresh data.
+let steamLibraries: {until:number;task:Promise<string[]>}|null=null;
+function cachedSteamLibraries():Promise<string[]>{
+ if(steamLibraries&&steamLibraries.until>Date.now())return steamLibraries.task;
+ const task=getSteamLibraryFolders().catch(error=>{steamLibraries=null;throw error;});
+ steamLibraries={until:Date.now()+30_000,task};
+ return task;
+}
+type ExeFileVersion={installedVersion:string;versionSource?:"product"|"file"};
+const exeVersions=new Map<string,{mtimeMs:number;size:number;until:number;value:ExeFileVersion}>();
+async function detectExeVersion(exe:string|null|undefined):Promise<ExeFileVersion>{
  const unknown={installedVersion:""};
  if(process.platform!=="win32"||!exe||!path.isAbsolute(exe)||path.extname(exe).toLowerCase()!==".exe")return unknown;
  try{
   const st=await fs.stat(exe);if(!st.isFile())return unknown;
+  const cacheKey=exe.toLowerCase();
+  const cached=exeVersions.get(cacheKey);
+  if(cached&&cached.until>Date.now()&&cached.mtimeMs===st.mtimeMs&&cached.size===st.size)
+   return cached.value;
+  const remember=(value:ExeFileVersion)=>{
+   if(exeVersions.size>=256)exeVersions.delete(exeVersions.keys().next().value!);
+   exeVersions.set(cacheKey,{mtimeMs:st.mtimeMs,size:st.size,until:Date.now()+10*60_000,value});
+   return value;
+  };
   // The executable path is passed as environment data, never interpolated into PowerShell code.
   const script="$ErrorActionPreference='Stop'; $v=[System.Diagnostics.FileVersionInfo]::GetVersionInfo($env:KRYSTA_VERSION_TARGET); @{product=$v.ProductVersion;file=$v.FileVersion} | ConvertTo-Json -Compress";
   const {stdout}=await exec(path.join(process.env.SystemRoot||"C:\\Windows","System32","WindowsPowerShell","v1.0","powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-Command",script],{env:{...process.env,KRYSTA_VERSION_TARGET:exe},windowsHide:true,timeout:10000,maxBuffer:65536});
-  const v=JSON.parse(stdout);for(const source of ["product","file"] as const){const raw=v[source];if(typeof raw!=="string")continue;const match=raw.trim().match(/^v?(\d+(?:[.,]\s*\d+){1,4})(?:\s+\([^\r\n]{1,80}\))?$/i);if(!match)continue;const number=match[1].replace(/,\s*/g,".").replace(/\s/g,"");if(!number.split(".").some(n=>Number(n)>0))continue;return {installedVersion:number,versionSource:source};}
+  const v=JSON.parse(stdout);for(const source of ["product","file"] as const){const raw=v[source];if(typeof raw!=="string")continue;const match=raw.trim().match(/^v?(\d+(?:[.,]\s*\d+){1,4})(?:\s+\([^\r\n]{1,80}\))?$/i);if(!match)continue;const number=match[1].replace(/,\s*/g,".").replace(/\s/g,"");if(!number.split(".").some(n=>Number(n)>0))continue;return remember({installedVersion:number,versionSource:source});}
+  return remember(unknown);
  }catch{/* missing or unreadable metadata */}
  return unknown;
 }
@@ -145,7 +166,9 @@ function localHistory(w:Watch|undefined,v:LocalVersion){
 }
 async function smartState(game:Game):Promise<Pick<Watch,"steamBuildId"|"updateState"|"updateCheckedAt"|"updateProvider"|"installedBuild"|"installedBuildSource">>{
  const unknown={installedBuild:undefined,installedBuildSource:undefined,updateProvider:undefined,steamBuildId:undefined,updateState:"unknown" as const,updateCheckedAt:new Date().toISOString()};
- if(game.shop==="epic"&&game.epicInstallation&&game.executablePath){
+ // An Epic manifest is sufficient to identify its installed build. A missing
+ // manually assigned EXE must not hide a confirmed Epic update.
+ if(game.shop==="epic"&&game.epicInstallation){
   try{
    const result=await getEpicGameInstallOptions(game.objectId,AbortSignal.timeout(25000));
    if(result.error)return unknown;
@@ -173,42 +196,49 @@ async function smartState(game:Game):Promise<Pick<Watch,"steamBuildId"|"updateSt
  }
  if(game.shop!=="steam")return unknown;
  try{
- const found=await readSteamUpdateState(game.objectId,await getSteamLibraryFolders(),game.executablePath);
+ const found=await readSteamUpdateState(game.objectId,await cachedSteamLibraries(),game.executablePath);
  return found?{updateProvider:"steam",steamBuildId:found.buildId??undefined,updateState:found.updateRequired?"required":"not-reported",updateCheckedAt:unknown.updateCheckedAt}:unknown;
  }catch{return unknown;}
 }
 async function perform(key:string,force=false){
  const game=await gamesSublevel.get(key);
  if(!game||game.isDeleted||game.shop==="launchbox")return null;
+ // Do not write the entire library before performing any I/O: one write per
+ // completed result is enough and avoids a large source of scan latency.
  const snapshot=await serial(async()=>{
   const all=await read(),settings=await readSettings(),old=all[key];
   if(!effective(old,settings)&&!force)return null;
-  const w:Watch={...old,gameTitle:game.title,shop:game.shop,id:game.objectId,override:mode(old),enabled:effective(old,settings),installedVersion:old?.installedVersion??""};
-  all[key]=w;await write(all);return w;
+  return {...old,gameTitle:game.title,shop:game.shop,id:game.objectId,override:mode(old),enabled:effective(old,settings),installedVersion:old?.installedVersion??""} as Watch;
  });
  if(!snapshot)return null;
- const detected=await detectVersion(game);
- const smart=await smartState(game);
- // Provider status and Steam news are separate. Failed news requests must not
- // invalidate a confirmed update from a local launcher.
- let news:Awaited<ReturnType<typeof getGameNews>>|null=null;
- let newsError:string|undefined;
- try{
-  const response=await getGameNews(game.catalogueGame?.shop==="steam"?game.catalogueGame.objectId:snapshot.shop==="steam"?snapshot.id:snapshot.steamId??"",game.title,true);
-  if(response.appId)news=response;
- }catch(error){newsError="Steam patch feed: "+String(error).slice(0,220);}
+ // Local version, official client state and Steam announcements are independent.
+ // Run them together so one slow news service does not add its latency after
+ // the provider check. A failed feed cannot invalidate the official status.
+ const newsRequest=getGameNews(
+  game.catalogueGame?.shop==="steam"?game.catalogueGame.objectId:snapshot.shop==="steam"?snapshot.id:snapshot.steamId??"",
+  game.title,true,force
+ ).then(response=>({
+  news:response.appId?response:null,
+  newsError:undefined as string|undefined
+ })).catch(error=>({
+  news:null as Awaited<ReturnType<typeof getGameNews>>|null,
+  newsError:"Steam patch feed: "+String(error).slice(0,220)
+ }));
+ const [detected,smart,{news,newsError}]=await Promise.all([
+  detectVersion(game),smartState(game),newsRequest
+ ]);
  const patches=news?.items.filter(x=>x.category==="patch").sort((a,b)=>b.date-a.date)??[];
  const latest=patches[0];
- const newItems=snapshot.seen?patches.filter(x=>!snapshot.seen!.includes(x.id)):[];
- return serial(async()=>{
-  const all=await read(),previous=all[key],settings=await readSettings();
-  if(!previous)return null;
+ const newItems=snapshot.seen?patches.filter(x=>!snapshot.seen!.includes(x.id)&&isRecentGamePatchAnnouncement(x.date)):[];
+ const notifications: Array<{kind:"KRYSTA_UPDATE"|"KRYSTA_PATCH";message:string;enabled:boolean}>=[];
+ const next=await serial(async()=>{
+  const all=await read(),previous=all[key]??snapshot,settings=await readSettings();
   const enabled=effective(previous,settings);
   if(enabled&&snapshot.enabled){
    if(smart.updateState==="required"&&previous.updateState!=="required")
-    await publishKrystaNotification("KRYSTA_UPDATE",game.title,(smart.updateProvider==="gog"?"GOG":game.shop==="epic"?"Epic Games":"Steam")+": aktualizacja wymagana / Update required",settings.notifications);
+    notifications.push({kind:"KRYSTA_UPDATE",message:(smart.updateProvider==="gog"?"GOG":game.shop==="epic"?"Epic Games":"Steam")+": aktualizacja wymagana / Update required",enabled:settings.notifications});
    const fresh=newItems.filter(x=>!previous.seen?.includes(x.id));
-   if(fresh.length)await publishKrystaNotification("KRYSTA_PATCH",game.title,"Nowy patch / New patch: "+fresh[0].title,settings.notifications);
+   if(fresh.length)notifications.push({kind:"KRYSTA_PATCH",message:"Nowy patch / New patch: "+fresh[0].title,enabled:settings.notifications});
   }
   const freshPatch=enabled&&snapshot.enabled&&previous.seen?newItems.find(x=>!previous.seen?.includes(x.id)):undefined;
   const next:Watch={
@@ -221,7 +251,7 @@ async function perform(key:string,force=false){
     lastChecked:new Date().toISOString(),
     latestTitle:latest?.title??previous.latestTitle,
     latestPublishedAt:latest?.date?new Date(latest.date*1000).toISOString():previous.latestPublishedAt,
-    latestVersion:latest?version(latest.title)??undefined:previous.latestVersion,
+    latestVersion:latest?announcedGamePatchVersion(latest.title)??undefined:previous.latestVersion,
     patchHistory:mergePublishedPatches(previous.patchHistory,patches),
     seen:[...new Set([...patches.map(x=>x.id),...(previous.seen??[])])].slice(0,500)
    }:{}),
@@ -229,21 +259,29 @@ async function perform(key:string,force=false){
   };
   all[key]=next;await write(all);return next;
  });
-
+ // OS notification calls may be slow; do not hold the serialized patch-store
+ // lock while they run. Failure to show a toast never invalidates the
+ // successfully saved update state.
+ if(notifications.length)
+  await Promise.allSettled(notifications.map(n=>
+   publishKrystaNotification(n.kind,game.title,n.message,n.enabled)
+  ));
+ return next;
+ 
 }
 const inflight=new Map<string,Promise<Watch|null>>();
 function check(key:string,force=false){const old=inflight.get(key);if(old)return old;const p=perform(key,force).finally(()=>inflight.delete(key));inflight.set(key,p);return p;}
 ipcMain.handle("krysta:game-watch-get",async(_e,shop:unknown,id:unknown)=>{
  const key=keyFor(shop,id),game=await gamesSublevel.get(key);if(!game||game.isDeleted)return null;
- // Show the local version without waiting for provider or news network calls.
- const detected=await detectVersion(game);
+ // Cached status is immediate. A full refresh runs in the background
+ // via "krysta:game-watch-check" only when the panel determines it is stale.
+ // In particular, do not start PowerShell or scan Epic manifests just to
+ // open a game details tab.
  return serial(async()=>{
   const all=await read(),prior=all[key],settings=await readSettings();
-  const local:Watch={...prior,gameTitle:game.title,shop:game.shop,id:game.objectId,override:mode(prior),enabled:effective(prior,settings),...detected,...localHistory(prior,detected),versionSource:detected.versionSource};
-  if(game.shop!=="launchbox"){
-   all[key]=local;await write(all);
-  }
-  return local;
+  return {...prior,gameTitle:game.title,shop:game.shop,id:game.objectId,
+   override:mode(prior),enabled:effective(prior,settings),
+   installedVersion:prior?.installedVersion??""} as Watch;
  });
 });
 ipcMain.handle("krysta:game-watch-set",async(_e,shop:GameShop,id:string,override:unknown)=>{
@@ -265,11 +303,17 @@ ipcMain.handle("krysta:game-watch-open-client",async(_e,shop:unknown,id:unknown)
    const settings=await serial(readSettings);
    try{await protectUpdate(game,settings,true);}catch(e){
     if(!String(e).includes("KRYSTA_NO_SAVE_FILES"))throw e;
-    const answer=await dialog.showMessageBox({type:"warning",title:"Krysta Launcher",message:"Nie wykryto zapisów gry / No save files detected",detail:"Krysta nie mogła znaleźć plików zapisów. Możesz otworzyć aktualizacje Steam bez kopii na własną odpowiedzialność albo anulować. / Krysta could not detect save files. Continue without a backup or cancel.",buttons:["Anuluj / Cancel","Otwórz aktualizacje Steam bez kopii / Continue without backup"],defaultId:0,cancelId:0,noLink:true});
-    if(answer.response!==1)return;
+    const answer=await dialog.showMessageBox({type:"warning",title:"Krysta Launcher",message:"Nie wykryto zapisów gry / No save files detected",detail:"Krysta nie mogła znaleźć plików zapisów. Możesz zlecić Steam weryfikację plików tej gry bez kopii zapisów albo anulować. / Krysta could not detect save files. Continue with game-file validation without a backup or cancel.",buttons:["Anuluj / Cancel","Weryfikuj bez kopii / Verify without backup"],defaultId:0,cancelId:0,noLink:true});
+    if(answer.response!==1)throw Error("Anulowano weryfikację gry / Game validation canceled");
    }
    if(hasTrackedGamesRunning())throw Error("Zamknij uruchomione gry / Close running games");
-   return shell.openExternal("steam://open/downloads");
+   // Steam's downloads page only opens the queue. Request a validation of the
+   // installed app instead: Steam can then download missing/outdated game files.
+   // Check the installation identity before sending a modifying Steam command.
+   const installed=await findInstalledSteamApp(game.objectId,await getSteamLibraryFolders());
+   if(!installed||(game.executablePath&&!isPathInsideSteamInstallDirectory(game.executablePath,installed.installDirectory)))
+    throw Error("Nie znaleziono potwierdzonej instalacji Steam tej gry / No matching Steam installation");
+   return shell.openExternal("steam://validate/"+installed.appId);
   }
   return shell.openExternal("steam://nav/games/details/"+game.objectId);
  }
@@ -311,28 +355,45 @@ ipcMain.handle("krysta:game-integrity",async(_e,shop:unknown,id:unknown,action:u
   return {mode:"local",sha256:hash.digest("hex"),size:after.size};
  }finally{integrityLocks.delete(key);}
 });
-ipcMain.handle("krysta:game-watch-badges",()=>serial(async()=>{
- const all=await read(),settings=await readSettings();
- const badges:{shop:GameShop;id:string;gameTitle:string;title:string;kind:"required"|"patch";downloadPercent:number|null}[]=[];
- let steamFolders:Awaited<ReturnType<typeof getSteamLibraryFolders>>|undefined;
- for(const w of Object.values(all)){
-  if(!effective(w,settings)||(!w.pendingPatch&&w.updateState!=="required"))continue;
-  const game=await gamesSublevel.get(keyFor(w.shop,w.id));
-  if(!game||game.isDeleted)continue;
-  let downloadPercent:number|null=null;
-  let required=w.updateState==="required";
-  if(required&&game.shop==="steam"){
-   try{
-    steamFolders??=await getSteamLibraryFolders();
-    const live=await readSteamUpdateState(game.objectId,steamFolders,game.executablePath);
-    if(live){required=live.updateRequired;downloadPercent=live.downloadPercent;}
-   }catch{/* retain last checked status when local state cannot be read */}
-  }
-  if(!required&&!w.pendingPatch)continue;
-  badges.push({shop:w.shop,id:w.id,gameTitle:game.title,title:required?(w.updateProvider==="gog"?"GOG: update required":game.shop==="epic"?"Epic Games: update required":"Steam: update required"):w.pendingPatch!,kind:required?"required":"patch",downloadPercent});
- }
- return badges;
-}));
+type PendingBadge={shop:GameShop;id:string;gameTitle:string;title:string;kind:"required"|"patch";downloadPercent:number|null};
+let badgeRead:Promise<PendingBadge[]>|null=null;
+async function getPendingBadges():Promise<PendingBadge[]>{
+ // A frequent badge refresh must not hold the serialized settings/patch-store
+ // write queue while reading dozens of Steam manifests.
+ const {all,settings}=await serial(async()=>({
+  all:await read(),settings:await readSettings()
+ }));
+ const relevant=Object.values(all).filter(w=>
+  effective(w,settings)&&(Boolean(w.pendingPatch)||w.updateState==="required")
+ );
+ const result:(PendingBadge|null)[]=Array(relevant.length).fill(null);
+ let libraries:Promise<string[]>|null=null;
+ // Ignore a missing Steam client for non-Steam games and retain the last
+ // confirmed status when manifest reads are temporarily unavailable.
+ await runBoundedGameUpdateScan(relevant.map((watch,index)=>({watch,index})),async({watch:w,index})=>{
+  try{
+   const game=await gamesSublevel.get(keyFor(w.shop,w.id));
+   if(!game||game.isDeleted)return;
+   let downloadPercent:number|null=null;
+   let required=w.updateState==="required";
+   if(required&&game.shop==="steam"){
+    try{
+     const live=await readSteamUpdateState(game.objectId,await(libraries??=cachedSteamLibraries()),game.executablePath);
+     if(live){required=live.updateRequired;downloadPercent=live.downloadPercent;}
+    }catch{/* retain last known status */}
+   }
+   if(!required&&!w.pendingPatch)return;
+   result[index]={shop:w.shop,id:w.id,gameTitle:game.title,
+    title:required?(w.updateProvider==="gog"?"GOG: update required":game.shop==="epic"?"Epic Games: update required":"Steam: update required"):w.pendingPatch!,
+    kind:required?"required":"patch",downloadPercent};
+  }catch{/* a missing library item must not block other badge updates */}
+ },async()=>true,4);
+ return result.filter((badge):badge is PendingBadge=>badge!==null);
+}
+ipcMain.handle("krysta:game-watch-badges",()=>{
+ badgeRead??=getPendingBadges().finally(()=>{badgeRead=null;});
+ return badgeRead;
+});
 ipcMain.handle("krysta:game-watch-history",()=>serial(async()=>{
  const all=await read();
  const rows:(BuildChange&{source:"steam"|"epic"|"gog"|"local";shop:GameShop;id:string;title:string})[]=[];
@@ -406,6 +467,7 @@ async function offerEpicUpdates(){
  }
 }
 let scanning=false,lastScan=0,lastFinished:string|null=null,lastError:string|null=null;
+let lastScanDurationMs:number|null=null;
 let scanChecked=0,scanTotal=0,scanRequired=0,scanUnknown=0,scanInterrupted=false;
 async function scan(manual=false){
  if(scanning)return;
@@ -421,22 +483,43 @@ async function scan(manual=false){
    if(manual?mode(all[key])!=="off":effective(all[key],initialSettings))targets.push(key);
   }
   scanTotal=targets.length;
-  for(const key of targets){
-   const settings=await serial(readSettings);
-   if(settings.pauseDuringPlay&&hasTrackedGamesRunning()){scanInterrupted=true;lastScan=0;return;}
-   const result=await check(key,manual);
-   scanChecked++;
-   if(result?.updateState==="required")scanRequired++;
-   if(!result||result.updateState==="unknown"||!result.updateState)scanUnknown++;
-   await new Promise(resolve=>setTimeout(resolve,350));
-  }
+  // Put games without a previous scan first, so new additions get status early.
+  targets.sort((a,b)=>Number(Boolean(all[a]?.lastChecked))-Number(Boolean(all[b]?.lastChecked)));
+  let settingsCheckedAt=0;
+  let scanPreferences=initialSettings;
+  const complete=await runBoundedGameUpdateScan(
+   targets,
+   async key=>{
+    try{
+     const result=await check(key,manual);
+     if(result?.updateState==="required")scanRequired++;
+     if(!result||result.updateState==="unknown"||!result.updateState)scanUnknown++;
+    }catch(error){
+     scanUnknown++;
+     // One broken game's metadata or network feed must not stop the rest.
+     if(!lastError)lastError="Błąd sprawdzania jednej z gier / Game check failed: "+String(error).slice(0,160);
+    }finally{scanChecked++;}
+   },
+   async()=>{
+    // Check setting changes at most once per second instead of opening the
+    // settings file for every game and every worker iteration.
+    if(Date.now()-settingsCheckedAt>1000){
+     settingsCheckedAt=Date.now();
+     scanPreferences=await serial(readSettings);
+    }
+    return !(scanPreferences.pauseDuringPlay&&hasTrackedGamesRunning());
+   },
+   4
+  );
+  if(!complete){scanInterrupted=true;lastScan=0;return;}
   lastFinished=new Date().toISOString();
+  lastScanDurationMs=Date.now()-lastScan;
   try{await offerSteamQueue();}catch(e){lastError="Steam: "+String(e);}
   try{await offerEpicUpdates();}catch(e){lastError=[lastError,"Epic: "+String(e)].filter(Boolean).join(" | ");}
  }catch(e){lastError=String(e);}
  finally{scanning=false;}
 }
-const status=async()=>({...await serial(readSettings),scanning,scanChecked,scanTotal,scanRequired,scanUnknown,scanInterrupted,lastFinished,lastError,pausedDuringPlay:hasTrackedGamesRunning()});
+const status=async()=>({...await serial(readSettings),scanning,scanChecked,scanTotal,scanRequired,scanUnknown,scanInterrupted,lastFinished,lastError,lastScanDurationMs,scanElapsedMs:scanning?Date.now()-lastScan:null,pausedDuringPlay:hasTrackedGamesRunning()});
 ipcMain.handle("krysta:game-watch-settings",status);
 ipcMain.handle("krysta:game-watch-settings-set",async(_e,value:unknown)=>{
  if(!value||typeof value!=="object")throw Error("Invalid settings");

@@ -10,6 +10,7 @@ import {
 import { SkeletonTheme } from "react-loading-skeleton";
 import { AchievementsSkeleton } from "./achievements-skeleton";
 import { AchievementsContent } from "./achievements-content";
+import { isUbisoftLibraryGame } from "@renderer/helpers/ubisoft-achievements";
 
 export default function Achievements() {
   const [searchParams] = useSearchParams();
@@ -17,6 +18,7 @@ export default function Achievements() {
   const shop = searchParams.get("shop");
   const title = searchParams.get("title");
   const userId = searchParams.get("userId");
+  const isUbisoftAchievements = isUbisoftLibraryGame(shop ?? "", objectId ?? "");
 
   const { userDetails } = useUserDetails();
 
@@ -40,14 +42,16 @@ export default function Achievements() {
       return;
     }
 
-    if (objectId && shop && userId) {
+    if (!isUbisoftAchievements && objectId && shop && userId) {
       window.electron
         .getComparedUnlockedAchievements(objectId, shop as GameShop, userId)
         .then(setComparedAchievements);
     }
-  }, [objectId, shop, userDetails?.id, userId]);
+  }, [objectId, shop, userDetails?.id, userId, isUbisoftAchievements]);
 
-  const otherUserId = userDetails?.id === userId ? null : userId;
+  // Ubisoft data belongs to the locally connected Ubisoft account; it
+  // cannot be compared via Hydra Cloud achievement endpoints.
+  const otherUserId = isUbisoftAchievements || userDetails?.id === userId ? null : userId;
 
   const otherUser = useMemo(() => {
     if (!otherUserId || !comparedAchievements) return null;

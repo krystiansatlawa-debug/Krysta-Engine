@@ -67,6 +67,7 @@ function renderCard(
     },
     "@shared": { getDisplayedPlayTimeInMilliseconds: () => 0 },
     "./library-category": libraryCategory,
+    "./krysta-patch-badge": { KrystaPatchBadge: () => null },
     "@renderer/helpers": {
       CLASSICS_PS_PLATFORM_LABELS: {},
       isGameReadyToPlay: (game: Record<string, unknown>) => game.isInstalled,

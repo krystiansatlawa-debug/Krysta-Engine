@@ -53,7 +53,8 @@ function loadModule(filename: string, stubs: Record<string, unknown> = {}) {
     exports,
     (name: string) =>
       stubs[name] ??
-      (name.endsWith("/epic-install-timing")
+      (name.includes("krysta-patch-badge") ? { KrystaPatchBadge: () => null } :
+      name.endsWith("/epic-install-timing")
         ? epicInstallTimingModule
         : requireModule(name))
   );

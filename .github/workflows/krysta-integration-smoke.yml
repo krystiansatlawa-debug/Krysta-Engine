@@ -1,0 +1,44 @@
+name: Krysta Steam Ubisoft Screenshot Smoke
+
+on:
+  pull_request:
+    paths:
+      - "src/main/events/krysta-game-update-watch.ts"
+      - "src/main/events/krysta-steam-update-action.test.ts"
+      - "src/main/services/screenshots/**"
+      - "src/renderer/src/helpers/ubisoft-achievements*"
+      - ".github/workflows/krysta-integration-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: krysta-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Steam / Ubisoft / screenshots (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.21.0"
+          cache: yarn
+      - name: Install dependencies without native rebuild
+        run: yarn --frozen-lockfile --ignore-scripts
+      - name: Test official Steam action, Ubisoft mapper, and legacy screenshot recovery
+        run: >
+          node --import ./scripts/register-ts-node.mjs --test
+          src/main/events/krysta-steam-update-action.test.ts
+          src/main/services/screenshots/screenshot-folder-match.test.ts
+          src/main/services/screenshots/local-screenshot-disk-recovery.test.ts
+          src/main/services/screenshots/achievement-screenshot-policy.test.ts
+          src/renderer/src/helpers/ubisoft-achievements.test.ts

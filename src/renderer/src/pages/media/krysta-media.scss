@@ -1,0 +1,8 @@
+.krysta-media {min-height:0;height:100%;overflow:auto;padding:16px 22px}
+.krysta-media__top {display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,.1)}
+.krysta-media__top h1 {font-size:19px;margin:0}
+.krysta-media__tabs {display:flex;gap:8px}
+.krysta-media__tab {display:inline-flex;gap:7px;align-items:center;border:1px solid rgba(255,255,255,.24);border-radius:6px;background:#252525;color:inherit;padding:9px 13px;cursor:pointer}
+.krysta-media__tab--active {background:#3b3b3b;border-color:#bcbcbc;font-weight:600}
+.krysta-media__tab:focus-visible {outline:2px solid #bcbcbc;outline-offset:2px}
+.krysta-media>.krysta-screenshots,.krysta-media>.krysta-recordings {height:auto;min-height:0;padding:16px 0}

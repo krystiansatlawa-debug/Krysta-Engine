@@ -24,6 +24,7 @@ import { Button, Link, ProgressBar } from "@renderer/components";
 import { ComparedAchievementList } from "./compared-achievement-list";
 import { AchievementList } from "./achievement-list";
 import { useSubscription } from "@renderer/hooks/use-subscription";
+import { isUbisoftLibraryGame } from "@renderer/helpers/ubisoft-achievements";
 import "./achievements-content.scss";
 
 interface UserInfo {
@@ -153,6 +154,7 @@ export function AchievementsContent({
   const { userDetails, hasActiveSubscription } = useUserDetails();
   const { showHydraCloudModal } = useSubscription();
   const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
+  const isUbisoftAchievements = isUbisoftLibraryGame(shop, objectId ?? "");
 
   const handleCompareClick = () => {
     if (!isComparing && !hasActiveSubscription) {
@@ -189,7 +191,12 @@ export function AchievementsContent({
   const logoImage =
     game?.customLogoImageUrl || shopDetails?.assets?.logoImageUrl || "";
 
-  if (!objectId || !shop || !gameTitle || !userDetails) return null;
+  if (!objectId || !shop || !gameTitle || (!userDetails && !isUbisoftAchievements)) return null;
+  const localOwner = {
+    id: userDetails?.id ?? "ubisoft-local",
+    displayName: isUbisoftAchievements ? "Ubisoft Connect" : (userDetails?.displayName ?? ""),
+    profileImageUrl: userDetails?.profileImageUrl ?? null,
+  };
 
   return (
     <div className="achievements-content__achievements-list">
@@ -230,7 +237,7 @@ export function AchievementsContent({
                   )}
                 </Link>
 
-                {otherUser && (
+                {otherUser && !isUbisoftAchievements && (
                   <Button
                     theme="outline"
                     className="achievements-content__compare-button"
@@ -251,7 +258,7 @@ export function AchievementsContent({
               {(!otherUser || isComparing) && (
                 <AchievementSummary
                   user={{
-                    ...userDetails,
+                    ...localOwner,
                     totalAchievementCount: comparedAchievements
                       ? comparedAchievements.owner.totalAchievementCount
                       : achievements!.length,
@@ -274,7 +281,7 @@ export function AchievementsContent({
           <ComparedAchievementList
             scrollElement={scrollElement}
             achievements={comparedAchievements!}
-            owner={userDetails}
+            owner={userDetails!}
             target={otherUser}
           />
         )}
@@ -296,6 +303,9 @@ export function AchievementsContent({
           />
         )}
 
+        {!otherUser && isUbisoftAchievements && (
+          <p className="achievements-content__source-note">Ubisoft Connect · osiągnięcia odczytane z połączonego konta. Nie są przesyłane do profilu Hydry ani oznaczane jako osiągnięcia Steam.</p>
+        )}
         {!otherUser && (
           <AchievementList
             scrollElement={scrollElement}

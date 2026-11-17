@@ -202,6 +202,17 @@ export function SettingsContextScreenshots() {
           }
         />
 
+        <CheckboxField
+          label={pl ? "Zrób zrzut ekranu po zdobyciu osiągnięcia" : "Save a screenshot when an achievement unlocks"}
+          checked={userPreferences?.screenshotOnAchievementEnabled === true}
+          disabled={isCaptureDisabled}
+          onChange={() => void updateUserPreferences({
+            screenshotOnAchievementEnabled: userPreferences?.screenshotOnAchievementEnabled !== true,
+          })}
+        />
+        <small>{pl
+          ? "Zdjęcie zapisze się lokalnie tylko wtedy, gdy Krysta rozpozna aktywne okno właściwej gry. Ta opcja jest niezależna od nagrywania i pamiątek w chmurze."
+          : "A local photo is saved only when Krysta recognizes the correct game's foreground window. This is independent of recording and cloud souvenirs."}</small>
         <SettingsScreenshotsHotkey
           binding={form.hotkey}
           disabled={isCaptureDisabled}
@@ -258,10 +269,7 @@ export function SettingsContextScreenshots() {
         </details>
       </div>
 
-      <details className="settings-screenshots__advanced">
-        <summary>{pl?"Nagrywanie osiągnięć — opcje":"Achievement recording — options"}</summary>
-        <SettingsAchievementRecordings />
-      </details>
+      <SettingsAchievementRecordings />
 
       <div className="settings-context-panel__group">
         <h3>{t("screenshots_upload_group")}</h3>

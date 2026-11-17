@@ -9,6 +9,7 @@ import { useSearchParams } from "react-router-dom";
 import { SETTINGS_CATEGORY_STORAGE_KEY } from "@renderer/session-state";
 
 export type SettingsCategoryId =
+  | "advanced"
   | "general"
   | "downloads"
   | "download_sources"
@@ -35,6 +36,7 @@ const legacyTabMap: Record<number, SettingsCategoryId> = {
 
 const isSettingsCategoryId = (value: string): value is SettingsCategoryId => {
   return [
+    "advanced",
     "general",
     "downloads",
     "download_sources",
@@ -110,7 +112,14 @@ export function SettingsContextProvider({
   const [currentCategoryId, setCurrentCategoryId] =
     useState<SettingsCategoryId>(() => {
       const stored = localStorage.getItem(SETTINGS_CATEGORY_STORAGE_KEY);
-      return stored && isSettingsCategoryId(stored) ? stored : "general";
+      if (stored && isSettingsCategoryId(stored)) {
+        // Older versions persisted advanced sections as top-level categories.
+        // Redirect those to the dedicated Advanced tab rather than hiding them.
+        if (["download_sources","content_gameplay","game","compatibility","big_picture","emulation"].includes(stored))
+          return "advanced";
+        return stored;
+      }
+      return "general";
     });
   const [blockedUsers, setBlockedUsers] = useState<UserBlocks["blocks"]>([]);
 
@@ -138,7 +147,10 @@ export function SettingsContextProvider({
   useEffect(() => {
     if (defaultTab) {
       if (isSettingsCategoryId(defaultTab)) {
-        setCurrentCategoryId(defaultTab);
+        setCurrentCategoryId(
+          ["download_sources","content_gameplay","game","compatibility","big_picture","emulation"].includes(defaultTab)
+            ? "advanced" : defaultTab
+        );
         return;
       }
 

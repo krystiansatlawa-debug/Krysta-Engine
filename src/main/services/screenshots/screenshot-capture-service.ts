@@ -5,7 +5,9 @@ import {
   resolveScreenshotPreferences,
   SCREENSHOT_CUSTOM_GAME_TITLE_MAX_LENGTH,
 } from "@shared";
+import { levelKeys } from "@main/level";
 import type {
+  Game,
   LocalScreenshot,
   ProfileVisibility,
   ScreenshotFailureKind,
@@ -64,6 +66,7 @@ import {
 } from "./screenshots-root-marker";
 import { ScreenshotTelemetry } from "./screenshot-telemetry";
 import { readUserPreferences } from "./screenshot-user-preferences";
+import { isAchievementScreenshotEnabled, isAchievementScreenshotTarget } from "./achievement-screenshot-policy";
 import { CaptureCallTimeoutError } from "./window-bound-promise";
 
 const DISK_FULL_ERROR_CODES = new Set(["ENOSPC", "EDQUOT"]);
@@ -236,6 +239,7 @@ const finishCapture = async ({
     uploadProgress: null,
     lastError: null,
     gameSessionId: getGameSessionId(target.gameKey),
+    captureSource: source,
     rootMarkerId: await ensureRootMarkerId(getScreenshotsRoot(filePath)),
     previewPath,
   });
@@ -592,7 +596,8 @@ const grabResolvedGame = async (
 
 const grabScreenshot = async (
   source: ScreenshotTriggerSource,
-  startedAt: number
+  startedAt: number,
+  expectedGameKey?: string
 ): Promise<SaveCapturedScreenshot | null> => {
   const timer = createCaptureTimer(startedAt, source);
   const userPreferences = await readUserPreferences();
@@ -601,7 +606,8 @@ const grabScreenshot = async (
     logger.debug("Screenshot hotkey ignored: screenshots disabled", { source });
     return null;
   }
-  if (!(await isScreenshotsFeatureEnabled())) {
+  // Local achievement photos do not depend on the online Hydra gallery flag.
+  if (source !== "achievement" && !(await isScreenshotsFeatureEnabled())) {
     logger.debug("Screenshot hotkey ignored: feature flag off", { source });
     return null;
   }
@@ -619,6 +625,15 @@ const grabScreenshot = async (
     return null;
   }
   timer.mark("foreground");
+  // Unlocks may arrive while the user is viewing another application/game.
+  // Never capture that window and attribute it to the unlocked game.
+  if (expectedGameKey && !isAchievementScreenshotTarget(lookup, expectedGameKey)) {
+    logger.debug("Achievement screenshot ignored: a different game has focus", {
+      expectedGameKey,
+      matchedGameKey: lookup.status === "resolved" ? lookup.target.gameKey : null,
+    });
+    return null;
+  }
   if (lookup.status === "unresolved") {
     reportUnresolvedGame(source, lookup, preferences.toastEnabled);
     return null;
@@ -643,7 +658,8 @@ const queueScreenshotSave = (save: SaveCapturedScreenshot) => {
 };
 
 export const handleScreenshotTrigger = async (
-  source: ScreenshotTriggerSource
+  source: ScreenshotTriggerSource,
+  expectedGameKey?: string
 ) => {
   const startedAt = performance.now();
   logger.debug("Screenshot trigger received", { source });
@@ -655,7 +671,7 @@ export const handleScreenshotTrigger = async (
 
   let save: SaveCapturedScreenshot | null = null;
   try {
-    save = await grabScreenshot(source, startedAt);
+    save = await grabScreenshot(source, startedAt, expectedGameKey);
   } catch (error) {
     logger.error("Screenshot trigger failed before capture", error);
   } finally {
@@ -663,6 +679,21 @@ export const handleScreenshotTrigger = async (
   }
 
   if (save) await queueScreenshotSave(save);
+};
+
+/** Independently enabled from achievement video capture and cloud souvenirs.
+ * A local capture only occurs for the game currently matched in the foreground.
+ * No automatic upload is started.
+ */
+export const captureAchievementScreenshot = async (
+  game: Pick<Game, "shop" | "objectId">
+) => {
+  const preferences = await readUserPreferences();
+  if (!isAchievementScreenshotEnabled(preferences)) return;
+  await handleScreenshotTrigger(
+    "achievement",
+    levelKeys.game(game.shop, game.objectId)
+  );
 };
 
 export const clearScreenshotGameSession = (gameKey: string) => {

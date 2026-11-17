@@ -5,7 +5,30 @@ type Settings=Awaited<ReturnType<typeof window.electron.krystaGameWatchSettings>
 export function KrystaGameUpdateSettings(){
  const {i18n}=useTranslation();const pl=i18n.language.startsWith("pl");
  const [cfg,setCfg]=useState<Settings|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
- useEffect(()=>{let active=true;const refresh=()=>{if(document.hidden)return;void window.electron.krystaGameWatchSettings().then(v=>{if(active)setCfg(v);}).catch(e=>{if(active)setError(String(e));});};refresh();const timer=setInterval(refresh,6000);document.addEventListener("visibilitychange",refresh);return()=>{active=false;clearInterval(timer);document.removeEventListener("visibilitychange",refresh);};},[]);
+ useEffect(()=>{
+  let active=true;
+  let inFlight=false;
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  const refresh=async()=>{
+   if(!active||inFlight)return;
+   if(document.hidden){timer=setTimeout(refresh,12000);return;}
+   inFlight=true;
+   let delay=12000;
+   try{
+    const latest=await window.electron.krystaGameWatchSettings();
+    if(active){setCfg(latest);delay=latest.scanning?2000:12000;}
+   }catch(e){if(active)setError(String(e));}
+   finally{inFlight=false;if(active)timer=setTimeout(refresh,delay);}
+  };
+  const onVisible=()=>{
+   if(document.hidden)return;
+   if(timer)clearTimeout(timer);
+   if(!inFlight)void refresh();
+  };
+  void refresh();
+  document.addEventListener("visibilitychange",onVisible);
+  return()=>{active=false;if(timer)clearTimeout(timer);document.removeEventListener("visibilitychange",onVisible);};
+ },[]);
  const change=async(patch:Partial<Settings>)=>{if(!cfg)return;setBusy(true);setError("");try{setCfg(await window.electron.krystaGameWatchSettingsSet({...cfg,...patch}));window.dispatchEvent(new Event("krysta:patch-badges"));}catch(e){setError(String(e));}finally{setBusy(false);}};
  const [history,setHistory]=useState<Awaited<ReturnType<typeof window.electron.krystaGameWatchHistory>>>([]),[historyOpen,setHistoryOpen]=useState(false),[search,setSearch]=useState("");
  useEffect(()=>{if(!historyOpen)return;let active=true;const refresh=()=>{if(document.hidden)return;void window.electron.krystaGameWatchHistory().then(v=>{if(active)setHistory(v);}).catch(e=>{if(active)setError(String(e));});};refresh();const timer=setInterval(refresh,15000);document.addEventListener("visibilitychange",refresh);return()=>{active=false;clearInterval(timer);document.removeEventListener("visibilitychange",refresh);};},[historyOpen]);
@@ -27,7 +50,8 @@ export function KrystaGameUpdateSettings(){
  <label htmlFor="krysta-update-interval">{pl?"Sprawdzaj co":"Check every"}</label>
  <select id="krysta-update-interval" value={cfg?.intervalHours??6} disabled={!cfg||busy} onChange={e=>void change({intervalHours:Number(e.target.value)})} style={{background:"#202020",color:"inherit",padding:8,border:"1px solid #555",borderRadius:4,maxWidth:300}}>{[1,3,6,12,24].map(n=><option key={n} value={n}>{n} h</option>)}</select>
  <Button theme="outline" disabled={!cfg||busy||cfg.scanning||(cfg.pauseDuringPlay&&cfg.pausedDuringPlay)} onClick={()=>void scan()}>{cfg?.scanning?(pl?"Sprawdzanie…":"Checking…"):(pl?"Sprawdź teraz":"Check now")}</Button>
- {cfg&&(cfg.scanning||cfg.scanTotal>0)&&<p role="status">{pl?"Postęp sprawdzania":"Scan progress"}: {cfg.scanChecked} / {cfg.scanTotal} · {pl?"Wymagają aktualizacji":"Updates required"}: {cfg.scanRequired} · {pl?"Niepotwierdzone":"Unknown"}: {cfg.scanUnknown}</p>}
+ {cfg&&(cfg.scanning||cfg.scanTotal>0)&&<p role="status">{pl?"Postęp sprawdzania":"Scan progress"}: {cfg.scanChecked} / {cfg.scanTotal} · {pl?"Wymagają aktualizacji":"Updates required"}: {cfg.scanRequired} · {pl?"Niepotwierdzone":"Unknown"}: {cfg.scanUnknown}{cfg.scanElapsedMs!==null&&cfg.scanElapsedMs!==undefined?" · "+(pl?"Czas":"Elapsed")+": "+Math.round(cfg.scanElapsedMs/1000)+" s":null}</p>}
+ {cfg?.lastScanDurationMs!=null&&!cfg.scanning&&<small>{pl?"Czas ostatniego skanowania":"Last scan duration"}: {Math.round(cfg.lastScanDurationMs/1000)} s</small>}
  {cfg?.scanInterrupted&&<small>{pl?"Skan przerwany podczas rozgrywki.":"Scan interrupted while playing."}</small>}
  {cfg?.lastFinished&&<p>{pl?"Ostatni skan":"Last scan"}: {new Date(cfg.lastFinished).toLocaleString(i18n.language)}</p>}
  <small>{pl?"Ręczne Sprawdź teraz obejmuje gry, dla których nie wyłączono monitorowania osobno. Wyniki z nieobsługiwanych platform pozostają niepotwierdzone. Dotyczy gier PC. Indywidualne ustawienia gry mają pierwszeństwo. Pierwsze sprawdzenie zapisuje punkt odniesienia; powiadomienia dotyczą kolejnych patchy. Launcher musi działać.":"PC games only. Individual game settings take precedence. First check establishes a baseline; subsequent patches trigger notifications. Launcher must be running."}</small>

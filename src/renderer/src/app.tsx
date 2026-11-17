@@ -129,14 +129,27 @@ export function App() {
   const [archivePaths, setArchivePaths] = useState<string[]>([]);
   const [showAddFriendModal, setShowAddFriendModal] = useState(false);
 
+  // Loading the entire library and user preferences on *every* route change
+  // made opening game cards/settings unnecessarily expensive. Initialize once;
+  // the dedicated game/download listeners already refresh after mutations.
   useEffect(() => {
-    Promise.all([
+    void Promise.all([
       levelDBService.get("userPreferences", null, "json"),
       updateLibrary(),
     ]).then(([preferences]) => {
       dispatch(setUserPreferences(preferences as UserPreferences | null));
-    });
-  }, [navigate, location.pathname, dispatch, updateLibrary]);
+    }).catch((error) => logger.error("Initial library refresh failed", error));
+  }, [dispatch, updateLibrary]);
+
+  // Refresh again only when navigating back into the library, rather than
+  // running a full library sync on each game details or settings click.
+  const previousRoute = useRef(location.pathname);
+  useEffect(() => {
+    const oldRoute = previousRoute.current;
+    previousRoute.current = location.pathname;
+    if (location.pathname === "/library" && oldRoute !== "/library")
+      void updateLibrary();
+  }, [location.pathname, updateLibrary]);
 
   useEffect(() => {
     const unsubscribe = window.electron.onUserPreferencesUpdated(

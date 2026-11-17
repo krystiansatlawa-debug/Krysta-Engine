@@ -134,3 +134,12 @@
 .settings__sidebar-expand:hover {background:rgba(255,255,255,.11)}
 .settings__sidebar-empty {font-size:13px;opacity:.7;padding:10px}
 @media (max-width:700px){.settings__container{padding:10px}.settings__sidebar{min-width:145px;max-width:45%;padding:8px}.settings__panel{padding:12px}.settings__sidebar-button{white-space:normal}}
+
+/* Extra settings have their own tab instead of expanding the main menu. */
+.settings__advanced-tabs {display:flex;flex-direction:column;gap:10px}
+.settings__advanced-tabs p {font-size:13px;color:#babcc1;margin:0}
+.settings__advanced-tab-list {display:flex;flex-wrap:wrap;gap:8px}
+.settings__advanced-tab {display:inline-flex;align-items:center;gap:7px;padding:9px 12px;border:1px solid rgba(255,255,255,.2);border-radius:7px;background:rgba(255,255,255,.035);color:inherit;cursor:pointer}
+.settings__advanced-tab:hover {background:rgba(255,255,255,.11)}
+.settings__advanced-tab--active {background:rgba(255,255,255,.16);border-color:#bbb}
+.settings__advanced-tab:focus-visible {outline:2px solid #bbb;outline-offset:2px}

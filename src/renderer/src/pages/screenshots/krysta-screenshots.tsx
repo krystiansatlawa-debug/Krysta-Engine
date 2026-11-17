@@ -67,7 +67,7 @@ export default function KrystaScreenshots() {
    const identity=local.path.toLocaleLowerCase();
    if(seen.has(identity))continue;
    seen.add(identity);
-   all.push({id:"manual:"+local.clientId,gameTitle:local.gameTitle,path:local.path,previewPath:local.previewPath??local.path,capturedAt:local.capturedAt,kind:"manual",achievementNames:[]});
+   all.push({id:"manual:"+local.clientId,gameTitle:local.gameTitle,path:local.path,previewPath:local.previewPath??local.path,capturedAt:local.capturedAt,kind:local.captureSource==="achievement"?"achievement":"manual",achievementNames:[]});
   }
   for(const item of souvenirs){
    const identity=item.path.toLocaleLowerCase();
