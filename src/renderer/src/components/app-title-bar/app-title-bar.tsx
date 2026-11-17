@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { RefreshCw, Film } from "lucide-react";
+import { RefreshCw, Film, Image as ImageIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   DashIcon,
@@ -92,6 +92,7 @@ export function AppTitleBar({
       <NavigationArrows className="title-bar__navigation" />
       <nav className="krysta-top-nav">
         <NavLink to="/recordings" className={({isActive})=>isActive?"active":""} title={pl?"Nagrania":"Recordings"}><Film size={17}/><span>{pl?"Nagrania":"Recordings"}</span></NavLink>
+        <NavLink to="/screenshots" className={({isActive})=>isActive?"active":""} title={pl?"Zrzuty ekranu":"Screenshots"}><ImageIcon size={17}/><span>{pl?"Zrzuty ekranu":"Screenshots"}</span></NavLink>
         <Link to="/library?collection=__krysta_updates__" className={updatesSelected?"active":""} aria-current={updatesSelected?"page":undefined} title={updatesLabel} aria-label={updatesLabel+" ("+patchCount+")"}><RefreshCw size={17}/><span>{updatesLabel} ({patchCount})</span></Link>
       </nav>
 
