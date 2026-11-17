@@ -239,6 +239,7 @@ const finishCapture = async ({
     uploadProgress: null,
     lastError: null,
     gameSessionId: getGameSessionId(target.gameKey),
+    captureSource: source,
     rootMarkerId: await ensureRootMarkerId(getScreenshotsRoot(filePath)),
     previewPath,
   });
