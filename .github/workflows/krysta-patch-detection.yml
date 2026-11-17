@@ -38,3 +38,4 @@ jobs:
           node --import ./scripts/register-ts-node.mjs --test
           src/shared/game-update-patch-history.test.ts
           src/shared/game-update-scan.test.ts
+          src/shared/game-update-refresh-policy.test.ts
