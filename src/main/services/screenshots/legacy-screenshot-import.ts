@@ -20,10 +20,15 @@ const normalizeScreenshotPath = (filePath: string) => {
  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
 };
 
+const normalizeGameFolder = (value: string) =>
+ value.normalize("NFKC").trim().replace(/[\\s._-]+/g, " ").toLocaleLowerCase();
+
 function matchGame(folderName: string, games: Game[]): Game | null {
+ const normalizedFolder = normalizeGameFolder(folderName);
  const matches = games.filter(game =>
-  !game.isDeleted && toScreenshotFolderName(game.title).toLowerCase() === folderName.toLowerCase()
+  !game.isDeleted && normalizeGameFolder(toScreenshotFolderName(game.title)) === normalizedFolder
  );
+ // Never guess when multiple games have indistinguishable folder names.
  return matches.length === 1 ? matches[0] : null;
 }
 
