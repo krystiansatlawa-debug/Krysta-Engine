@@ -206,7 +206,8 @@ export function SettingsContextScreenshots() {
           </button>
         ))}
       </nav>
-      {captureSection === "screenshots" && <div className="settings-context-panel__group">
+      {captureSection === "screenshots" && (
+        <div className="settings-context-panel__group">
         <h3>{t("screenshots_capture_group")}</h3>
 
         <CheckboxField
@@ -274,7 +275,8 @@ export function SettingsContextScreenshots() {
         />
           </div>
         </details>
-      </div>}
+      </div>
+      )}
 
       {captureSection === "recordings" && <div className="settings-context-panel__group">
         <h3>{pl ? "Nagrywanie osiągnięć" : "Achievement recordings"}</h3>
