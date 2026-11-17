@@ -50,7 +50,18 @@ export const publishAchievementUnlockNotifications = ({
   userPreferences,
 }: AchievementUnlockNotificationOptions) => {
   if (achievements.length) {
-    void recordAchievementClip(game, achievements.map(a => a.displayName));
+    // Recording is optional. A capture failure must never interrupt achievement
+    // notifications or produce an unhandled promise rejection during sync.
+    void recordAchievementClip(
+      game,
+      achievements.map((achievement) => achievement.displayName)
+    ).catch((error) => {
+      achievementsLogger.warn(
+        "Unable to record achievement clip",
+        game.objectId,
+        error
+      );
+    });
   }
   if (
     !achievements.length ||
