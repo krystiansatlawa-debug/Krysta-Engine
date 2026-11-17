@@ -216,7 +216,7 @@ async function perform(key:string,force=false){
  // the provider check. A failed feed cannot invalidate the official status.
  const newsRequest=getGameNews(
   game.catalogueGame?.shop==="steam"?game.catalogueGame.objectId:snapshot.shop==="steam"?snapshot.id:snapshot.steamId??"",
-  game.title,true
+  game.title,true,force
  ).then(response=>({
   news:response.appId?response:null,
   newsError:undefined as string|undefined
