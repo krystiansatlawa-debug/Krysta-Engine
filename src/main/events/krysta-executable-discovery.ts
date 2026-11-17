@@ -16,14 +16,14 @@ import {scanUbisoft} from "./krysta-ubisoft";
 const MAX_FILES=2800,MAX_DEPTH=4,MAX_MS=12000;
 const normalize=(v:string)=>v.normalize("NFKD").toLowerCase().replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");
 const folderNameSafe=(v:string)=>v.trim().replace(/[\\/<>:"|?*]/g,"").replace(/\.+$/,"").slice(0,100);
-async function listExe(root:string):Promise<string[]>{
+async function listExe(root:string,budgetMs=MAX_MS):Promise<string[]>{
  const files:string[]=[],pending:[string,number][]=[[root,0]];
  const started=Date.now();let visited=0;
- while(pending.length>0&&visited<MAX_FILES&&Date.now()-started<MAX_MS){
+ while(pending.length>0&&visited<MAX_FILES&&Date.now()-started<budgetMs){
   const [dir,depth]=pending.shift()!;
   const entries=await fs.readdir(dir,{withFileTypes:true}).catch(()=>[]);
   for(const entry of entries){
-   if(++visited>=MAX_FILES||Date.now()-started>=MAX_MS)break;
+   if(++visited>=MAX_FILES||Date.now()-started>=budgetMs)break;
    if(entry.isSymbolicLink())continue;
    const relative=path.relative(root,path.join(dir,entry.name));
    if(entry.isDirectory()&&depth<MAX_DEPTH&&!isRedistributableDirectory(entry.name)&&!/^\.|^\$|^windowsapps$|^node_modules$/i.test(entry.name)){
@@ -82,11 +82,14 @@ export async function discoverKrystaGameExecutable(shop:unknown,id:unknown,folde
  const download=await downloadsSublevel.get(levelKeys.game(game.shop,game.objectId)).catch(()=>null);
  const roots=folder?[folder]:await detectedRoots(game,download);
  const found:Candidate[]=[],seen=new Set<string>();
+ const scanStarted=Date.now();
  for(const root of roots.slice(0,24)){
+  const remaining=MAX_MS-(Date.now()-scanStarted);
+  if(remaining<1000)break;
   if(!path.isAbsolute(root)||path.parse(root).root===root)continue;
   const st=await fs.lstat(root).catch(()=>null);
   if(!st?.isDirectory()||st.isSymbolicLink())continue;
-  const candidates=rankKrystaExecutableSuggestions(await listExe(root),game.title,GameExecutables.getExecutablesForGame(game.objectId)??[]);
+  const candidates=rankKrystaExecutableSuggestions(await listExe(root,remaining),game.title,GameExecutables.getExecutablesForGame(game.objectId)??[]);
   for(const item of candidates){
    const file=path.join(root,item.relativePath),key=process.platform==="win32"?file.toLowerCase():file;
    if(seen.has(key))continue;seen.add(key);
@@ -102,6 +105,16 @@ export async function discoverKrystaGameExecutable(shop:unknown,id:unknown,folde
  * Rechecks ownership inside the serialized library write queue to avoid racing manual edits.
  */
 const automaticLinks=new Map<string,Promise<string|null>>();
+const scanWaiters:Array<()=>void>=[];
+let activeAutomaticScans=0;
+async function withAutoScanSlot<T>(work:()=>Promise<T>):Promise<T>{
+ // Prevent automatic background scans from saturating disk I/O when many
+ // games are added or imported at once.
+ if(activeAutomaticScans>=2)await new Promise<void>(resolve=>scanWaiters.push(resolve));
+ activeAutomaticScans++;
+ try{return await work();}
+ finally{activeAutomaticScans--;scanWaiters.shift()?.();}
+}
 export function autoLinkKrystaGameExecutable(shop:"steam"|"epic"|"custom",id:string):Promise<string|null>{
  if(process.platform!=="win32")return Promise.resolve(null);
  const key=levelKeys.game(shop,id),previous=automaticLinks.get(key);
@@ -109,7 +122,7 @@ export function autoLinkKrystaGameExecutable(shop:"steam"|"epic"|"custom",id:str
  const task=(async()=>{
   const first=await gamesSublevel.get(key);
   if(!canAutoLinkKrystaExecutable(first))return null;
-  const discovered=await discoverKrystaGameExecutable(shop,id);
+  const discovered=await withAutoScanSlot(()=>discoverKrystaGameExecutable(shop,id));
   const proposed=discovered.automaticPath;
   if(!proposed)return null;
   const stat=await fs.lstat(proposed).catch(()=>null);
