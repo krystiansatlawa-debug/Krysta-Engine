@@ -271,7 +271,7 @@ async function renderLibrary(
   const exports: { default?: React.ComponentType } = {};
   new Function("exports", "require", outputText)(exports, (name: string) => {
     if (name.endsWith(".scss")) return {};
-    return stubs[name] ?? requireModule(name);
+    return stubs[name] ?? (name.includes("krysta-patch-badge") ? { KrystaPatchBadge: () => null } : requireModule(name));
   });
   const Library = exports.default!;
   await act(async () => root.render(React.createElement(Library)));
