@@ -21,7 +21,7 @@ const normalizeScreenshotPath = (filePath: string) => {
 };
 
 const normalizeGameFolder = (value: string) =>
- value.normalize("NFKC").trim().replace(/[\\s._-]+/g, " ").toLocaleLowerCase();
+ value.normalize("NFKC").trim().replace(/[\s._-]+/g, " ").toLocaleLowerCase();
 
 function matchGame(folderName: string, games: Game[]): Game | null {
  const normalizedFolder = normalizeGameFolder(folderName);
