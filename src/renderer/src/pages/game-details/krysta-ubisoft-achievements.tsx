@@ -6,14 +6,14 @@ type Snapshot=Awaited<ReturnType<typeof window.electron.getUbisoftAchievements>>
 export function KrystaUbisoftAchievements({objectId}:{objectId:string}){
  const {i18n}=useTranslation(),pl=i18n.language.startsWith("pl");
  const [data,setData]=useState<Snapshot|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[filter,setFilter]=useState("all"),[search,setSearch]=useState("");
- const active=useRef(false),request=useRef(false);
+ const active=useRef(false),request=useRef(false),generation=useRef(0);
  const refresh=useCallback(async(force=false)=>{
-  if(request.current)return;request.current=true;setBusy(true);setError("");
-  try{const next=await window.electron.getUbisoftAchievements(objectId,force);if(active.current)setData(next);}
-  catch{if(active.current)setError(pl?"Nie udało się odczytać osiągnięć. Sprawdź połączenie z kontem Ubisoft w ustawieniach integracji.":"Could not read achievements. Check your Ubisoft account connection in integration settings.");}
-  finally{request.current=false;if(active.current)setBusy(false);}
+  if(request.current)return;request.current=true;const currentGeneration=generation.current;setBusy(true);setError("");
+  try{const next=await window.electron.getUbisoftAchievements(objectId,force);if(active.current&&currentGeneration===generation.current)setData(next);}
+  catch{if(active.current&&currentGeneration===generation.current)setError(pl?"Nie udało się odczytać osiągnięć. Sprawdź połączenie z kontem Ubisoft w ustawieniach integracji.":"Could not read achievements. Check your Ubisoft account connection in integration settings.");}
+  finally{if(currentGeneration===generation.current){request.current=false;if(active.current)setBusy(false);}}
  },[objectId,pl]);
- useEffect(()=>{active.current=true;void refresh();const timer=setInterval(()=>{if(!document.hidden)void refresh(true);},120000);return()=>{active.current=false;clearInterval(timer);};},[refresh]);
+ useEffect(()=>{generation.current++;request.current=false;active.current=true;setData(null);setError("");setBusy(false);void refresh();const timer=setInterval(()=>{if(!document.hidden)void refresh(true);},120000);return()=>{active.current=false;generation.current++;request.current=false;clearInterval(timer);};},[refresh]);
  const items=data?.items.filter(a=>(filter==="all"||(filter==="unlocked"?a.unlocked:!a.unlocked))&&(a.title+" "+a.description).toLocaleLowerCase().includes(search.toLocaleLowerCase()))??[];
  return <section className="krysta-updates" style={{padding:16,display:"flex",flexDirection:"column",gap:12}}>
   <header className="krysta-updates__header"><h2><Trophy size={18}/> {pl?"Osiągnięcia Ubisoft Connect":"Ubisoft Connect achievements"}</h2><button disabled={busy} onClick={()=>void refresh(true)}><RefreshCw size={14}/> {pl?"Odśwież":"Refresh"}</button></header>
