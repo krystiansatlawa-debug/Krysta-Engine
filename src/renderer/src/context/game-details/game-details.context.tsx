@@ -5,6 +5,10 @@ import { levelDBService } from "@renderer/services/leveldb.service";
 import { ensureArray } from "@renderer/helpers";
 import { orderBy } from "lodash-es";
 import {
+  isUbisoftLibraryGame,
+  toHydraUbisoftAchievements,
+} from "@renderer/helpers/ubisoft-achievements";
+import {
   useAppDispatch,
   useAppSelector,
   useDownload,
@@ -247,6 +251,26 @@ export function GameDetailsContextProvider({
         }
       });
 
+    // Ubisoft games use verified, account-scoped Ubisoft unlock data. The
+    // normal Hydra achievement context renders it without altering Steam
+    // unlocks or uploading anything to Hydra servers.
+    if (isUbisoftLibraryGame(shop, objectId)) {
+      const achievementUpdateCount = achievementUpdateCountRef.current;
+      void window.electron
+        .getUbisoftAchievements(objectId)
+        .then((snapshot) => {
+          if (
+            !abortController.signal.aborted &&
+            achievementUpdateCount === achievementUpdateCountRef.current
+          ) {
+            setAchievements(toHydraUbisoftAchievements(snapshot.items));
+          }
+        })
+        .catch(() => {
+          if (!abortController.signal.aborted) setAchievements([]);
+        });
+    }
+
     if (shop !== "custom") {
       void window.electron
         .getGameStats(catalogueObjectId, catalogueShop)
@@ -302,6 +326,29 @@ export function GameDetailsContextProvider({
     userPreferences?.disableNsfwAlert,
     userPreferences?.retroAchievementsWebApiKey,
   ]);
+
+  useEffect(() => {
+    if (!isUbisoftLibraryGame(shop, objectId)) return;
+    let live = true;
+    const refreshUbisoftAchievements = () => {
+      if (document.hidden) return;
+      void window.electron
+        .getUbisoftAchievements(objectId, true)
+        .then((snapshot) => {
+          if (live) setAchievements(toHydraUbisoftAchievements(snapshot.items));
+        })
+        .catch(() => {
+          // Keep the last verified snapshot on transient account/API errors.
+        });
+    };
+    const interval = window.setInterval(refreshUbisoftAchievements, 120000);
+    window.addEventListener("focus", refreshUbisoftAchievements);
+    return () => {
+      live = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshUbisoftAchievements);
+    };
+  }, [shop, objectId]);
 
   const refreshGameDetails = useCallback(async () => {
     await Promise.all([updateGame(), fetchGameDetails()]);
