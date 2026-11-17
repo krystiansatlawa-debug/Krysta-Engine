@@ -55,6 +55,8 @@ async function fixture(
     requests,
     updates: [] as Array<{ channel: string; achievements: unknown }>,
     recordings: [] as Array<{ game: Game; names: string[] }>,
+    screenshots: [] as Game[],
+    failScreenshot: false,
     recordingWarnings: [] as unknown[][],
     failRecording: false,
     catalogueGate: null as Promise<unknown> | null,
@@ -103,6 +105,7 @@ async function fixture(
     export const createCombinedDefinitionLookup = () => () => undefined;
     export const publishNewAchievementNotification = () => {};
     export const recordAchievementClip = async (game, names) => { state.recordings.push({game, names}); if (state.failRecording) throw new Error("Recording unavailable"); };
+    export const captureAchievementScreenshot = async game => {state.screenshots.push(game);if(state.failScreenshot)throw Error("Screenshot unavailable");};
     export const registerEvent = (name, handler) => state.events.set(name, handler);
     export const gamesSublevel = {get: async () => state.game};
     export const collectGameAchievementFiles = async () => [];
@@ -201,6 +204,27 @@ async function fixture(
     root,
   };
 }
+
+test("achievement screenshot and video captures are separate and do not block synchronization", async (t) => {
+  const f = await fixture(t);
+  f.state.failScreenshot = true;
+  f.AchievementMemoryStore.set("steam", "620", {
+    achievements: [
+      {name:"A",displayName:"New unlock",description:"Fixture",icon:"",icongray:"",hidden:false},
+    ],
+    unlockedAchievements: [],
+  });
+  const count = await f.mergeAchievements(f.game, [{name:"A",unlockTime:1}], true);
+  assert.equal(count,1);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.state.screenshots.length,1);
+  assert.equal(f.state.recordings.length,1);
+  assert.equal(f.state.recordingWarnings.length,1);
+  await f.untilRequest(1);
+  f.requests[0]!.gate.resolve(undefined);
+  await f.achievementSyncWorker.trigger();
+  assert.equal(f.records.size,0);
+});
 
 test("a failed optional achievement recording does not abort unlock sync", async (t) => {
   const f = await fixture(t);
