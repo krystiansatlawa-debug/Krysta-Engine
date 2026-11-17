@@ -114,13 +114,13 @@ async function safeClip(id:unknown,dir:string){
  return {file,stat};
 }
 async function list(dir:string):Promise<Clip[]>{
- const entries=await fs.readdir(dir).catch(()=>[] as string[]),clips:Clip[]=[];
+ const entries=await fs.readdir(dir).catch((error:NodeJS.ErrnoException)=>{if(error.code==="ENOENT")return [] as string[];throw error;}),clips:Clip[]=[];
  for(const name of entries.filter(n=>n.endsWith(".json")&&validId(n.slice(0,-5)))){
   try{
    const id=name.slice(0,-5),info=path.join(dir,name),st=await fs.lstat(info);
-   if(!st.isFile()||st.size>65536)continue;
+   if(!st.isFile()||st.isSymbolicLink()||st.size>65536)continue;
    const c=JSON.parse(await fs.readFile(info,"utf8")) as Clip;
-   if(c.id!==id||typeof c.game!=="string"||typeof c.achievement!=="string"||!Number.isFinite(Date.parse(c.createdAt))||!Number.isFinite(c.duration)||typeof c.audio!=="boolean")continue;
+   if(c.id!==id||typeof c.game!=="string"||typeof c.achievement!=="string"||!Number.isFinite(Date.parse(c.createdAt))||!Number.isFinite(c.duration)||c.duration<=0||typeof c.audio!=="boolean")continue;
    const {stat}=await safeClip(id,dir);
    clips.push({id,game:c.game,achievement:c.achievement,createdAt:c.createdAt,duration:c.duration,audio:c.audio,size:stat.size,before:typeof c.before==="number"&&Number.isFinite(c.before)?c.before:undefined,thumbnail:thumbnail(c.thumbnail)?c.thumbnail:undefined});
   }catch{/* incomplete recording */}
