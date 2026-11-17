@@ -92,6 +92,7 @@ export function SettingsContextScreenshots() {
     resolveScreenshotPreferences(userPreferences)
   );
   const [screenshotsPath, setScreenshotsPath] = useState("");
+  const [captureSection, setCaptureSection] = useState<"screenshots" | "recordings" | "library">("screenshots");
 
   useEffect(() => {
     if (!userPreferences) return;
@@ -188,7 +189,15 @@ export function SettingsContextScreenshots() {
 
   return (
     <div className="settings-context-panel settings-screenshots">
-      <div className="settings-context-panel__group">
+      <nav className="settings-screenshots__section-tabs" aria-label={pl ? "Ustawienia multimediów" : "Media settings"}>
+        {(["screenshots", "recordings", "library"] as const).map(section => (
+          <button key={section} type="button" aria-pressed={captureSection === section}
+            onClick={() => setCaptureSection(section)}>
+            {section === "screenshots" ? (pl ? "Zrzuty ekranu" : "Screenshots") : section === "recordings" ? (pl ? "Nagrania" : "Recordings") : (pl ? "Galeria i prywatność" : "Gallery and privacy")}
+          </button>
+        ))}
+      </nav>
+      {captureSection === "screenshots" && <div className="settings-context-panel__group">
         <h3>{t("screenshots_capture_group")}</h3>
 
         <CheckboxField
@@ -258,11 +267,12 @@ export function SettingsContextScreenshots() {
         </details>
       </div>
 
-      <details className="settings-screenshots__advanced">
-        <summary>{pl?"Nagrywanie osiągnięć — opcje":"Achievement recording — options"}</summary>
+      {captureSection === "recordings" && <div className="settings-context-panel__group">
+        <h3>{pl ? "Nagrywanie osiągnięć" : "Achievement recordings"}</h3>
         <SettingsAchievementRecordings />
-      </details>
+      </div>}
 
+      {captureSection === "library" && <>
       <div className="settings-context-panel__group">
         <h3>{t("screenshots_upload_group")}</h3>
 
@@ -339,6 +349,7 @@ export function SettingsContextScreenshots() {
           </Button>
         </div>
       </div>
+      </>}
     </div>
   );
 }
