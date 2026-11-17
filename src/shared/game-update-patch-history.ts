@@ -52,3 +52,16 @@ export function announcedGamePatchVersion(title: string): string | null {
   const major=Number(version.split(".")[0]);
   return major>=2000&&major<=2100?null:version;
 }
+
+/** Avoid notifying users about months-old announcements that reappear in a
+ * changing Steam feed. Old posts remain visible in the historical timeline.
+ */
+export function isRecentGamePatchAnnouncement(
+  publishedSeconds:number,
+  now=Date.now(),
+  maxDays=30
+):boolean {
+  if(!Number.isFinite(publishedSeconds))return false;
+  const publishedMs=publishedSeconds*1000;
+  return publishedMs>=now-maxDays*86400000 && publishedMs<=now+86400000;
+}
