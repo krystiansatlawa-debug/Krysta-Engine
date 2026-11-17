@@ -64,8 +64,10 @@ async function detectedRoots(game:{shop:string;objectId:string;title:string;exec
   }
   const safe=folderNameSafe(game.title);
   if(safe.length>=4){
-   for(const drive of ["C:","D:"]){
-    for(const dir of ["Games","GOG Games","Epic Games","Ubisoft Games","Rockstar Games"])
+   const drives=new Set(["C:","D:","E:","F:",process.env.SystemDrive??"C:"]);
+   for(const drive of drives){
+    if(!/^[a-z]:$/i.test(drive))continue;
+    for(const dir of ["Games","GOG Games","Epic Games","Ubisoft Games","Rockstar Games","Program Files","Program Files (x86)"])
      add(path.win32.join(drive+"\\",dir,safe));
    }
   }
