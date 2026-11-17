@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "./krysta-game-updates.scss";
 import { providerStatusIsStale } from "../../../../shared/game-update-patch-history";
+import { needsAutomaticGameUpdateRefresh } from "../../../../shared/game-update-refresh-policy";
 type Watch=Awaited<ReturnType<typeof window.electron.krystaGameWatchGet>>;
 export function KrystaGameWatch({shop,id,executablePath}:{shop:string;id:string;executablePath?:string|null}){
  const {i18n}=useTranslation();const pl=i18n.language.startsWith("pl");
@@ -15,7 +16,7 @@ export function KrystaGameWatch({shop,id,executablePath}:{shop:string;id:string;
     const local=await window.electron.krystaGameWatchGet(shop,id);
     if(!active)return;
     setWatch(local);setOverride(local?.override??"inherit");setReady(true);
-    if(!local||shop==="launchbox")return;
+    if(!local||shop==="launchbox"||!needsAutomaticGameUpdateRefresh(local))return;
     const checked=await window.electron.krystaGameWatchCheck(shop,id);
     if(active&&checked){setWatch(checked);setOverride(checked.override??"inherit");}
    }catch(e){if(active)setNotice(String(e));}
