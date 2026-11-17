@@ -218,14 +218,15 @@ async function perform(key:string,force=false){
  const patches=news?.items.filter(x=>x.category==="patch").sort((a,b)=>b.date-a.date)??[];
  const latest=patches[0];
  const newItems=snapshot.seen?patches.filter(x=>!snapshot.seen!.includes(x.id)&&isRecentGamePatchAnnouncement(x.date)):[];
- return serial(async()=>{
+ const notifications: Array<{kind:"KRYSTA_UPDATE"|"KRYSTA_PATCH";message:string;enabled:boolean}>=[];
+ const next=await serial(async()=>{
   const all=await read(),previous=all[key]??snapshot,settings=await readSettings();
   const enabled=effective(previous,settings);
   if(enabled&&snapshot.enabled){
    if(smart.updateState==="required"&&previous.updateState!=="required")
-    await publishKrystaNotification("KRYSTA_UPDATE",game.title,(smart.updateProvider==="gog"?"GOG":game.shop==="epic"?"Epic Games":"Steam")+": aktualizacja wymagana / Update required",settings.notifications);
+    notifications.push({kind:"KRYSTA_UPDATE",message:(smart.updateProvider==="gog"?"GOG":game.shop==="epic"?"Epic Games":"Steam")+": aktualizacja wymagana / Update required",enabled:settings.notifications});
    const fresh=newItems.filter(x=>!previous.seen?.includes(x.id));
-   if(fresh.length)await publishKrystaNotification("KRYSTA_PATCH",game.title,"Nowy patch / New patch: "+fresh[0].title,settings.notifications);
+   if(fresh.length)notifications.push({kind:"KRYSTA_PATCH",message:"Nowy patch / New patch: "+fresh[0].title,enabled:settings.notifications});
   }
   const freshPatch=enabled&&snapshot.enabled&&previous.seen?newItems.find(x=>!previous.seen?.includes(x.id)):undefined;
   const next:Watch={
@@ -246,7 +247,15 @@ async function perform(key:string,force=false){
   };
   all[key]=next;await write(all);return next;
  });
-
+ // OS notification calls may be slow; do not hold the serialized patch-store
+ // lock while they run. Failure to show a toast never invalidates the
+ // successfully saved update state.
+ if(notifications.length)
+  await Promise.allSettled(notifications.map(n=>
+   publishKrystaNotification(n.kind,game.title,n.message,n.enabled)
+  ));
+ return next;
+ 
 }
 const inflight=new Map<string,Promise<Watch|null>>();
 function check(key:string,force=false){const old=inflight.get(key);if(old)return old;const p=perform(key,force).finally(()=>inflight.delete(key));inflight.set(key,p);return p;}
