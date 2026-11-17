@@ -15,6 +15,11 @@ const IMAGE_EXTENSION = /\.(jpe?g|png|webp)$/i;
 const MAX_IMAGE_BYTES = 80 * 1024 * 1024;
 const MAX_FILES = 10000;
 
+const normalizeScreenshotPath = (filePath: string) => {
+ const normalized = path.normalize(filePath);
+ return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+};
+
 function matchGame(folderName: string, games: Game[]): Game | null {
  const matches = games.filter(game =>
   !game.isDeleted && toScreenshotFolderName(game.title).toLowerCase() === folderName.toLowerCase()
@@ -26,7 +31,7 @@ function matchGame(folderName: string, games: Game[]): Game | null {
 export async function importLegacyScreenshots(): Promise<number> {
  const games = await gamesSublevel.values().all();
  const existing = await LocalScreenshotStore.listIncludingDeleted();
- const known = new Set(existing.map(item => path.normalize(item.path).toLowerCase()));
+ const known = new Set(existing.map(item => normalizeScreenshotPath(item.path)));
  const ownerId = getSignedInScreenshotOwnerId();
  let imported = 0;
  let inspected = 0;
@@ -45,7 +50,7 @@ export async function importLegacyScreenshots(): Promise<number> {
     if (++inspected > MAX_FILES) return imported;
     if (!file.isFile() || file.isSymbolicLink() || !IMAGE_EXTENSION.test(file.name)) continue;
     const filePath = path.join(directory, file.name);
-    const key = path.normalize(filePath).toLowerCase();
+    const key = normalizeScreenshotPath(filePath);
     if (known.has(key)) continue;
     const stat = await fs.stat(filePath).catch(() => null);
     if (!stat || !stat.isFile() || stat.size === 0 || stat.size > MAX_IMAGE_BYTES) continue;
@@ -57,6 +62,10 @@ export async function importLegacyScreenshots(): Promise<number> {
      continue;
     }
     if (!dimensions.width || !dimensions.height) continue;
+    const rootMarkerId = await ensureRootMarkerId(getScreenshotsRoot(filePath)).catch((error: unknown) => {
+     logger.warn("Could not initialize legacy screenshot folder marker", { filePath, error });
+     return null;
+    });
     const screenshot: LocalScreenshot = {
      clientId: randomUUID(),
      ownerId,
@@ -77,7 +86,7 @@ export async function importLegacyScreenshots(): Promise<number> {
      uploadProgress: null,
      lastError: null,
      gameSessionId: null,
-     rootMarkerId: await ensureRootMarkerId(getScreenshotsRoot(filePath)),
+     rootMarkerId,
      previewPath: null,
     };
     try {
