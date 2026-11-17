@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
-import type { GameRepack, GameShop, Steam250Game } from "@types";
+import type { GameRepack, GameShop, LibraryGame, Steam250Game } from "@types";
 
 import { Button, ConfirmationModal } from "@renderer/components";
 import { buildGameDetailsPath } from "@renderer/helpers";
@@ -26,6 +26,25 @@ import { CloudSyncFilesModal } from "./cloud-sync-files-modal/cloud-sync-files-m
 import { CloudSaveV2Provider } from "./cloud-save-v2";
 import "./game-details.scss";
 import "./hero.scss";
+
+/** Also repairs previously imported Krysta library entries when their game page is opened. */
+function AutoDetectLaunchExecutable({game,updateGame}:{
+  game:LibraryGame;updateGame:()=>Promise<unknown>|void
+}) {
+  const updateRef=useRef(updateGame);
+  useEffect(()=>{updateRef.current=updateGame;},[updateGame]);
+  useEffect(()=>{
+    if(window.electron.platform!=="win32"||game.executablePath||
+       game.shop==="launchbox"||game.hasActiveSteamImport||game.hasActiveEpicImport||
+       game.source==="steam"||game.source==="epic")return;
+    let active=true;
+    void window.electron.krystaAutoLinkGameExecutable(game.shop,game.objectId)
+      .then(file=>{if(active&&file)void updateRef.current();})
+      .catch(()=>{});
+    return()=>{active=false;};
+  },[game.shop,game.objectId,Boolean(game.executablePath),game.hasActiveSteamImport,game.hasActiveEpicImport,game.source]);
+  return null;
+}
 
 export default function GameDetails() {
   const [randomGame, setRandomGame] = useState<Steam250Game | null>(null);
@@ -190,6 +209,7 @@ export default function GameDetails() {
                     clickOutsideToClose={false}
                   />
 
+                  {game && <AutoDetectLaunchExecutable game={game} updateGame={updateGame} />}
                   {game && (
                     <GameOptionsModal
                       visible={showGameOptionsModal}

@@ -206,6 +206,7 @@ contextBridge.exposeInMainWorld("electron", {
   krystaCloudAccountStatus: () => ipcRenderer.invoke("krysta:cloud-account-status"),
   krystaCloudGoogleConnect: () => ipcRenderer.invoke("krysta:cloud-google-connect"),
   krystaCloudGoogleConnectJson: () => ipcRenderer.invoke("krysta:cloud-google-connect-json"),
+  krystaCloudGoogleTest: () => ipcRenderer.invoke("krysta:cloud-google-test"),
   krystaCloudOpenPreUpdateFolder: () => ipcRenderer.invoke("krysta:cloud-open-pre-update-folder"),
   krystaCloudSynologyConnect: (url:string,username:string,password:string) => ipcRenderer.invoke("krysta:cloud-synology-connect",url,username,password),
   krystaCloudAccountDisconnect: (provider:string) => ipcRenderer.invoke("krysta:cloud-account-disconnect",provider),
@@ -1365,6 +1366,10 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("hasDownloadFolder", shop, objectId),
   getExecutablePickerPath: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("getExecutablePickerPath", shop, objectId),
+  krystaDiscoverGameExecutable: (shop: GameShop, objectId: string, folder?: string) =>
+    ipcRenderer.invoke("krysta:discover-game-exe", shop, objectId, folder),
+  krystaAutoLinkGameExecutable: (shop: GameShop, objectId: string) =>
+    ipcRenderer.invoke("krysta:auto-link-game-exe", shop, objectId),
   openGameInstallerPath: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("openGameInstallerPath", shop, objectId),
   openGameWinetricks: (shop: GameShop, objectId: string) =>
@@ -1700,6 +1705,7 @@ contextBridge.exposeInMainWorld("electron", {
   getScreenshotsFolderPath: () =>
     ipcRenderer.invoke("getScreenshotsFolderPath"),
   getLocalScreenshots: () => ipcRenderer.invoke("getLocalScreenshots"),
+  getKrystaSouvenirGallery: () => ipcRenderer.invoke("krysta:souvenir-gallery"),
   getLocalScreenshotsForGame: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("getLocalScreenshotsForGame", shop, objectId),
   deleteLocalScreenshotsForGame: (shop: GameShop, objectId: string) =>

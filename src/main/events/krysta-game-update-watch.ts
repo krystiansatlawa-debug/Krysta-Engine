@@ -16,9 +16,10 @@ import { getSteamLibraryFolders } from "@main/services/steam";
 import { readSteamUpdateState, findInstalledSteamApp, isPathInsideSteamInstallDirectory } from "@main/services/steam-integration/steam-installation-core";
 import { hasTrackedGamesRunning } from "@main/services/game-running-state";
 import type { GameShop, Game } from "@types";
+import { mergePublishedPatches, type PatchAnnouncement } from "../../shared/game-update-patch-history";
 
 type BuildChange={from:string;to:string;detectedAt:string};
-type Watch={gameTitle?:string;installedBuild?:string;installedBuildSource?:"epic"|"gog";platformBuildHistory?:(BuildChange&{source:"epic"|"gog"})[];lastPlatformBuild?:string;lastPlatformSource?:"epic"|"gog";localVersionHistory?:BuildChange[];lastLocalVersion?:string;lastLocalSource?:string;updateProvider?:"steam"|"epic"|"gog";buildHistory?:BuildChange[];lastKnownBuildId?:string;shop:GameShop;id:string;enabled:boolean;override?:"on"|"off"|"inherit";installedVersion:string;versionSource?:"product"|"file"|"epic-manifest"|"version-file"|"gog-manifest";seen?:string[];lastChecked?:string;latestTitle?:string;latestVersion?:string;error?:string;steamId?:string;pendingPatch?:string;steamBuildId?:string;updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string};
+type Watch={gameTitle?:string;installedBuild?:string;installedBuildSource?:"epic"|"gog";platformBuildHistory?:(BuildChange&{source:"epic"|"gog"})[];lastPlatformBuild?:string;lastPlatformSource?:"epic"|"gog";localVersionHistory?:BuildChange[];lastLocalVersion?:string;lastLocalSource?:string;updateProvider?:"steam"|"epic"|"gog";buildHistory?:BuildChange[];lastKnownBuildId?:string;shop:GameShop;id:string;enabled:boolean;override?:"on"|"off"|"inherit";installedVersion:string;versionSource?:"product"|"file"|"epic-manifest"|"version-file"|"gog-manifest";seen?:string[];lastChecked?:string;latestTitle?:string;latestPublishedAt?:string;patchHistory?:PatchAnnouncement[];latestVersion?:string;error?:string;steamId?:string;pendingPatch?:string;steamBuildId?:string;updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string};
 function recordBuild(w:Watch|undefined,smart:Pick<Watch,"steamBuildId"|"updateState"|"updateCheckedAt">){
  const previous=w?.lastKnownBuildId??w?.steamBuildId;
  const current=smart.steamBuildId;
@@ -188,25 +189,47 @@ async function perform(key:string,force=false){
  if(!snapshot)return null;
  const detected=await detectVersion(game);
  const smart=await smartState(game);
+ // Provider status and Steam news are separate. Failed news requests must not
+ // invalidate a confirmed update from a local launcher.
+ let news:Awaited<ReturnType<typeof getGameNews>>|null=null;
+ let newsError:string|undefined;
  try{
- const result=await getGameNews(game.catalogueGame?.shop==="steam"?game.catalogueGame.objectId:snapshot.shop==="steam"?snapshot.id:snapshot.steamId??"",game.title,true);
- if(!result.appId)throw Error("No verified Steam match");
- const patches=result.items.filter(x=>x.category==="patch").sort((a,b)=>b.date-a.date);
+  const response=await getGameNews(game.catalogueGame?.shop==="steam"?game.catalogueGame.objectId:snapshot.shop==="steam"?snapshot.id:snapshot.steamId??"",game.title,true);
+  if(response.appId)news=response;
+ }catch(error){newsError="Steam patch feed: "+String(error).slice(0,220);}
+ const patches=news?.items.filter(x=>x.category==="patch").sort((a,b)=>b.date-a.date)??[];
  const latest=patches[0];
- const newItems=snapshot.seen?patches.filter(x=>!snapshot.seen!.includes(x.id)): [];
- return await serial(async()=>{
- const all=await read(),w=all[key],settings=await readSettings();if(!w)return null;
- const enabled=effective(w,settings);
- if(enabled&&snapshot.enabled){
- if(smart.updateState==="required"&&w.updateState!=="required")await publishKrystaNotification("KRYSTA_UPDATE",game.title,(smart.updateProvider==="gog"?"GOG":game.shop==="epic"?"Epic Games":"Steam")+": aktualizacja wymagana / Update required",settings.notifications);
- const fresh=newItems.filter(x=>!w.seen?.includes(x.id));
- if(fresh.length)await publishKrystaNotification("KRYSTA_PATCH",game.title,"Nowy patch / New patch: "+fresh[0].title,settings.notifications);
- }
- const freshPatch=enabled&&snapshot.enabled&&w.seen?newItems.find(x=>!w.seen?.includes(x.id)):undefined;
- const next={...w,enabled,pendingPatch:enabled?(freshPatch?.title??w.pendingPatch):undefined,...detected,...smart,...recordBuild(w,smart),...platformHistory(w,smart),...localHistory(w,detected),versionSource:detected.versionSource,steamId:result.appId??undefined,lastChecked:new Date().toISOString(),latestTitle:latest?.title,latestVersion:latest?version(latest.title)??undefined:undefined,seen:[...new Set([...patches.map(x=>x.id),...(w.seen??[])])].slice(0,500),error:undefined};
- all[key]=next;await write(all);return next;
+ const newItems=snapshot.seen?patches.filter(x=>!snapshot.seen!.includes(x.id)):[];
+ return serial(async()=>{
+  const all=await read(),previous=all[key],settings=await readSettings();
+  if(!previous)return null;
+  const enabled=effective(previous,settings);
+  if(enabled&&snapshot.enabled){
+   if(smart.updateState==="required"&&previous.updateState!=="required")
+    await publishKrystaNotification("KRYSTA_UPDATE",game.title,(smart.updateProvider==="gog"?"GOG":game.shop==="epic"?"Epic Games":"Steam")+": aktualizacja wymagana / Update required",settings.notifications);
+   const fresh=newItems.filter(x=>!previous.seen?.includes(x.id));
+   if(fresh.length)await publishKrystaNotification("KRYSTA_PATCH",game.title,"Nowy patch / New patch: "+fresh[0].title,settings.notifications);
+  }
+  const freshPatch=enabled&&snapshot.enabled&&previous.seen?newItems.find(x=>!previous.seen?.includes(x.id)):undefined;
+  const next:Watch={
+   ...previous,enabled,pendingPatch:enabled?(freshPatch?.title??previous.pendingPatch):undefined,
+   ...detected,...smart,
+   ...recordBuild(previous,smart),...platformHistory(previous,smart),...localHistory(previous,detected),
+   versionSource:detected.versionSource,
+   ...(news?{
+    steamId:news.appId??undefined,
+    lastChecked:new Date().toISOString(),
+    latestTitle:latest?.title??previous.latestTitle,
+    latestPublishedAt:latest?.date?new Date(latest.date*1000).toISOString():previous.latestPublishedAt,
+    latestVersion:latest?version(latest.title)??undefined:previous.latestVersion,
+    patchHistory:mergePublishedPatches(previous.patchHistory,patches),
+    seen:[...new Set([...patches.map(x=>x.id),...(previous.seen??[])])].slice(0,500)
+   }:{}),
+   error:newsError,
+  };
+  all[key]=next;await write(all);return next;
  });
- }catch(e){return serial(async()=>{const all=await read(),w=all[key];if(!w)return null;const settings=await readSettings();if(effective(w,settings)&&snapshot.enabled&&smart.updateState==="required"&&w.updateState!=="required")await publishKrystaNotification("KRYSTA_UPDATE",game.title,(smart.updateProvider==="gog"?"GOG":game.shop==="epic"?"Epic Games":"Steam")+": aktualizacja wymagana / Update required",settings.notifications);all[key]={...w,...detected,...smart,...recordBuild(w,smart),...platformHistory(w,smart),...localHistory(w,detected),versionSource:detected.versionSource,error:String(e)};await write(all);return all[key];});}
+
 }
 const inflight=new Map<string,Promise<Watch|null>>();
 function check(key:string,force=false){const old=inflight.get(key);if(old)return old;const p=perform(key,force).finally(()=>inflight.delete(key));inflight.set(key,p);return p;}
@@ -382,19 +405,28 @@ async function offerEpicUpdates(){
  }
 }
 let scanning=false,lastScan=0,lastFinished:string|null=null,lastError:string|null=null;
-async function scan(){
+let scanChecked=0,scanTotal=0,scanRequired=0,scanUnknown=0,scanInterrupted=false;
+async function scan(manual=false){
  if(scanning)return;
- if((await serial(readSettings)).pauseDuringPlay&&hasTrackedGamesRunning())return;
- if(scanning)return;scanning=true;lastScan=Date.now();lastError=null;
+ if((await serial(readSettings)).pauseDuringPlay&&hasTrackedGamesRunning()){scanInterrupted=true;return;}
+ if(scanning)return;scanning=true;lastScan=Date.now();lastError=null;scanInterrupted=false;
+ scanChecked=0;scanTotal=0;scanRequired=0;scanUnknown=0;
  try{
-  const all=await serial(read);
-  const initialSettings=await serial(readSettings);
-  if(!initialSettings.enabled&&!Object.values(all).some(w=>effective(w,initialSettings)))return;
+  const all=await serial(read),initialSettings=await serial(readSettings);
+  if(!manual&&!initialSettings.enabled&&!Object.values(all).some(w=>effective(w,initialSettings)))return;
+  const targets:string[]=[];
   for await(const [key,game] of gamesSublevel.iterator()){
+   if(game.isDeleted||game.shop==="launchbox")continue;
+   if(manual?mode(all[key])!=="off":effective(all[key],initialSettings))targets.push(key);
+  }
+  scanTotal=targets.length;
+  for(const key of targets){
    const settings=await serial(readSettings);
-   if(settings.pauseDuringPlay&&hasTrackedGamesRunning()){lastScan=0;return;}
-   if(game.isDeleted||game.shop==="launchbox"||!effective(all[key],settings))continue;
-   await check(key);
+   if(settings.pauseDuringPlay&&hasTrackedGamesRunning()){scanInterrupted=true;lastScan=0;return;}
+   const result=await check(key,manual);
+   scanChecked++;
+   if(result?.updateState==="required")scanRequired++;
+   if(!result||result.updateState==="unknown"||!result.updateState)scanUnknown++;
    await new Promise(resolve=>setTimeout(resolve,350));
   }
   lastFinished=new Date().toISOString();
@@ -403,7 +435,7 @@ async function scan(){
  }catch(e){lastError=String(e);}
  finally{scanning=false;}
 }
-const status=async()=>({...await serial(readSettings),scanning,lastFinished,lastError,pausedDuringPlay:hasTrackedGamesRunning()});
+const status=async()=>({...await serial(readSettings),scanning,scanChecked,scanTotal,scanRequired,scanUnknown,scanInterrupted,lastFinished,lastError,pausedDuringPlay:hasTrackedGamesRunning()});
 ipcMain.handle("krysta:game-watch-settings",status);
 ipcMain.handle("krysta:game-watch-settings-set",async(_e,value:unknown)=>{
  if(!value||typeof value!=="object")throw Error("Invalid settings");
@@ -412,7 +444,7 @@ ipcMain.handle("krysta:game-watch-settings-set",async(_e,value:unknown)=>{
  await serial(async()=>{const old=await readSettings();await writeKrystaSettings(app.getPath("userData"),"game-updates",{enabled:v.enabled,intervalHours:v.intervalHours,notifications:v.notifications,startup:v.startup,pauseDuringPlay:v.pauseDuringPlay??old.pauseDuringPlay,autoOpenSteamQueue:v.autoOpenSteamQueue??old.autoOpenSteamQueue,autoDownloadEpic:v.autoDownloadEpic??old.autoDownloadEpic,backupBeforeUpdate:v.backupBeforeUpdate??old.backupBeforeUpdate});if(v.enabled&&!old.enabled)lastScan=0;});
  if(v.enabled&&lastScan===0)void scan();return status();
 });
-ipcMain.handle("krysta:game-watch-scan",async()=>{void scan();return status();});
+ipcMain.handle("krysta:game-watch-scan",async()=>{void scan(true);return status();});
 let timer:ReturnType<typeof setInterval>|undefined;
 void app.whenReady().then(()=>{
  lastScan=Date.now();

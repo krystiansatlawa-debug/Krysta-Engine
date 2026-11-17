@@ -217,6 +217,7 @@ declare global {
     krystaCloudAccountStatus: () => Promise<{google:boolean;synology:boolean;googleConfigured:boolean}>;
     krystaCloudGoogleConnect: () => Promise<boolean>;
     krystaCloudGoogleConnectJson: () => Promise<boolean>;
+    krystaCloudGoogleTest: () => Promise<boolean>;
     krystaCloudOpenPreUpdateFolder: () => Promise<void>;
     krystaCloudSynologyConnect: (url:string,username:string,password:string) => Promise<boolean>;
     krystaCloudAccountDisconnect: (provider:string) => Promise<boolean>;
@@ -225,10 +226,10 @@ declare global {
     krystaGameWatchDismiss: (shop:string,id:string) => Promise<void>;
     krystaGameWatchHistory: () => Promise<{from:string;to:string;detectedAt:string;source:"steam"|"epic"|"gog"|"local";shop:string;id:string;title:string}[]>;
     krystaGameIntegrity: (shop:string,id:string,action:"official"|"local") => Promise<{mode:"official"|"manual";provider:string}|{mode:"local";sha256:string;size:number}>;
-    krystaGameWatchGet: (shop:string,id:string) => Promise<{enabled:boolean;override?:"inherit"|"on"|"off";installedVersion:string;installedBuild?:string;installedBuildSource?:"epic"|"gog";versionSource?:"product"|"file"|"epic-manifest"|"version-file"|"gog-manifest";updateProvider?:"steam"|"epic"|"gog";platformBuildHistory?:{from:string;to:string;detectedAt:string;source:"epic"|"gog"}[];localVersionHistory?:{from:string;to:string;detectedAt:string}[];pendingPatch?:string;steamBuildId?:string;buildHistory?:{from:string;to:string;detectedAt:string}[];updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string;latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}|null>;
+    krystaGameWatchGet: (shop:string,id:string) => Promise<{enabled:boolean;override?:"inherit"|"on"|"off";installedVersion:string;installedBuild?:string;installedBuildSource?:"epic"|"gog";versionSource?:"product"|"file"|"epic-manifest"|"version-file"|"gog-manifest";updateProvider?:"steam"|"epic"|"gog";platformBuildHistory?:{from:string;to:string;detectedAt:string;source:"epic"|"gog"}[];localVersionHistory?:{from:string;to:string;detectedAt:string}[];pendingPatch?:string;steamBuildId?:string;buildHistory?:{from:string;to:string;detectedAt:string}[];updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string;latestVersion?:string;latestTitle?:string;latestPublishedAt?:string;patchHistory?:{id:string;title:string;publishedAt:string}[];lastChecked?:string;error?:string}|null>;
     krystaGameWatchSet: (shop:string,id:string,override:"inherit"|"on"|"off") => Promise<{enabled:boolean;override?:"inherit"|"on"|"off";installedVersion:string;installedBuild?:string;installedBuildSource?:"epic"|"gog";versionSource?:"product"|"file"|"epic-manifest"|"version-file"|"gog-manifest";updateProvider?:"steam"|"epic"|"gog";platformBuildHistory?:{from:string;to:string;detectedAt:string;source:"epic"|"gog"}[];localVersionHistory?:{from:string;to:string;detectedAt:string}[];pendingPatch?:string;steamBuildId?:string;buildHistory?:{from:string;to:string;detectedAt:string}[];updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string;latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}>;
     krystaGameWatchCheck: (shop:string,id:string) => Promise<{enabled:boolean;override?:"inherit"|"on"|"off";installedVersion:string;installedBuild?:string;installedBuildSource?:"epic"|"gog";versionSource?:"product"|"file"|"epic-manifest"|"version-file"|"gog-manifest";updateProvider?:"steam"|"epic"|"gog";platformBuildHistory?:{from:string;to:string;detectedAt:string;source:"epic"|"gog"}[];localVersionHistory?:{from:string;to:string;detectedAt:string}[];pendingPatch?:string;steamBuildId?:string;buildHistory?:{from:string;to:string;detectedAt:string}[];updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string;latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}|null>;
-    krystaGameWatchSettings: () => Promise<{enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;pauseDuringPlay:boolean;autoOpenSteamQueue:boolean;autoDownloadEpic:boolean;backupBeforeUpdate:boolean;pausedDuringPlay:boolean;scanning:boolean;lastFinished:string|null;lastError:string|null}>;
+    krystaGameWatchSettings: () => Promise<{enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;pauseDuringPlay:boolean;autoOpenSteamQueue:boolean;autoDownloadEpic:boolean;backupBeforeUpdate:boolean;pausedDuringPlay:boolean;scanning:boolean;scanChecked:number;scanTotal:number;scanRequired:number;scanUnknown:number;scanInterrupted:boolean;lastFinished:string|null;lastError:string|null}>;
     krystaGameWatchSettingsSet: (value:{enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;pauseDuringPlay?:boolean;autoOpenSteamQueue?:boolean;autoDownloadEpic?:boolean;backupBeforeUpdate?:boolean}) => ReturnType<Window["electron"]["krystaGameWatchSettings"]>;
     krystaGameWatchScan: () => ReturnType<Window["electron"]["krystaGameWatchSettings"]>;
     krystaGameWatchOpenClient: (shop:string,id:string) => Promise<void>;
@@ -638,6 +639,12 @@ declare global {
       shop: GameShop,
       objectId: string
     ) => Promise<string | null>;
+    krystaDiscoverGameExecutable: (
+      shop: GameShop,
+      objectId: string,
+      folder?: string
+    ) => Promise<{automaticPath:string|null;candidates:{path:string;highConfidence:boolean}[];searchedFolders:number}>;
+    krystaAutoLinkGameExecutable: (shop: GameShop, objectId: string) => Promise<string|null>;
     openGameInstallerPath: (shop: GameShop, objectId: string) => Promise<void>;
     openGameWinetricks: (shop: GameShop, objectId: string) => Promise<boolean>;
     openGameExecutablePath: (shop: GameShop, objectId: string) => Promise<void>;
@@ -1305,6 +1312,7 @@ declare global {
     getScreenshotsPath: () => Promise<string>;
     getScreenshotsFolderPath: () => Promise<string>;
     getLocalScreenshots: () => Promise<LocalScreenshot[]>;
+    getKrystaSouvenirGallery: () => Promise<{id:string;gameKey:string;gameTitle:string;path:string;capturedAt:number;achievementNames:string[]}[]>;
     getLocalScreenshotsForGame: (
       shop: GameShop,
       objectId: string

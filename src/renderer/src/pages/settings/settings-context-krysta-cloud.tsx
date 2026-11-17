@@ -10,14 +10,19 @@ export function SettingsContextKrystaCloud(){
  const [nasUser,setNasUser]=useState("");
  const [nasPassword,setNasPassword]=useState("");
  const [accountError,setAccountError]=useState("");
+ const [accountNotice,setAccountNotice]=useState("");
  useEffect(()=>{
    let active=true;
    void window.electron.krystaCloudAccountStatus().then(value=>{if(active)setAccounts(value);}).catch(e=>{if(active)setAccountError(String(e));});
    return()=>{active=false;};
  },[]);
- const accountAction=async(fn:()=>Promise<boolean>)=>{
-   setBusy(true);setAccountError("");
-   try{await fn();setAccounts(await window.electron.krystaCloudAccountStatus());}
+ const accountAction=async(fn:()=>Promise<boolean>,successLabel?:string)=>{
+   setBusy(true);setAccountError("");setAccountNotice("");
+   try{
+    const success=await fn();
+    setAccounts(await window.electron.krystaCloudAccountStatus());
+    if(success&&successLabel)setAccountNotice(successLabel);
+   }
    catch(e){setAccountError(String(e));}
    finally{setNasPassword("");setBusy(false);}
  };
@@ -39,10 +44,11 @@ export function SettingsContextKrystaCloud(){
  {(cfg?.provider==="google"||cfg?.provider==="synology")&&<><h3>{pl?"Połączenia z chmurą":"Cloud connections"}</h3>
  <p>{pl?"Połącz wybranego dostawcę. Kopie z tego komputera są przesyłane bezpośrednio; lokalna historia pozostaje dostępna.":"Connect your provider. Backups from this computer upload directly; local history remains available."}</p>
  {cfg.provider==="google"&&<><h4>Google Drive</h4>
- {accounts&&!accounts.google&&!accounts.googleConfigured&&<p role="status">{pl?"Logowanie Google wymaga konfiguracji OAuth w kompilacji Krysty.":"Google sign-in requires OAuth configuration in this Krysta build."}</p>}
+ {accounts&&!accounts.google&&!accounts.googleConfigured&&<p role="status">{pl?"Brak skonfigurowanego klienta Google. Przy pierwszym połączeniu Krysta poprosi o plik JSON aplikacji Desktop z Google Cloud. Przy kolejnych logowaniach konfiguracja pozostanie zapisana lokalnie.":"No Google client is configured. On first connect, Krysta will ask for a Desktop OAuth JSON from Google Cloud. The configuration is saved locally for future logins."}</p>}
  <p>{pl?"Zaloguj się do Google w przeglądarce i zezwól Krystie na zapisywanie kopii gier.":"Sign in to Google in your browser and allow Krysta to store game backups."}</p>
- <Button theme="outline" disabled={busy||!accounts||(!accounts.google&&!accounts.googleConfigured)} onClick={()=>void accountAction(()=>accounts?.google?window.electron.krystaCloudAccountDisconnect("google"):window.electron.krystaCloudGoogleConnect())}>{accounts?.google?(pl?"Odłącz Google Drive":"Disconnect Google Drive"):(pl?"Połącz konto Google":"Connect Google account")}</Button>
- {!accounts?.google&&<><Button theme="outline" disabled={busy||!accounts} onClick={()=>void accountAction(()=>window.electron.krystaCloudGoogleConnectJson())}>{pl?"Połącz przy użyciu pliku JSON klienta OAuth":"Connect using OAuth client JSON"}</Button><p>{pl?"Opcja awaryjna dla klienta Google OAuth typu Desktop. Wybierz plik pobrany z Google Cloud Console. Dane pozostają lokalnie i nie są wysyłane do Krysty ani GitHuba.":"Fallback for a Google Desktop OAuth client. Select the file downloaded from Google Cloud Console. Credentials stay local and are not sent to Krysta or GitHub."}</p></>}
+ <Button theme="outline" disabled={busy||!accounts} onClick={()=>void accountAction(()=>accounts?.google?window.electron.krystaCloudAccountDisconnect("google"):window.electron.krystaCloudGoogleConnect())}>{accounts?.google?(pl?"Odłącz Google Drive":"Disconnect Google Drive"):(pl?"Połącz konto Google":"Connect Google account")}</Button>
+ {accounts?.google&&<Button theme="outline" disabled={busy} onClick={()=>void accountAction(()=>window.electron.krystaCloudGoogleTest(),pl?"Google Drive: połączenie działa.":"Google Drive connection is working.")}>{pl?"Sprawdź połączenie Google":"Test Google connection"}</Button>}
+ {!accounts?.google&&<details><summary>{pl?"Opcje zaawansowane Google OAuth":"Advanced Google OAuth options"}</summary><div className="settings-context-panel__group"><Button theme="outline" disabled={busy||!accounts} onClick={()=>void accountAction(()=>window.electron.krystaCloudGoogleConnectJson())}>{pl?"Użyj innego pliku klienta Desktop JSON":"Use another Desktop OAuth JSON"}</Button><p>{pl?"Jeżeli Google zgłasza błąd 401 invalid_client, sprawdź konfigurację w Google Cloud i wybierz właściwy JSON klienta Desktop. Plik oraz token pozostają zaszyfrowane na tym komputerze.":"If Google returns 401 invalid_client, check Google Cloud configuration and choose the matching Desktop OAuth JSON. Credentials remain encrypted on this computer."}</p></div></details>}
  </>}{cfg.provider==="synology"&&<><h4>Synology NAS (WebDAV HTTPS)</h4>
  {accounts?.synology?<Button theme="outline" disabled={busy} onClick={()=>void accountAction(()=>window.electron.krystaCloudAccountDisconnect("synology"))}>{pl?"Odłącz Synology":"Disconnect Synology"}</Button>:<>
  <input aria-label="WebDAV HTTPS URL" placeholder="https://nas.example.org:5006/Backups/" value={nasUrl} onChange={e=>setNasUrl(e.target.value)} disabled={busy} style={{background:"#202020",color:"inherit",padding:10,border:"1px solid #555",borderRadius:6}}/>
@@ -54,6 +60,7 @@ export function SettingsContextKrystaCloud(){
  <h3>{pl?"Lokalne kopie przed aktualizacjami":"Local pre-update backups"}</h3>
  <p>{pl?"Kopie przed aktualizacją gry są zapisywane na tym komputerze niezależnie od połączenia Google Drive lub Synology.":"Pre-update game save backups are stored on this computer independently of Google Drive or Synology."}</p>
  <Button theme="outline" disabled={busy} onClick={()=>{setAccountError("");void window.electron.krystaCloudOpenPreUpdateFolder().catch(e=>setAccountError(String(e)));}}>{pl?"Otwórz folder kopii lokalnych":"Open local backup folder"}</Button>
+ {accountNotice&&<p role="status">{accountNotice}</p>}
  {accountError&&<p role="alert">{accountError}</p>}
  {error&&<p role="alert">{pl?"Nie udało się zapisać ustawień.":"Unable to save settings."}</p>}
  </div></div>;

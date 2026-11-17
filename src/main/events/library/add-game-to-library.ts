@@ -9,6 +9,8 @@ import {
 } from "@main/level";
 import { clearFinishedDownload } from "@main/helpers";
 import { AchievementWatcherManager } from "@main/services/achievements/achievement-watcher-manager";
+import { autoLinkKrystaGameExecutable } from "../krysta-executable-discovery";
+import { logger } from "@main/services/logger";
 
 const lookupCachedPlatform = async (
   shop: GameShop,
@@ -85,6 +87,14 @@ const addGameToLibrary = async (
       game.shop,
       game.objectId
     );
+
+    // Do not block adding a game while scanning its installation on disk.
+    // Official Steam/Epic imports and manually assigned executables are protected.
+    if (process.platform === "win32" && (game.shop === "steam" || game.shop === "epic" || game.shop === "custom")) {
+      void autoLinkKrystaGameExecutable(game.shop, game.objectId).catch((error) =>
+        logger.warn("Automatic game executable detection failed", {gameKey, error})
+      );
+    }
   }
 };
 

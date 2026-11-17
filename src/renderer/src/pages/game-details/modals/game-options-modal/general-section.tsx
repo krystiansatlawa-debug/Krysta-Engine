@@ -577,6 +577,88 @@ function fmt(b: number) {
   return (b / 1e3).toFixed(0) + " KB";
 }
 
+interface AutoExecutableDiscoveryProps {
+ game: LibraryGame;
+}
+function AutoExecutableDiscovery({game}:Readonly<AutoExecutableDiscoveryProps>){
+ const {i18n}=useTranslation();
+ const pl=i18n.language.startsWith("pl");
+ const {updateGame}=useContext(gameDetailsContext);
+ const [busy,setBusy]=useState(false);
+ const [message,setMessage]=useState("");
+ const [suggestions,setSuggestions]=useState<{path:string;highConfidence:boolean}[]>([]);
+ const active=useRef(true);
+ const scanCounter=useRef(0);
+ const binding=useRef(false);
+ const setExecutable=async(filePath:string)=>{
+  if(binding.current||game.executablePath)return;
+  binding.current=true;
+  try{
+   const used=await window.electron.verifyExecutablePathInUse(filePath);
+   if(used&&(used.shop!==game.shop||used.objectId!==game.objectId)){
+    if(active.current)setMessage(pl?"Ten plik jest już przypisany do innej gry.":"This executable already belongs to another game.");
+    return;
+   }
+   await window.electron.updateExecutablePath(game.shop,game.objectId,filePath);
+   if(active.current){
+    await updateGame();
+    setMessage(pl?"Plik uruchamiający został automatycznie przypisany.":"Game executable detected and linked.");
+    setSuggestions([]);
+   }
+  }catch(error){if(active.current)setMessage(String(error));}
+  finally{binding.current=false;}
+ };
+ const discover=async(folder?:string,automatic=false)=>{
+  if((busy&&!automatic)||binding.current||game.executablePath)return;
+  const counter=++scanCounter.current;
+  setBusy(true);setMessage("");setSuggestions([]);
+  try{
+   const result=await window.electron.krystaDiscoverGameExecutable(game.shop,game.objectId,folder);
+   if(!active.current||counter!==scanCounter.current)return;
+   if(result.automaticPath&&automatic&&!game.hasActiveSteamImport&&!game.hasActiveEpicImport){
+    await setExecutable(result.automaticPath);
+    return;
+   }
+   setSuggestions(result.candidates);
+   setMessage(result.candidates.length?
+    (pl?"Wybierz właściwy plik z proponowanych:":"Choose an executable from these suggestions:"):
+    (pl?"Nie znaleziono pewnego pliku EXE. Wskaż folder instalacji gry.":"No likely EXE found. Select the game's installation folder."));
+  }catch(error){if(active.current&&counter===scanCounter.current)setMessage(String(error));}
+  finally{if(active.current&&counter===scanCounter.current)setBusy(false);}
+ };
+ const chooseFolder=async()=>{
+  if(busy)return;
+  const result=await window.electron.showOpenDialog({properties:["openDirectory"]});
+  if(!result.canceled&&result.filePaths[0])void discover(result.filePaths[0],true);
+ };
+ useEffect(()=>{
+  active.current=true;scanCounter.current++;
+  setSuggestions([]);setMessage("");
+  if(window.electron.platform==="win32"&&!game.executablePath)void discover(undefined,true);
+  return()=>{active.current=false;scanCounter.current++;};
+  // Search only for a new game identity or when the missing-path condition changes.
+ },[game.shop,game.objectId,Boolean(game.executablePath)]);
+ if(window.electron.platform!=="win32")return null;
+ return <div className="game-options-modal__executable-discovery" style={{display:"flex",flexDirection:"column",gap:9,margin:"12px 0"}}>
+   <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+    <Button type="button" theme="outline" disabled={busy||Boolean(game.executablePath)} onClick={()=>void discover(undefined,true)}>
+     <RefreshCw size={16}/>{busy?(pl?"Szukam EXE…":"Searching…"):(pl?"Wykryj EXE automatycznie":"Auto-detect EXE")}
+    </Button>
+    <Button type="button" theme="outline" disabled={busy||Boolean(game.executablePath)} onClick={()=>void chooseFolder()}>
+     <FolderOpen size={16}/>{pl?"Wybierz folder gry":"Choose game folder"}
+    </Button>
+   </div>
+   {message&&<small role="status">{message}</small>}
+   {suggestions.length>0&&!game.executablePath&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
+    {suggestions.slice(0,8).map(candidate=><button type="button" disabled={busy||binding.current} key={candidate.path} title={candidate.path}
+      onClick={()=>void setExecutable(candidate.path)} style={{background:"#252525",color:"inherit",border:"1px solid #555",borderRadius:6,padding:"8px 10px",textAlign:"left",overflowWrap:"anywhere",cursor:"pointer"}}>
+      {candidate.path}
+    </button>)}
+    <small>{pl?"Gdy program znajdzie kilka plików, nie wybierze ich bez Twojej zgody.":"Ambiguous results are never selected without your confirmation."}</small>
+   </div>}
+ </div>;
+}
+
 const isBatchExecutable = (executablePath?: string | null) =>
   !!executablePath && /\.(bat|cmd)$/i.test(executablePath);
 
@@ -856,6 +938,7 @@ export function GeneralSettingsSection({
               }
             />
 
+            <AutoExecutableDiscovery key={game.shop+":"+game.objectId} game={game}/>
             <div className="game-options-modal__executable-field-buttons">
               {game.executablePath && (
                 <Button

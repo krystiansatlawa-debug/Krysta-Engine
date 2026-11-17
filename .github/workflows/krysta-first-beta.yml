@@ -28,7 +28,9 @@ jobs:
       - name: Install dependencies
         run: yarn --frozen-lockfile
       - name: Run release regression tests
-        run: node --import ./scripts/register-ts-node.mjs --test src/main/services/krysta-settings-recovery.test.ts src/main/services/achievements/ubisoft-recording-baseline.test.ts
+        run: node --import ./scripts/register-ts-node.mjs --test src/main/services/krysta-settings-recovery.test.ts src/main/services/achievements/ubisoft-recording-baseline.test.ts src/main/services/krysta-google-oauth.test.ts src/main/helpers/krysta-executable-ranking.test.ts src/main/helpers/krysta-executable-autolink.test.ts src/shared/game-update-patch-history.test.ts
+      - name: Check TypeScript across main and renderer
+        run: yarn typecheck
       - name: Prepare verified PresentMon
         run: node scripts/prepare-presentmon.cjs
       - uses: actions/setup-python@v5
@@ -53,8 +55,8 @@ jobs:
           $base = (Get-Content package.json -Raw | ConvertFrom-Json).version
           if ($base -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid Hydra base package version' }
           "MAIN_VITE_KRYSTA_HYDRA_BASE=$base" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-      - name: Set Krysta 1.0.0 version
-        run: npm version 1.0.0 --no-git-tag-version --ignore-scripts
+      - name: Set Krysta 1.0.1 version
+        run: npm version 1.0.1 --no-git-tag-version --ignore-scripts
       - name: Check optional desktop Google OAuth configuration
         shell: pwsh
         env:
@@ -76,21 +78,24 @@ jobs:
           RENDERER_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL || 'https://assets.hydralauncher.gg' }}
       - uses: actions/upload-artifact@v4
         with:
-          name: Krysta-1.0.0-windows
+          name: Krysta-1.0.1-windows
           path: dist/*.exe
           if-no-files-found: error
           retention-days: 7
 
       # Publish only after the regression tests and both Windows packages succeed.
-      - name: Publish Krysta 1.0.0 release
+      - name: Publish Krysta 1.0.1 release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'v1.0.0'
-          $files = @('dist/krysta-launcher-1.0.0-setup.exe', 'dist/krysta-launcher-1.0.0-portable.exe')
+          $tag = 'v1.0.1'
+          $files = @('dist/krysta-launcher-1.0.1-setup.exe', 'dist/krysta-launcher-1.0.1-portable.exe')
           foreach ($file in $files) { if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing release installer: $file" } }
           gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null
           if ($LASTEXITCODE -eq 0) { throw 'Release already exists; refusing to overwrite' }
-          gh release create $tag @files --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Krysta Launcher 1.0.0' --notes-file docs/krysta-1.0.0.md
+          $hashes = $files | ForEach-Object { $h = Get-FileHash -LiteralPath $_ -Algorithm SHA256; "$($h.Hash.ToLowerInvariant())  $(Split-Path $_ -Leaf)" }
+          $hashes | Set-Content -LiteralPath 'dist/krysta-launcher-1.0.1-sha256.txt' -Encoding ascii
+          $files += 'dist/krysta-launcher-1.0.1-sha256.txt'
+          gh release create $tag @files --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Krysta Launcher 1.0.1' --notes-file docs/krysta-1.0.1.md
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

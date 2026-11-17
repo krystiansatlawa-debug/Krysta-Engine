@@ -41,6 +41,8 @@ import "./krysta-game-news";
 import "./krysta-game-update-watch";
 import "./krysta-fps";
 import "./krysta-recordings";
+import "./krysta-souvenir-gallery";
+import "./krysta-executable-discovery";
 import "./krysta-cloud";
 import "./krysta-updates";
 import "./krysta-cloud-accounts";

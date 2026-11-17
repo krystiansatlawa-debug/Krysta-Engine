@@ -3,43 +3,75 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
-type Credentials={google?:{clientId:string;clientSecret:string;refreshToken:string};synology?:{url:string;username:string;password:string}};
+import { googleOAuthCallbackError, googleOAuthTokenError, validateGoogleDesktopClient } from "@main/services/krysta-google-oauth";
+type Credentials={google?:{clientId:string;clientSecret:string;refreshToken:string};googleClient?:{clientId:string;clientSecret:string};synology?:{url:string;username:string;password:string}};
 const file=()=>path.join(app.getPath("userData"),"krysta-cloud-accounts.bin");
 async function read():Promise<Credentials>{try{return JSON.parse(safeStorage.decryptString(await fs.readFile(file())));}catch(e){if((e as NodeJS.ErrnoException).code==="ENOENT")return {};throw Error("Cannot decrypt cloud credentials");}}
 async function write(c:Credentials){if(!safeStorage.isEncryptionAvailable()||safeStorage.getSelectedStorageBackend?.()==="basic_text")throw Error("Secure storage unavailable");await fs.writeFile(file()+".tmp",safeStorage.encryptString(JSON.stringify(c)),{mode:0o600});await fs.rename(file()+".tmp",file());}
 let busy=false;
 async function exclusive<T>(fn:()=>Promise<T>){if(busy)throw Error("Account operation already running");busy=true;try{return await fn();}finally{busy=false;}}
 type DesktopClient={client_id:string;client_secret:string};
-function desktopClient(id:unknown,secret:unknown):DesktopClient{
- if(typeof id!=="string"||typeof secret!=="string")throw Error("Brak konfiguracji OAuth Desktop / Desktop OAuth configuration missing");
- const client_id=id.trim(),client_secret=secret.trim();
- if(!/^[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(client_id)||!client_secret||/\s/.test(client_secret)||client_secret.length>512)throw Error("Nieprawidłowa konfiguracja OAuth Desktop / Invalid desktop OAuth configuration");
- return {client_id,client_secret};
-}
+const desktopClient=validateGoogleDesktopClient;
 function builtInClient(){return desktopClient(import.meta.env.MAIN_VITE_KRYSTA_GOOGLE_CLIENT_ID,import.meta.env.MAIN_VITE_KRYSTA_GOOGLE_CLIENT_SECRET);}
+function getSavedClient(c:Credentials):DesktopClient|null{
+ const client=c.googleClient??c.google; // Accounts connected before this update already contain the working Desktop client.
+ if(!client)return null;
+ try{return desktopClient(client.clientId,client.clientSecret);}catch{return null;}
+}
+async function preferredClient():Promise<DesktopClient|null>{
+ const stored=getSavedClient(await read());
+ if(stored)return stored; // Prefer a Desktop configuration that previously authenticated successfully.
+ try{return builtInClient();}catch{return null;}
+}
+async function selectDesktopClient():Promise<DesktopClient|null>{
+ const result=await dialog.showOpenDialog({title:"Google OAuth Desktop JSON",properties:["openFile"],filters:[{name:"OAuth client JSON",extensions:["json"]}]});
+ if(result.canceled||!result.filePaths[0])return null;
+ const selected=result.filePaths[0],st=await fs.lstat(selected);
+ if(!st.isFile()||st.isSymbolicLink()||st.size>128*1024)throw Error("Invalid OAuth JSON file");
+ let data;try{data=JSON.parse(await fs.readFile(selected,"utf8"));}catch{throw Error("Invalid OAuth JSON file");}
+ if(!data?.installed||data.web||data.installed.token_uri!=="https://oauth2.googleapis.com/token")
+  throw Error("Wybierz plik JSON klienta Desktop, nie Web / Select a Desktop OAuth client JSON");
+ return desktopClient(data.installed.client_id,data.installed.client_secret);
+}
 async function tokenRequest(params:Record<string,string>){
  const r=await fetch("https://oauth2.googleapis.com/token",{method:"POST",body:new URLSearchParams(params),signal:AbortSignal.timeout(30000),redirect:"error"});
  if(!r.ok){
   // Only show recognized error codes, never Google response text, authorization codes or secrets.
   const value=await r.json().catch(()=>null);
   const code=typeof value?.error==="string"?value.error:"";
-  if(code==="invalid_client"||r.status===401)throw Error("Google OAuth: invalid_client (401). Sprawdź zgodność Client ID i Client Secret lub połącz przy użyciu pliku JSON klienta Desktop / Check matching desktop OAuth credentials.");
-  if(code==="invalid_grant")throw Error("Google OAuth: invalid_grant. Zaloguj się ponownie / Sign in again.");
-  if(code==="unauthorized_client")throw Error("Google OAuth: unauthorized_client. Wymagany klient Desktop / Desktop client required.");
-  throw Error("Google authorization failed ("+r.status+")");
+  throw Error(googleOAuthTokenError(code,r.status));
  }
  return await r.json() as {access_token?:string;refresh_token?:string};
 }
 ipcMain.handle("krysta:cloud-account-status",async()=>{
- const c=await read();let googleConfigured=false;try{builtInClient();googleConfigured=true;}catch{}
- return {google:!!c.google,synology:!!c.synology,googleConfigured};
+ const c=await read();
+ let configured=!!getSavedClient(c);
+ if(!configured){try{builtInClient();configured=true;}catch{}}
+ return {google:!!c.google,synology:!!c.synology,googleConfigured:configured};
 });
+async function probeGoogleDrive(accessToken:string){
+ const probe=await fetch("https://www.googleapis.com/drive/v3/files?pageSize=1&fields=files(id)",{headers:{Authorization:"Bearer "+accessToken},signal:AbortSignal.timeout(15000),redirect:"error"});
+ await probe.body?.cancel();
+ if(!probe.ok)throw Error("Google Drive: dostęp do plików niedostępny (HTTP "+probe.status+"). Sprawdź Drive API i uprawnienia aplikacji. / Drive access unavailable.");
+}
 async function connectGoogle(installed:DesktopClient){
  if(!safeStorage.isEncryptionAvailable()||safeStorage.getSelectedStorageBackend?.()==="basic_text")throw Error("Secure storage unavailable");
  const verifier=randomBytes(48).toString("base64url"),state=randomBytes(32).toString("base64url");
  let callback:(code:string)=>void=()=>{},rejectCallback:(e:Error)=>void=()=>{};
  const codePromise=new Promise<string>((resolve,reject)=>{callback=resolve;rejectCallback=reject;});void codePromise.catch(()=>{});
- const server=createServer((req,res)=>{const u=new URL(req.url??"/","http://127.0.0.1");if(u.pathname!=="/callback"||u.searchParams.get("state")!==state){res.writeHead(400);res.end("Invalid request");return;}const code=u.searchParams.get("code");res.setHeader("Content-Type","text/plain; charset=utf-8");if(!code){res.end("Authorization cancelled.");rejectCallback(Error("Google authorization cancelled"));return;}res.end("Authorization received. Return to Krysta Launcher.");callback(code);});
+ const server=createServer((req,res)=>{
+  const u=new URL(req.url??"/","http://127.0.0.1");
+  res.setHeader("Content-Type","text/plain; charset=utf-8");
+  res.setHeader("Cache-Control","no-store");
+  if(req.method!=="GET"||u.pathname!=="/callback"||u.searchParams.get("state")!==state){
+   res.writeHead(400);res.end("Invalid request");return;
+  }
+  const error=u.searchParams.get("error");
+  if(error){res.end("Google sign-in was not completed. Return to Krysta Launcher.");rejectCallback(Error(googleOAuthCallbackError(error)));return;}
+  const code=u.searchParams.get("code");
+  if(!code){res.writeHead(400);res.end("Authorization code missing.");rejectCallback(Error("Google authorization code missing"));return;}
+  res.end("Authorization received. Return to Krysta Launcher.");callback(code);
+ });
  const timer=setTimeout(()=>rejectCallback(Error("Google login timed out")),180000);
  try{
  await new Promise<void>((resolve,reject)=>{server.once("error",reject);server.listen(0,"127.0.0.1",resolve);});
@@ -49,19 +81,27 @@ async function connectGoogle(installed:DesktopClient){
  await shell.openExternal(u.toString());const code=await codePromise;
  const t=await tokenRequest({client_id:installed.client_id,client_secret:installed.client_secret,code,code_verifier:verifier,grant_type:"authorization_code",redirect_uri:redirect});
  if(!t.refresh_token||!t.access_token)throw Error("Google did not provide offline authorization");
- const probe=await fetch("https://www.googleapis.com/drive/v3/files?pageSize=1&fields=files(id)",{headers:{Authorization:"Bearer "+t.access_token},signal:AbortSignal.timeout(15000),redirect:"error"});if(!probe.ok)throw Error("Google Drive access unavailable");
- await write({...await read(),google:{clientId:installed.client_id,clientSecret:installed.client_secret,refreshToken:t.refresh_token}});return true;
+ await probeGoogleDrive(t.access_token);
+ await write({...await read(),googleClient:{clientId:installed.client_id,clientSecret:installed.client_secret},google:{clientId:installed.client_id,clientSecret:installed.client_secret,refreshToken:t.refresh_token}});return true;
  }finally{clearTimeout(timer);server.closeAllConnections();server.close();}
 }
-ipcMain.handle("krysta:cloud-google-connect",()=>exclusive(()=>connectGoogle(builtInClient())));
+// One entry point: use a previously working client, built-in credentials, or
+// ask for Desktop JSON only when no configured client is available.
+ipcMain.handle("krysta:cloud-google-connect",()=>exclusive(async()=>{
+ const client=(await preferredClient())??(await selectDesktopClient());
+ return client?connectGoogle(client):false;
+}));
 ipcMain.handle("krysta:cloud-google-connect-json",()=>exclusive(async()=>{
- const result=await dialog.showOpenDialog({title:"Google OAuth Desktop JSON",properties:["openFile"],filters:[{name:"OAuth client JSON",extensions:["json"]}]});
- if(result.canceled||!result.filePaths[0])return false;
- const selected=result.filePaths[0],st=await fs.stat(selected);
- if(!st.isFile()||st.size>128*1024)throw Error("Invalid OAuth JSON file");
- let data;try{data=JSON.parse(await fs.readFile(selected,"utf8"));}catch{throw Error("Invalid OAuth JSON file");}
- if(!data?.installed||data.web||data.installed.token_uri!=="https://oauth2.googleapis.com/token")throw Error("Wybierz plik JSON klienta Desktop, nie Web / Select a Desktop OAuth client JSON");
- return connectGoogle(desktopClient(data.installed.client_id,data.installed.client_secret));
+ const client=await selectDesktopClient();
+ return client?connectGoogle(client):false;
+}));
+ipcMain.handle("krysta:cloud-google-test",()=>exclusive(async()=>{
+ const c=await read(),g=c.google;
+ if(!g)throw Error("Google Drive nie jest połączony / Google Drive is not connected");
+ const t=await tokenRequest({client_id:g.clientId,client_secret:g.clientSecret,refresh_token:g.refreshToken,grant_type:"refresh_token"});
+ if(!t.access_token)throw Error("Google nie zwrócił tokenu dostępu. Połącz konto ponownie. / Google access token missing");
+ await probeGoogleDrive(t.access_token);
+ return true;
 }));
 ipcMain.handle("krysta:cloud-synology-connect",(_e,url:unknown,username:unknown,password:unknown)=>exclusive(async()=>{
  if(typeof url!=="string"||typeof username!=="string"||typeof password!=="string"||!username||!password||url.length>2048)throw Error("Invalid NAS credentials");
@@ -70,7 +110,10 @@ ipcMain.handle("krysta:cloud-synology-connect",(_e,url:unknown,username:unknown,
  const r=await fetch(u,{method:"PROPFIND",headers:{Authorization:authorization,Depth:"0"},redirect:"error",signal:AbortSignal.timeout(15000)});await r.body?.cancel();if(r.status!==207)throw Error("WebDAV connection failed ("+r.status+")");
  await write({...await read(),synology:{url:u.toString(),username,password}});return true;
 }));
-ipcMain.handle("krysta:cloud-account-disconnect",(_e,provider:unknown)=>exclusive(async()=>{const c=await read();if(provider==="google")delete c.google;else if(provider==="synology")delete c.synology;else throw Error("Invalid provider");await write(c);return true;}));
+ipcMain.handle("krysta:cloud-account-disconnect",(_e,provider:unknown)=>exclusive(async()=>{const c=await read();if(provider==="google"){
+  if(c.google&&!c.googleClient)c.googleClient={clientId:c.google.clientId,clientSecret:c.google.clientSecret};
+  delete c.google;
+ }else if(provider==="synology")delete c.synology;else throw Error("Invalid provider");await write(c);return true;}));
 
 type DirectProvider="google"|"synology";
 export async function directCloudIdentity(provider:DirectProvider){
