@@ -6,6 +6,9 @@ import {getDownloadFolderPath} from "@main/helpers/find-game-installer";
 import {isRedistributableDirectory} from "@main/helpers/game-executable-ranking";
 import {rankKrystaExecutableSuggestions,chooseKrystaAutomaticExecutable} from "@main/helpers/krysta-executable-ranking";
 import {GameExecutables} from "@main/services/game-executables";
+import {libraryWriteQueue} from "@main/services/library-sync/library-write-queue";
+import {updateGameExecutablePath} from "@main/helpers/update-executable-path";
+import {canAutoLinkKrystaExecutable} from "@main/helpers/krysta-executable-autolink";
 import {getSteamLibraryFolders} from "@main/services/steam";
 import {findInstalledSteamApp} from "@main/services/steam-integration/steam-installation-core";
 import {scanUbisoft} from "./krysta-ubisoft";
@@ -69,11 +72,13 @@ async function detectedRoots(game:{shop:string;objectId:string;title:string;exec
  return out;
 }
 type Candidate={path:string;score:number;highConfidence:boolean};
-ipcMain.handle("krysta:discover-game-exe",async(_e,shop:unknown,id:unknown,folder?:unknown)=>{
+export async function discoverKrystaGameExecutable(shop:unknown,id:unknown,folder?:unknown){
  if(!["steam","epic","custom"].includes(String(shop))||typeof id!=="string"||!id||id.length>200)throw Error("Invalid game");
  const game=await gamesSublevel.get(levelKeys.game(shop as "steam"|"epic"|"custom",id));
  if(!game||game.isDeleted)throw Error("Game not found");
  if(folder!==undefined&&(typeof folder!=="string"||!path.isAbsolute(folder)))throw Error("Invalid folder");
+ // The official executable catalogue helps identify games whose EXE differs from their display title.
+ await GameExecutables.ensureLoaded().catch(()=>false);
  const download=await downloadsSublevel.get(levelKeys.game(game.shop,game.objectId)).catch(()=>null);
  const roots=folder?[folder]:await detectedRoots(game,download);
  const found:Candidate[]=[],seen=new Set<string>();
@@ -91,4 +96,35 @@ ipcMain.handle("krysta:discover-game-exe",async(_e,shop:unknown,id:unknown,folde
  found.sort((a,b)=>b.score-a.score||a.path.length-b.path.length||a.path.localeCompare(b.path));
  const safe=chooseKrystaAutomaticExecutable(found.map(v=>({...v,relativePath:v.path})));
  return {automaticPath:safe,candidates:found.slice(0,10).map(({path,highConfidence})=>({path,highConfidence})),searchedFolders:roots.length};
-});
+}
+
+/** Auto-link in the background, never replacing a user-selected EXE or official launcher.
+ * Rechecks ownership inside the serialized library write queue to avoid racing manual edits.
+ */
+const automaticLinks=new Map<string,Promise<string|null>>();
+export function autoLinkKrystaGameExecutable(shop:"steam"|"epic"|"custom",id:string):Promise<string|null>{
+ if(process.platform!=="win32")return Promise.resolve(null);
+ const key=levelKeys.game(shop,id),previous=automaticLinks.get(key);
+ if(previous)return previous;
+ const task=(async()=>{
+  const first=await gamesSublevel.get(key);
+  if(!canAutoLinkKrystaExecutable(first))return null;
+  const discovered=await discoverKrystaGameExecutable(shop,id);
+  const proposed=discovered.automaticPath;
+  if(!proposed)return null;
+  const stat=await fs.lstat(proposed).catch(()=>null);
+  if(!stat?.isFile()||stat.isSymbolicLink()||!proposed.toLowerCase().endsWith(".exe"))return null;
+  return libraryWriteQueue.run(async()=>{
+   const current=await gamesSublevel.get(key);
+   if(!canAutoLinkKrystaExecutable(current))return null;
+   const games=await gamesSublevel.iterator().all();
+   if(games.some(([otherKey,other])=>otherKey!==key&&!other.isDeleted&&other.executablePath?.toLowerCase()===proposed.toLowerCase()))return null;
+   await gamesSublevel.put(key,updateGameExecutablePath(current,proposed));
+   return proposed;
+  });
+ })().finally(()=>automaticLinks.delete(key));
+ automaticLinks.set(key,task);
+ return task;
+}
+ipcMain.handle("krysta:discover-game-exe",(_e,shop:unknown,id:unknown,folder?:unknown)=>discoverKrystaGameExecutable(shop,id,folder));
+
