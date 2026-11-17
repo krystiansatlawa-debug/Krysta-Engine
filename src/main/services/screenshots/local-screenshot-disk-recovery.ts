@@ -28,7 +28,7 @@ async function scan() {
   const games = await gamesSublevel.values().all();
   const byFolder = new Map<string, Game | null>();
   for (const game of games) {
-    if (game.isDeleted || !game.title) continue;
+    if (game.isDeleted || !game.title || !["steam", "epic", "custom"].includes(game.shop)) continue;
     const name = gameFolder(game.title).toLowerCase();
     if (!name) continue;
     const existing = byFolder.get(name);
@@ -73,6 +73,7 @@ async function scan() {
           shop: game.shop,
           objectId: game.objectId,
           gameTitle: game.title,
+          customGameTitle: game.shop === "custom" ? game.title.slice(0, 100) : null,
           path: file,
           capturedAt: stat.mtimeMs,
           width: 0,
@@ -81,6 +82,7 @@ async function scan() {
           isSpoiler: false,
           visibility: "PRIVATE",
           screenshotId: null,
+          gameSessionId: null,
           moderationStatus: null,
           moderationReason: null,
           uploadProgress: null,
