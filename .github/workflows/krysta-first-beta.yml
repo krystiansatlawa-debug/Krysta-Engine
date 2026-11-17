@@ -27,7 +27,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install dependencies
         run: yarn --frozen-lockfile
-      - name: Run release regression tests
+      - name: Run release regressions (Google OAuth, EXE detection and game updates)
         run: node --import ./scripts/register-ts-node.mjs --test src/main/services/krysta-settings-recovery.test.ts src/main/services/achievements/ubisoft-recording-baseline.test.ts src/main/services/krysta-google-oauth.test.ts src/main/helpers/krysta-executable-ranking.test.ts src/main/helpers/krysta-executable-autolink.test.ts src/shared/game-update-patch-history.test.ts
       - name: Check TypeScript across main and renderer
         run: yarn typecheck
