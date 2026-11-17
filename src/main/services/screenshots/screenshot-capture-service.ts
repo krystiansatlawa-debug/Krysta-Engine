@@ -66,6 +66,7 @@ import {
 } from "./screenshots-root-marker";
 import { ScreenshotTelemetry } from "./screenshot-telemetry";
 import { readUserPreferences } from "./screenshot-user-preferences";
+import { isAchievementScreenshotEnabled, isAchievementScreenshotTarget } from "./achievement-screenshot-policy";
 import { CaptureCallTimeoutError } from "./window-bound-promise";
 
 const DISK_FULL_ERROR_CODES = new Set(["ENOSPC", "EDQUOT"]);
@@ -604,7 +605,8 @@ const grabScreenshot = async (
     logger.debug("Screenshot hotkey ignored: screenshots disabled", { source });
     return null;
   }
-  if (!(await isScreenshotsFeatureEnabled())) {
+  // Local achievement photos do not depend on the online Hydra gallery flag.
+  if (source !== "achievement" && !(await isScreenshotsFeatureEnabled())) {
     logger.debug("Screenshot hotkey ignored: feature flag off", { source });
     return null;
   }
@@ -624,7 +626,7 @@ const grabScreenshot = async (
   timer.mark("foreground");
   // Unlocks may arrive while the user is viewing another application/game.
   // Never capture that window and attribute it to the unlocked game.
-  if (expectedGameKey && (lookup.status !== "resolved" || lookup.target.gameKey !== expectedGameKey)) {
+  if (expectedGameKey && !isAchievementScreenshotTarget(lookup, expectedGameKey)) {
     logger.debug("Achievement screenshot ignored: a different game has focus", {
       expectedGameKey,
       matchedGameKey: lookup.status === "resolved" ? lookup.target.gameKey : null,
@@ -686,8 +688,7 @@ export const captureAchievementScreenshot = async (
   game: Pick<Game, "shop" | "objectId">
 ) => {
   const preferences = await readUserPreferences();
-  if (preferences?.screenshotOnAchievementEnabled !== true ||
-      preferences.screenshotsEnabled === false) return;
+  if (!isAchievementScreenshotEnabled(preferences)) return;
   await handleScreenshotTrigger(
     "achievement",
     levelKeys.game(game.shop, game.objectId)
