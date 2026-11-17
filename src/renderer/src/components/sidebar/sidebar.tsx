@@ -520,7 +520,7 @@ export function Sidebar() {
                       onClick={() => handleSidebarItemClick(path)}
                     >
                       {render()}
-                      <span>{t(nameKey)}</span>
+                      <span>{nameKey === "multimedia" ? (t("home") === "Início" ? "Mídia" : (document.documentElement.lang.startsWith("pl") ? "Multimedia" : "Media")) : t(nameKey)}</span>
                     </button>
                   </li>
                 ))}
