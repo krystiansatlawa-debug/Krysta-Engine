@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { nativeImage } from "electron";
+import { logger } from "../logger";
 import { gamesSublevel } from "@main/level";
 import type { Game, LocalScreenshot } from "@types";
 import { LocalScreenshotStore } from "./local-screenshot-store";
@@ -48,7 +49,13 @@ export async function importLegacyScreenshots(): Promise<number> {
     if (known.has(key)) continue;
     const stat = await fs.stat(filePath).catch(() => null);
     if (!stat || !stat.isFile() || stat.size === 0 || stat.size > MAX_IMAGE_BYTES) continue;
-    const dimensions = nativeImage.createFromPath(filePath).getSize();
+    let dimensions: { width: number; height: number };
+    try {
+     dimensions = nativeImage.createFromPath(filePath).getSize();
+    } catch (error) {
+     logger.warn("Could not read legacy screenshot image", { filePath, error });
+     continue;
+    }
     if (!dimensions.width || !dimensions.height) continue;
     const screenshot: LocalScreenshot = {
      clientId: randomUUID(),
@@ -73,9 +80,13 @@ export async function importLegacyScreenshots(): Promise<number> {
      rootMarkerId: await ensureRootMarkerId(getScreenshotsRoot(filePath)),
      previewPath: null,
     };
-    await LocalScreenshotStore.put(screenshot);
-    known.add(key);
-    imported++;
+    try {
+     await LocalScreenshotStore.put(screenshot);
+     known.add(key);
+     imported++;
+    } catch (error) {
+     logger.warn("Could not import legacy screenshot", { filePath, error });
+    }
    }
   }
  }
