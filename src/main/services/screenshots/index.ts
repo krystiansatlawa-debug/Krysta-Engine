@@ -217,7 +217,7 @@ export const getLocalScreenshotsForGame = async (
   shop: GameShop,
   objectId: string
 ) => {
-  await awaitLegacyImport();
+  await refreshLegacyScreenshots();
   return pruneMissingLocalScreenshots(
     filterLocalScreenshotsForSignedInOwner(
       await LocalScreenshotStore.listForGame(shop, objectId)
