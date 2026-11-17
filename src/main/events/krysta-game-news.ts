@@ -19,7 +19,7 @@ async function fetchGameNews(id: unknown, title: unknown, metadataOnly=false) {
   if (!appId && typeof title === "string" && title.trim()) {
     const q = new URL("https://store.steampowered.com/api/storesearch/");
     q.searchParams.set("term", title.slice(0,200)); q.searchParams.set("l","english"); q.searchParams.set("cc","US");
-    const res = await net.fetch(q.toString(), {signal:AbortSignal.timeout(15000)});
+    const res = await net.fetch(q.toString(), {signal:AbortSignal.timeout(6000)});
     if(!res.ok) throw new Error("Steam search unavailable");
     const data = await res.json();
     const matches = (Array.isArray(data.items) ? data.items : []).filter((g:{name?:string;id?:number}) => typeof g.name==="string" && normalizeNewsTitle(g.name)===normalizeNewsTitle(title));
@@ -29,7 +29,7 @@ async function fetchGameNews(id: unknown, title: unknown, metadataOnly=false) {
   if(!appId) return {appId:null,items:[] as News[]};
   const url = new URL("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/");
   url.searchParams.set("appid",appId); url.searchParams.set("count","100"); url.searchParams.set("maxlength",metadataOnly?"1":"0"); url.searchParams.set("feeds","steam_community_announcements");
-  const res=await net.fetch(url.toString(),{signal:AbortSignal.timeout(20000)});
+  const res=await net.fetch(url.toString(),{signal:AbortSignal.timeout(10000)});
   if(!res.ok) throw new Error("Steam news unavailable");
   const data=await res.json();
   const raw=data?.appnews?.newsitems;
@@ -39,11 +39,28 @@ async function fetchGameNews(id: unknown, title: unknown, metadataOnly=false) {
 }
 type NewsResult=Awaited<ReturnType<typeof fetchGameNews>>;
 const newsRequests=new Map<string,Promise<NewsResult>>();
+const metadataCache=new Map<string,{until:number;result:NewsResult}>();
+const METADATA_CACHE_MS=3*60_000;
+const METADATA_CACHE_MAX=128;
 export async function getGameNews(id:unknown,title:unknown,metadataOnly=false):Promise<NewsResult>{
  const key=JSON.stringify([typeof id==="string"?id.slice(0,40):"",typeof title==="string"?title.slice(0,200):"",metadataOnly]);
+ // Reading the same game's patch metadata on successive views should not hit
+ // Steam again; full article bodies are intentionally never cached here.
+ if(metadataOnly){
+  const cached=metadataCache.get(key);
+  if(cached&&cached.until>Date.now())return cached.result;
+  if(cached)metadataCache.delete(key);
+ }
  const running=newsRequests.get(key);if(running)return running;
  if(newsRequests.size>=8)throw Error("Too many concurrent news requests");
- const request=fetchGameNews(id,title,metadataOnly).finally(()=>newsRequests.delete(key));
+ const request=fetchGameNews(id,title,metadataOnly).then(result=>{
+  if(metadataOnly){
+   if(metadataCache.size>=METADATA_CACHE_MAX)
+    metadataCache.delete(metadataCache.keys().next().value!);
+   metadataCache.set(key,{result,until:Date.now()+METADATA_CACHE_MS});
+  }
+  return result;
+ }).finally(()=>newsRequests.delete(key));
  newsRequests.set(key,request);return request;
 }
 ipcMain.handle("krysta:game-news",(_event,id:unknown,title:unknown)=>getGameNews(id,title));
