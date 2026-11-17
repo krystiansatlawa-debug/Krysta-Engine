@@ -265,8 +265,8 @@ ipcMain.handle("krysta:game-watch-open-client",async(_e,shop:unknown,id:unknown)
    const settings=await serial(readSettings);
    try{await protectUpdate(game,settings,true);}catch(e){
     if(!String(e).includes("KRYSTA_NO_SAVE_FILES"))throw e;
-    const answer=await dialog.showMessageBox({type:"warning",title:"Krysta Launcher",message:"Nie wykryto zapisów gry / No save files detected",detail:"Krysta nie mogła znaleźć plików zapisów. Możesz otworzyć aktualizacje Steam bez kopii na własną odpowiedzialność albo anulować. / Krysta could not detect save files. Continue without a backup or cancel.",buttons:["Anuluj / Cancel","Otwórz aktualizacje Steam bez kopii / Continue without backup"],defaultId:0,cancelId:0,noLink:true});
-    if(answer.response!==1)return;
+    const answer=await dialog.showMessageBox({type:"warning",title:"Krysta Launcher",message:"Nie wykryto zapisów gry / No save files detected",detail:"Krysta nie mogła znaleźć plików zapisów. Możesz zlecić Steam weryfikację plików tej gry bez kopii zapisów albo anulować. / Krysta could not detect save files. Continue with game-file validation without a backup or cancel.",buttons:["Anuluj / Cancel","Weryfikuj bez kopii / Verify without backup"],defaultId:0,cancelId:0,noLink:true});
+    if(answer.response!==1)throw Error("Anulowano weryfikację gry / Game validation canceled");
    }
    if(hasTrackedGamesRunning())throw Error("Zamknij uruchomione gry / Close running games");
    // Steam's downloads page only opens the queue. Request a validation of the
