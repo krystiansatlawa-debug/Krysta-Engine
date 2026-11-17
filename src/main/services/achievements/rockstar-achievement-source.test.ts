@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fetchRockstarAchievements, rockstarAchievementTitle, RockstarAchievementSync } from "./rockstar-achievement-source";
+import { fetchRockstarAchievements, rockstarAchievementTitle, RockstarAchievementSync } from "./rockstar-achievement-source.js";
 
 test("GTA V editions share the same Social Club achievement title", () => {
   assert.equal(rockstarAchievementTitle("gtav-legacy"), "gtav");
