@@ -46,14 +46,19 @@ export default function KrystaScreenshots() {
   const stop = window.electron.onLocalScreenshotsChange((next)=>{
    revision.current++;
    setItems(next);
+   // Drop previously indexed souvenirs immediately on account changes, then
+   // recheck ownership via the main process before displaying them again.
+   setSouvenirs([]);
    setLoaded(true);
    setError("");
+   void reload();
   });
   void reload();
   const refresh=()=>{if(!document.hidden)void reload();};
   const timer=setInterval(refresh,30000);
   window.addEventListener("focus",refresh);
-  return()=>{mounted.current=false;revision.current++;stop();clearInterval(timer);window.removeEventListener("focus",refresh);};
+  document.addEventListener("visibilitychange",refresh);
+  return()=>{mounted.current=false;revision.current++;stop();clearInterval(timer);window.removeEventListener("focus",refresh);document.removeEventListener("visibilitychange",refresh);};
  },[reload]);
  const entries=useMemo<GalleryEntry[]>(()=>{
   const all:GalleryEntry[]=[];

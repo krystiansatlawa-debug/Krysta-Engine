@@ -76,7 +76,8 @@ function ScreenshotInputStatusLine({
 }
 
 export function SettingsContextScreenshots() {
-  const { t } = useTranslation("settings");
+  const { t, i18n } = useTranslation("settings");
+  const pl = i18n.language.startsWith("pl");
   const { t: tCapture } = useTranslation("screenshots_capture");
   const { updateUserPreferences } = useContext(settingsContext);
   const inputStatus = useScreenshotInputStatus();
@@ -209,6 +210,9 @@ export function SettingsContextScreenshots() {
 
         <ScreenshotInputStatusLine status={inputStatus} />
 
+        <details className="settings-screenshots__advanced">
+          <summary>{pl?"Dodatkowe opcje zdjęć (pad, dźwięk, powiadomienia)":"Extra capture options (gamepad, sound, notifications)"}</summary>
+          <div className="settings-context-panel__group">
         <CheckboxField
           label={t("screenshots_gamepad_enable")}
           checked={form.gamepadEnabled}
@@ -250,9 +254,14 @@ export function SettingsContextScreenshots() {
             )
           }
         />
+          </div>
+        </details>
       </div>
 
-      <SettingsAchievementRecordings />
+      <details className="settings-screenshots__advanced">
+        <summary>{pl?"Nagrywanie osiągnięć — opcje":"Achievement recording — options"}</summary>
+        <SettingsAchievementRecordings />
+      </details>
 
       <div className="settings-context-panel__group">
         <h3>{t("screenshots_upload_group")}</h3>
