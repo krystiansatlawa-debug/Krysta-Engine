@@ -16,7 +16,7 @@ import { getSteamLibraryFolders } from "@main/services/steam";
 import { readSteamUpdateState, findInstalledSteamApp, isPathInsideSteamInstallDirectory } from "@main/services/steam-integration/steam-installation-core";
 import { hasTrackedGamesRunning } from "@main/services/game-running-state";
 import type { GameShop, Game } from "@types";
-import { mergePublishedPatches, announcedGamePatchVersion, type PatchAnnouncement } from "../../shared/game-update-patch-history";
+import { mergePublishedPatches, announcedGamePatchVersion, isRecentGamePatchAnnouncement, type PatchAnnouncement } from "../../shared/game-update-patch-history";
 import { runBoundedGameUpdateScan } from "../../shared/game-update-scan";
 
 type BuildChange={from:string;to:string;detectedAt:string};
@@ -200,7 +200,7 @@ async function perform(key:string,force=false){
  }catch(error){newsError="Steam patch feed: "+String(error).slice(0,220);}
  const patches=news?.items.filter(x=>x.category==="patch").sort((a,b)=>b.date-a.date)??[];
  const latest=patches[0];
- const newItems=snapshot.seen?patches.filter(x=>!snapshot.seen!.includes(x.id)):[];
+ const newItems=snapshot.seen?patches.filter(x=>!snapshot.seen!.includes(x.id)&&isRecentGamePatchAnnouncement(x.date)):[];
  return serial(async()=>{
   const all=await read(),previous=all[key],settings=await readSettings();
   if(!previous)return null;
