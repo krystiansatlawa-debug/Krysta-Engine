@@ -16,7 +16,8 @@ import { getSteamLibraryFolders } from "@main/services/steam";
 import { readSteamUpdateState, findInstalledSteamApp, isPathInsideSteamInstallDirectory } from "@main/services/steam-integration/steam-installation-core";
 import { hasTrackedGamesRunning } from "@main/services/game-running-state";
 import type { GameShop, Game } from "@types";
-import { mergePublishedPatches, type PatchAnnouncement } from "../../shared/game-update-patch-history";
+import { mergePublishedPatches, announcedGamePatchVersion, type PatchAnnouncement } from "../../shared/game-update-patch-history";
+import { runBoundedGameUpdateScan } from "../../shared/game-update-scan";
 
 type BuildChange={from:string;to:string;detectedAt:string};
 type Watch={gameTitle?:string;installedBuild?:string;installedBuildSource?:"epic"|"gog";platformBuildHistory?:(BuildChange&{source:"epic"|"gog"})[];lastPlatformBuild?:string;lastPlatformSource?:"epic"|"gog";localVersionHistory?:BuildChange[];lastLocalVersion?:string;lastLocalSource?:string;updateProvider?:"steam"|"epic"|"gog";buildHistory?:BuildChange[];lastKnownBuildId?:string;shop:GameShop;id:string;enabled:boolean;override?:"on"|"off"|"inherit";installedVersion:string;versionSource?:"product"|"file"|"epic-manifest"|"version-file"|"gog-manifest";seen?:string[];lastChecked?:string;latestTitle?:string;latestPublishedAt?:string;patchHistory?:PatchAnnouncement[];latestVersion?:string;error?:string;steamId?:string;pendingPatch?:string;steamBuildId?:string;updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string};
@@ -41,7 +42,6 @@ function serial<T>(fn:()=>Promise<T>):Promise<T>{const next=queue.then(fn,fn);qu
 async function read():Promise<Store>{try{return JSON.parse(await fs.readFile(filename(),"utf8"));}catch(e){if((e as NodeJS.ErrnoException).code==="ENOENT")return {};throw e;}}
 async function write(s:Store){await fs.writeFile(filename()+".tmp",JSON.stringify(s),{mode:0o600});await fs.rename(filename()+".tmp",filename());}
 function keyFor(shop:unknown,id:unknown){if((shop!=="steam"&&shop!=="epic"&&shop!=="custom"&&shop!=="launchbox")||typeof id!=="string"||!id||id.length>200)throw Error("Invalid game");return levelKeys.game(shop,id);}
-function version(title:string){return title.match(/\b(?:patch|hotfix|update|version|v)\s*v?(\d+(?:\.\d+){1,4})\b/i)?.[1]??null;}
 const exec=promisify(execFile);
 async function detectExeVersion(exe:string|null|undefined):Promise<{installedVersion:string;versionSource?:"product"|"file"}>{
  const unknown={installedVersion:""};
@@ -187,8 +187,7 @@ async function perform(key:string,force=false){
   all[key]=w;await write(all);return w;
  });
  if(!snapshot)return null;
- const detected=await detectVersion(game);
- const smart=await smartState(game);
+ const [detected,smart]=await Promise.all([detectVersion(game),smartState(game)]);
  // Provider status and Steam news are separate. Failed news requests must not
  // invalidate a confirmed update from a local launcher.
  let news:Awaited<ReturnType<typeof getGameNews>>|null=null;
@@ -221,7 +220,7 @@ async function perform(key:string,force=false){
     lastChecked:new Date().toISOString(),
     latestTitle:latest?.title??previous.latestTitle,
     latestPublishedAt:latest?.date?new Date(latest.date*1000).toISOString():previous.latestPublishedAt,
-    latestVersion:latest?version(latest.title)??undefined:previous.latestVersion,
+    latestVersion:latest?announcedGamePatchVersion(latest.title)??undefined:previous.latestVersion,
     patchHistory:mergePublishedPatches(previous.patchHistory,patches),
     seen:[...new Set([...patches.map(x=>x.id),...(previous.seen??[])])].slice(0,500)
    }:{}),
@@ -427,15 +426,26 @@ async function scan(manual=false){
    if(manual?mode(all[key])!=="off":effective(all[key],initialSettings))targets.push(key);
   }
   scanTotal=targets.length;
-  for(const key of targets){
-   const settings=await serial(readSettings);
-   if(settings.pauseDuringPlay&&hasTrackedGamesRunning()){scanInterrupted=true;lastScan=0;return;}
-   const result=await check(key,manual);
-   scanChecked++;
-   if(result?.updateState==="required")scanRequired++;
-   if(!result||result.updateState==="unknown"||!result.updateState)scanUnknown++;
-   await new Promise(resolve=>setTimeout(resolve,350));
-  }
+  const complete=await runBoundedGameUpdateScan(
+   targets,
+   async key=>{
+    try{
+     const result=await check(key,manual);
+     if(result?.updateState==="required")scanRequired++;
+     if(!result||result.updateState==="unknown"||!result.updateState)scanUnknown++;
+    }catch(error){
+     scanUnknown++;
+     // One broken game's metadata or network feed must not stop the rest.
+     if(!lastError)lastError="Błąd sprawdzania jednej z gier / Game check failed: "+String(error).slice(0,160);
+    }finally{scanChecked++;}
+   },
+   async()=>{
+    const settings=await serial(readSettings);
+    return !(settings.pauseDuringPlay&&hasTrackedGamesRunning());
+   },
+   3
+  );
+  if(!complete){scanInterrupted=true;lastScan=0;return;}
   lastFinished=new Date().toISOString();
   try{await offerSteamQueue();}catch(e){lastError="Steam: "+String(e);}
   try{await offerEpicUpdates();}catch(e){lastError=[lastError,"Epic: "+String(e)].filter(Boolean).join(" | ");}
