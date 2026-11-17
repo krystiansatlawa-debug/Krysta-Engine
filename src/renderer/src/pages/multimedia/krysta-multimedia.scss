@@ -3,3 +3,7 @@
 .krysta-multimedia__tabs button { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: inherit; cursor: pointer; opacity: .7; }
 .krysta-multimedia__tabs button.active { border-bottom-color: currentColor; opacity: 1; font-weight: 600; }
 .krysta-multimedia__tabs button:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
+
+.krysta-multimedia__settings { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; padding: 10px 12px; color: inherit; text-decoration: none; opacity: .85; }
+.krysta-multimedia__settings:hover { opacity: 1; text-decoration: underline; }
+.krysta-multimedia__settings:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
