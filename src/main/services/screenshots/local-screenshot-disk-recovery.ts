@@ -28,7 +28,7 @@ async function scan() {
   const games = await gamesSublevel.values().all();
   const byFolder = new Map<string, Game | null>();
   for (const game of games) {
-    if (game.isDeleted || !game.title || !["steam", "epic", "custom"].includes(game.shop)) continue;
+    if (game.isDeleted || !game.title || (game.shop !== "steam" && game.shop !== "epic" && game.shop !== "custom")) continue;
     const name = gameFolder(game.title).toLowerCase();
     if (!name) continue;
     const existing = byFolder.get(name);
