@@ -66,7 +66,7 @@ export async function importLegacyScreenshots(): Promise<number> {
     const key = normalizeScreenshotPath(filePath);
     if (known.has(key)) {
      const current = existingByPath.get(key);
-     if (current && !current.objectId && current.state !== "deleted") {
+     if (current && current.ownerId === ownerId && !current.objectId && current.state !== "deleted") {
       await LocalScreenshotStore.update(current.clientId, record =>
        record.objectId ? {} : { shop: game.shop, objectId: game.objectId, gameTitle: game.title }
       );
@@ -113,7 +113,8 @@ export async function importLegacyScreenshots(): Promise<number> {
     try {
      // A capture may have been recorded while the folder scan was running.
      const latestRecords = await LocalScreenshotStore.listIncludingDeleted();
-     if (latestRecords.some(record => normalizeScreenshotPath(record.path) === key)) {
+     const alreadySaved = latestRecords.some(record => normalizeScreenshotPath(record.path) === key);
+     if (alreadySaved) {
       known.add(key);
       continue;
      }
