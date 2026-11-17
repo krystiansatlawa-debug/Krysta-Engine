@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { RockstarAchievementDiskCache } from "./rockstar-achievement-disk-cache";
+import { RockstarAchievementDiskCache } from "./rockstar-achievement-disk-cache.js";
 
 test("Rockstar snapshots survive restart and never leak to another account", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "krysta-rockstar-"));
