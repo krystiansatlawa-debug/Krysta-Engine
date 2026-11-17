@@ -49,6 +49,7 @@ export async function importLegacyScreenshots(): Promise<number> {
    return [];
   });
   for (const folder of folders) {
+   if (inspected >= MAX_FILES) return imported;
    if (!folder.isDirectory() || folder.isSymbolicLink()) continue;
    const game = matchGame(folder.name, games);
    if (!game) continue;
@@ -58,8 +59,8 @@ export async function importLegacyScreenshots(): Promise<number> {
     return [];
    });
    for (const file of files) {
-    if (++inspected > MAX_FILES) return imported;
     if (!file.isFile() || file.isSymbolicLink() || !IMAGE_EXTENSION.test(file.name)) continue;
+    if (++inspected > MAX_FILES) return imported;
     const filePath = path.join(directory, file.name);
     const key = normalizeScreenshotPath(filePath);
     if (known.has(key)) continue;
@@ -101,6 +102,12 @@ export async function importLegacyScreenshots(): Promise<number> {
      previewPath: null,
     };
     try {
+     // A capture may have been recorded while the folder scan was running.
+     const latestRecords = await LocalScreenshotStore.listIncludingDeleted();
+     if (latestRecords.some(record => normalizeScreenshotPath(record.path) === key)) {
+      known.add(key);
+      continue;
+     }
      await LocalScreenshotStore.put(screenshot);
      known.add(key);
      imported++;
