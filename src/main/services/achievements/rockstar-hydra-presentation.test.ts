@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { presentRockstarInHydra } from "./rockstar-hydra-presentation";
+import { presentRockstarInHydra } from "./rockstar-hydra-presentation.js";
 
 test("Rockstar unlocks appear in Hydra's existing achievement model", () => {
   const definitions = [
