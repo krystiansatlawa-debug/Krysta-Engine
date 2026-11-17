@@ -259,6 +259,8 @@ export interface LocalScreenshot {
   uploadProgress: number | null;
   lastError: string | null;
   gameSessionId: string | null;
+  /** Capture origin; omitted for older screenshot records. */
+  captureSource?: ScreenshotTriggerSource;
   rootMarkerId?: string | null;
   uploadQuality?: ScreenshotQuality | null;
   uploadQualityFallback?: boolean;
