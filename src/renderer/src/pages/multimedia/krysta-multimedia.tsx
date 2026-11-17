@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router-dom";
-import { Camera, Film } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Camera, Film, Settings2 } from "lucide-react";
 import KrystaRecordings from "../recordings/krysta-recordings";
 import KrystaScreenshots from "../screenshots/krysta-screenshots";
 import "./krysta-multimedia.scss";
@@ -28,6 +28,9 @@ export default function KrystaMultimedia() {
           onClick={() => changeTab("recordings")}>
           <Film size={18} />{pl ? "Nagrania" : "Recordings"}
         </button>
+        <Link className="krysta-multimedia__settings" to={tab === "recordings" ? "/settings?tab=screenshots&media=recordings" : "/settings?tab=screenshots&media=screenshots"}>
+          <Settings2 size={17} />{pl ? "Ustawienia" : "Settings"}
+        </Link>
       </nav>
       {tab === "screenshots" ? <KrystaScreenshots /> : <KrystaRecordings />}
     </div>
