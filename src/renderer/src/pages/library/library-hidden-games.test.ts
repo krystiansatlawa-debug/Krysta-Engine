@@ -271,6 +271,7 @@ async function renderLibrary(
   const exports: { default?: React.ComponentType } = {};
   new Function("exports", "require", outputText)(exports, (name: string) => {
     if (name.endsWith(".scss")) return {};
+    if (name.endsWith("/krysta-patch-badge")) return { KrystaPatchBadge: () => null, KrystaUpdateCenterActions: () => null, useKrystaPendingPatches: () => [], findKrystaPendingPatch: () => null };
     return stubs[name] ?? requireModule(name);
   });
   const Library = exports.default!;
