@@ -1,0 +1,33 @@
+name: Achievement Sync Regression
+
+on:
+  pull_request:
+    paths:
+      - "src/main/services/achievements/**"
+      - "src/main/services/krysta-recordings.ts"
+      - ".github/workflows/achievement-sync-regression.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: achievement-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  achievement-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.21.0"
+          cache: yarn
+      - name: Install JavaScript dependencies
+        run: yarn --frozen-lockfile --ignore-scripts
+      - name: Test achievement synchronization
+        run: node --import ./scripts/register-ts-node.mjs --test src/main/services/achievements/achievement-sync.test.ts
