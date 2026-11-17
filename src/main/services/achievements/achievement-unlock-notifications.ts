@@ -9,6 +9,7 @@ import { publishNewAchievementNotification } from "../notifications";
 import { achievementsLogger } from "../logger";
 import { achievementNotificationPresenter } from "../achievement-notification-presenter-electron";
 import { recordAchievementClip } from "../krysta-recordings";
+import { captureAchievementScreenshot } from "../screenshots/screenshot-capture-service";
 
 const RARE_ACHIEVEMENT_MAX_UNLOCK_PERCENTAGE = 10;
 
@@ -50,6 +51,15 @@ export const publishAchievementUnlockNotifications = ({
   userPreferences,
 }: AchievementUnlockNotificationOptions) => {
   if (achievements.length) {
+    // Local achievement photos and video clips are separate opt-in features.
+    // Both are best-effort and never interrupt achievement synchronization.
+    void captureAchievementScreenshot(game).catch((error) => {
+      achievementsLogger.warn(
+        "Unable to capture achievement screenshot",
+        game.objectId,
+        error
+      );
+    });
     // Recording is optional. A capture failure must never interrupt achievement
     // notifications or produce an unhandled promise rejection during sync.
     void recordAchievementClip(
