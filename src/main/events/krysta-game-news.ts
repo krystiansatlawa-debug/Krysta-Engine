@@ -2,6 +2,7 @@ import { app, ipcMain, net } from "electron";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { isLikelyGamePatchAnnouncement } from "../../shared/game-update-patch-history";
 
 type News = { id: string; title: string; date: number; contents: string; url: string; author: string; category: "patch" | "news" };
 // Normalize display-title decorations only, preserving edition and sequel identities.
@@ -11,11 +12,7 @@ export function normalizeNewsTitle(value:string){
   .replace(/[^a-z0-9]/g,"");
 }
 function category(x:{title:string;tags?:unknown}):"patch"|"news" {
-  const tags=Array.isArray(x.tags)?x.tags.map(t=>String(t).toLowerCase()):[];
-  if(tags.some(t=>/^(patchnotes|patch_notes|patch-notes|hotfix)$/.test(t))) return "patch";
-  const title=x.title;
-  if(/\b(patch notes|release notes|changelog|hotfix(?:es)?|bug fixes|maintenance patch|patch\s+v?\d|(?:game |title )update\s+v?\d|version\s+v?\d+(?:\.\d+)+|update\s+v?\d+(?:\.\d+)+)\b|lista zmian|poprawki błędów|aktualizacja\s+\d/i.test(title)) return "patch";
-  return "news";
+  return isLikelyGamePatchAnnouncement(x.title,x.tags)?"patch":"news";
 }
 async function fetchGameNews(id: unknown, title: unknown, metadataOnly=false) {
   let appId = typeof id === "string" && /^\d{1,10}$/.test(id) ? id : "";
