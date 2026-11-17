@@ -1,0 +1,5 @@
+.krysta-multimedia { width: 100%; min-width: 0; }
+.krysta-multimedia__tabs { display: flex; gap: 8px; padding: 16px 24px 0; border-bottom: 1px solid var(--border-color, #34343c); }
+.krysta-multimedia__tabs button { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: inherit; cursor: pointer; opacity: .7; }
+.krysta-multimedia__tabs button.active { border-bottom-color: currentColor; opacity: 1; font-weight: 600; }
+.krysta-multimedia__tabs button:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
