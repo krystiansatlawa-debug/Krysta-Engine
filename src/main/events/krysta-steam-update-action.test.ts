@@ -13,7 +13,9 @@ async function fixture(t: TestContext) {
   const key = "__steamUpdateFixture" + randomUUID().replaceAll("-", "");
   const state = {
     root: tmp,
-    game: { shop: "steam", objectId: "620", title: "Game", executablePath: "/steam/game.exe" },
+    game: { shop: "steam", objectId: "620", title: "Game", executablePath: "/steam/game.exe" as string | null, epicInstallation: null as null | {artifactId:string;platform:string} },
+    epicOptions: [] as Array<{artifactId:string;platform:string;installed:boolean;installedVersion:string;publishedVersion:string}>,
+    epicError: true,
     updateRequired: true,
     installed: true,
     sameInstall: true,
@@ -37,7 +39,7 @@ export const readKrystaSettings=async()=>({pauseDuringPlay:true,backupBeforeUpda
 export const writeKrystaSettings=async()=>{};
 export const gamesSublevel={get:async()=>s.game};
 export const levelKeys={game:(shop,id)=>shop+":"+id};
-export const getEpicGameInstallOptions=async()=>({options:[],error:true});
+export const getEpicGameInstallOptions=async()=>({options:s.epicOptions,error:s.epicError});
 export const startEpicGameUpdate=async()=>({ok:false});
 export const scanUbisoft=async()=>({games:[]});
 export const findUbisoftExecutable=()=>null;
@@ -123,4 +125,31 @@ test("Steam update button validates the specific installed game and respects bac
     await assert.rejects(trigger(), /Zamknij uruchomione gry/);
     assert.deepEqual(state.links,[]);
   });
+});
+
+test("Epic reports installed and published versions without a manually configured EXE",async(t)=>{
+ const {state}=await fixture(t);
+ state.game.shop="epic";
+ state.game.objectId="epic-game";
+ state.game.executablePath=null;
+ state.game.epicInstallation={artifactId:"artifact-01",platform:"Windows"};
+ state.epicError=false;
+ state.epicOptions=[{
+   artifactId:"artifact-01",
+   platform:"Windows",
+   installed:true,
+   installedVersion:"1.0.0",
+   publishedVersion:"1.0.2",
+ }];
+ const check=state.handlers.get("krysta:game-watch-check");
+ assert.ok(check);
+ const result=await check(null,"epic","epic-game") as {
+   installedBuild?:string;
+   updateState?:string;
+   updateProvider?:string;
+ };
+ assert.equal(result.installedBuild,"1.0.0");
+ assert.equal(result.updateState,"required");
+ assert.equal(result.updateProvider,"epic");
+ assert.deepEqual(state.links,[]);
 });
