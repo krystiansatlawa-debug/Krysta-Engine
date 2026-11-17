@@ -82,6 +82,7 @@ export function SettingsContextScreenshots() {
   const { updateUserPreferences } = useContext(settingsContext);
   const inputStatus = useScreenshotInputStatus();
   const { hash, search } = useLocation();
+  const requestedSection = new URLSearchParams(search).get("media");
   const navigate = useNavigate();
 
   const userPreferences = useAppSelector(
@@ -92,7 +93,15 @@ export function SettingsContextScreenshots() {
     resolveScreenshotPreferences(userPreferences)
   );
   const [screenshotsPath, setScreenshotsPath] = useState("");
-  const [captureSection, setCaptureSection] = useState<"screenshots" | "recordings" | "library">("screenshots");
+  const [captureSection, setCaptureSection] = useState<"screenshots" | "recordings" | "library">(() =>
+    requestedSection === "recordings" || requestedSection === "library" ? requestedSection : "screenshots"
+  );
+
+  useEffect(() => {
+    if (requestedSection === "recordings" || requestedSection === "screenshots" || requestedSection === "library") {
+      setCaptureSection(requestedSection);
+    }
+  }, [requestedSection]);
 
   useEffect(() => {
     if (!userPreferences) return;
