@@ -3,6 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { nativeImage } from "electron";
 import { logger } from "../logger";
+import { SCREENSHOT_CUSTOM_GAME_TITLE_MAX_LENGTH } from "@shared";
 import { gamesSublevel } from "@main/level";
 import type { Game, LocalScreenshot } from "@types";
 import { LocalScreenshotStore } from "./local-screenshot-store";
@@ -41,16 +42,21 @@ export async function importLegacyScreenshots(): Promise<number> {
  let imported = 0;
  let inspected = 0;
  for (const root of await getScreenshotFolderCandidates()) {
-  const folders = await fs.readdir(root, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
-   if (error.code === "ENOENT") return [];
-   throw error;
+  const folders = await fs.readdir(root, { withFileTypes: true }).catch((error: unknown) => {
+   if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+    logger.warn("Could not scan legacy screenshot root", { root, error });
+   }
+   return [];
   });
   for (const folder of folders) {
    if (!folder.isDirectory() || folder.isSymbolicLink()) continue;
    const game = matchGame(folder.name, games);
    if (!game) continue;
    const directory = path.join(root, folder.name);
-   const files = await fs.readdir(directory, { withFileTypes: true }).catch(() => []);
+   const files = await fs.readdir(directory, { withFileTypes: true }).catch((error: unknown) => {
+    logger.warn("Could not scan legacy screenshot game folder", { directory, error });
+    return [];
+   });
    for (const file of files) {
     if (++inspected > MAX_FILES) return imported;
     if (!file.isFile() || file.isSymbolicLink() || !IMAGE_EXTENSION.test(file.name)) continue;
@@ -77,7 +83,7 @@ export async function importLegacyScreenshots(): Promise<number> {
      shop: game.shop,
      objectId: game.objectId,
      gameTitle: game.title,
-     customGameTitle: game.shop === "custom" ? game.title.slice(0, 120) : null,
+     customGameTitle: game.shop === "custom" ? game.title.trim().slice(0, SCREENSHOT_CUSTOM_GAME_TITLE_MAX_LENGTH) : null,
      path: filePath,
      capturedAt: stat.mtimeMs,
      width: dimensions.width,
