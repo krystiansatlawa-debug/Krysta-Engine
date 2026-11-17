@@ -180,7 +180,8 @@ export type ScreenshotTriggerSource =
   | "keyboard"
   | "gamepad"
   | "portal"
-  | "deeplink";
+  | "deeplink"
+  | "achievement";
 
 export interface ScreenshotHotkeyBinding {
   key: string;
