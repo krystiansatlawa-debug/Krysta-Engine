@@ -80,7 +80,7 @@ export async function discoverKrystaGameExecutable(shop:unknown,id:unknown,folde
  // The official executable catalogue helps identify games whose EXE differs from their display title.
  await GameExecutables.ensureLoaded().catch(()=>false);
  const download=await downloadsSublevel.get(levelKeys.game(game.shop,game.objectId)).catch(()=>null);
- const roots=folder?[folder]:await detectedRoots(game,download);
+ const roots=folder?[folder]:await detectedRoots(game,download??null);
  const found:Candidate[]=[],seen=new Set<string>();
  const scanStarted=Date.now();
  for(const root of roots.slice(0,24)){
@@ -137,7 +137,7 @@ export function autoLinkKrystaGameExecutable(shop:"steam"|"epic"|"custom",id:str
   if(!stat?.isFile()||stat.isSymbolicLink()||!proposed.toLowerCase().endsWith(".exe"))return null;
   return libraryWriteQueue.run(async()=>{
    const current=await gamesSublevel.get(key);
-   if(!canAutoLinkKrystaExecutable(current))return null;
+   if(!current||!canAutoLinkKrystaExecutable(current))return null;
    const games=await gamesSublevel.iterator().all();
    if(games.some(([otherKey,other])=>otherKey!==key&&!other.isDeleted&&other.executablePath?.toLowerCase()===proposed.toLowerCase()))return null;
    await gamesSublevel.put(key,updateGameExecutablePath(current,proposed));

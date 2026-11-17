@@ -313,7 +313,7 @@ ipcMain.handle("krysta:game-integrity",async(_e,shop:unknown,id:unknown,action:u
 });
 ipcMain.handle("krysta:game-watch-badges",()=>serial(async()=>{
  const all=await read(),settings=await readSettings();
- const badges=[];
+ const badges:{shop:GameShop;id:string;gameTitle:string;title:string;kind:"required"|"patch";downloadPercent:number|null}[]=[];
  let steamFolders:Awaited<ReturnType<typeof getSteamLibraryFolders>>|undefined;
  for(const w of Object.values(all)){
   if(!effective(w,settings)||(!w.pendingPatch&&w.updateState!=="required"))continue;
@@ -335,7 +335,7 @@ ipcMain.handle("krysta:game-watch-badges",()=>serial(async()=>{
 }));
 ipcMain.handle("krysta:game-watch-history",()=>serial(async()=>{
  const all=await read();
- const rows=[];
+ const rows:(BuildChange&{source:"steam"|"epic"|"gog"|"local";shop:GameShop;id:string;title:string})[]=[];
  for(const w of Object.values(all)){
   const game=await gamesSublevel.get(keyFor(w.shop,w.id)).catch(()=>undefined);
   const title=game?.title??w.gameTitle??w.id;
@@ -393,6 +393,7 @@ async function offerEpicUpdates(){
   const matches=result.options.filter(o=>o.artifactId===installation.artifactId&&o.platform===installation.platform&&o.installed&&o.installedVersion&&o.publishedVersion&&o.installedVersion!==o.publishedVersion);
   if(matches.length!==1)continue;
   const option=matches[0],target=option.publishedVersion;
+  if(!target)continue;
   if(epicRequested.get(key)===target)continue;
   const current=await serial(async()=>({settings:await readSettings(),watch:(await read())[key]}));
   if(!current.settings.autoDownloadEpic||!effective(current.watch,current.settings)||hasTrackedGamesRunning())return;
