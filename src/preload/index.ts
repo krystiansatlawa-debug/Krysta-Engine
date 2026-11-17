@@ -1365,6 +1365,8 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("hasDownloadFolder", shop, objectId),
   getExecutablePickerPath: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("getExecutablePickerPath", shop, objectId),
+  krystaDiscoverGameExecutable: (shop: GameShop, objectId: string, folder?: string) =>
+    ipcRenderer.invoke("krysta:discover-game-exe", shop, objectId, folder),
   openGameInstallerPath: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("openGameInstallerPath", shop, objectId),
   openGameWinetricks: (shop: GameShop, objectId: string) =>

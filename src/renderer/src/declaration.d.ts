@@ -638,6 +638,11 @@ declare global {
       shop: GameShop,
       objectId: string
     ) => Promise<string | null>;
+    krystaDiscoverGameExecutable: (
+      shop: GameShop,
+      objectId: string,
+      folder?: string
+    ) => Promise<{automaticPath:string|null;candidates:{path:string;highConfidence:boolean}[];searchedFolders:number}>;
     openGameInstallerPath: (shop: GameShop, objectId: string) => Promise<void>;
     openGameWinetricks: (shop: GameShop, objectId: string) => Promise<boolean>;
     openGameExecutablePath: (shop: GameShop, objectId: string) => Promise<void>;
