@@ -200,7 +200,8 @@ export class EpicAchievementSource {
                 }
               } catch (error) {
                 epicAbort(parent);
-                completed.set(sandbox, null);
+                // Failed sandboxes must remain retryable in later chunks.
+                // Only cache confirmed responses; a transient failure is not an empty result.
                 if (
                   error instanceof EpicIntegrationError &&
                   error.code === "session-expired"
