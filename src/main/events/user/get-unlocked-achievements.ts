@@ -14,6 +14,7 @@ import { CombinedAchievementsRequests } from "@main/services/achievements/combin
 import { AchievementSouvenirStore } from "@main/services/achievements/achievement-souvenir-store";
 import { fetchRemoteUserGameAchievements } from "@main/services/achievements/get-achievement-souvenirs";
 import { mergeUnlockedAchievementLists } from "@main/services/achievements/merge-unlocked-achievements";
+import { fillMissingAchievementDefinitions } from "@main/services/achievements/fill-missing-achievement-definitions";
 import {
   createCombinedDefinitionLookup,
   presentCombinedAchievements,
@@ -195,6 +196,10 @@ export const getUnlockedAchievements = async (
   }
   const unlockedByName = indexByUpperCaseName(unlockedAchievements);
   const remoteByName = indexByUpperCaseName(remote.achievements);
+
+  // Some locally detected unlocks have no matching catalogue definition yet.
+  // Keep the original catalogue intact and show those earned IDs instead of hiding them.
+  catalogueAchievements = fillMissingAchievementDefinitions(catalogueAchievements, unlockedAchievements);
 
   return catalogueAchievements
     .map((achievementData) => {
