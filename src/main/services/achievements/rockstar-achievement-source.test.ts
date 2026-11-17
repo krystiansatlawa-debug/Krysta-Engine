@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fetchRockstarAchievements, rockstarAchievementTitle } from "./rockstar-achievement-source";
+import { fetchRockstarAchievements, rockstarAchievementTitle, RockstarAchievementSync } from "./rockstar-achievement-source";
 
 test("GTA V editions share the same Social Club achievement title", () => {
   assert.equal(rockstarAchievementTitle("gtav-legacy"), "gtav");
@@ -29,4 +29,20 @@ test("invalid accounts and unavailable titles never invoke the network", async (
   await assert.rejects(fetchRockstarAchievements("gtasa", "123", fetcher));
   await assert.rejects(fetchRockstarAchievements("rdr2", "not-an-id", fetcher));
   assert.equal(called, false);
+});
+
+test("failed refresh retains last successful Rockstar snapshot", async () => {
+  const sync = new RockstarAchievementSync();
+  const first = await sync.sync("rdr2", "123", async () => ({
+    awardedAchievements: { won: { achieved: true } },
+  }));
+  assert.equal(first.items.length, 1);
+  await assert.rejects(sync.sync("rdr2", "123", async () => {
+    throw new Error("Network unavailable");
+  }));
+  assert.deepEqual(sync.getCached("rdr2"), first);
+  await assert.rejects(sync.sync("rdr2", "123", async () => ({})));
+  assert.deepEqual(sync.getCached("rdr2"), first);
+  sync.clear();
+  assert.equal(sync.getCached("rdr2"), null);
 });
