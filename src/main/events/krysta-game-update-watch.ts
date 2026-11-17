@@ -446,6 +446,7 @@ async function offerEpicUpdates(){
  }
 }
 let scanning=false,lastScan=0,lastFinished:string|null=null,lastError:string|null=null;
+let lastScanDurationMs:number|null=null;
 let scanChecked=0,scanTotal=0,scanRequired=0,scanUnknown=0,scanInterrupted=false;
 async function scan(manual=false){
  if(scanning)return;
@@ -491,12 +492,13 @@ async function scan(manual=false){
   );
   if(!complete){scanInterrupted=true;lastScan=0;return;}
   lastFinished=new Date().toISOString();
+  lastScanDurationMs=Date.now()-lastScan;
   try{await offerSteamQueue();}catch(e){lastError="Steam: "+String(e);}
   try{await offerEpicUpdates();}catch(e){lastError=[lastError,"Epic: "+String(e)].filter(Boolean).join(" | ");}
  }catch(e){lastError=String(e);}
  finally{scanning=false;}
 }
-const status=async()=>({...await serial(readSettings),scanning,scanChecked,scanTotal,scanRequired,scanUnknown,scanInterrupted,lastFinished,lastError,pausedDuringPlay:hasTrackedGamesRunning()});
+const status=async()=>({...await serial(readSettings),scanning,scanChecked,scanTotal,scanRequired,scanUnknown,scanInterrupted,lastFinished,lastError,lastScanDurationMs,scanElapsedMs:scanning?Date.now()-lastScan:null,pausedDuringPlay:hasTrackedGamesRunning()});
 ipcMain.handle("krysta:game-watch-settings",status);
 ipcMain.handle("krysta:game-watch-settings-set",async(_e,value:unknown)=>{
  if(!value||typeof value!=="object")throw Error("Invalid settings");
