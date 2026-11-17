@@ -1,4 +1,4 @@
-import { parseRockstarUnlockedAchievements, type RockstarUnlockedAchievement } from "./rockstar-achievement-parser";
+import { parseRockstarUnlockedAchievements, type RockstarUnlockedAchievement } from "./rockstar-achievement-parser.js";
 
 /** Rockstar Social Club title identifiers verified against the Galaxy integration.
  * Unmapped titles must not be queried using guessed identifiers.
