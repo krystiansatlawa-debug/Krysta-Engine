@@ -5,6 +5,7 @@ import { gamesSublevel } from "@main/level";
 import { resolveManualScreenshotPath } from "./screenshot-file-path";
 import { getDefaultScreenshotsFolder, getScreenshotFolderCandidates } from "./screenshots-folder";
 import { LocalScreenshotStore } from "./local-screenshot-store";
+import { lookupScreenshotGameDirectory } from "./screenshot-folder-match";
 import { logger } from "../logger";
 import type { Game, LocalScreenshot } from "@types";
 
@@ -55,7 +56,7 @@ async function scan() {
     for (const directory of directories.slice(0, MAX_DIRECTORIES)) {
       if (imported >= MAX_IMPORTED_PER_SCAN) break;
       if (!directory.isDirectory() || directory.isSymbolicLink()) continue;
-      const game = byFolder.get(directory.name.toLowerCase());
+      const game = lookupScreenshotGameDirectory(directory.name, byFolder);
       if (!game) continue;
       const folder = path.join(root, directory.name);
       const files = await fs.readdir(folder, { withFileTypes: true }).catch(() => []);
