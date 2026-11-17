@@ -31,6 +31,7 @@ import {
   isLocalScreenshotVisibleToSignedInOwner,
 } from "./local-screenshot-owner";
 import { LocalScreenshotStore } from "./local-screenshot-store";
+import { importLegacyScreenshots } from "./legacy-screenshot-import";
 import {
   pruneMissingLocalScreenshots,
   removeLocalScreenshotIfMissing,
@@ -101,6 +102,10 @@ export const initializeScreenshots = () => {
 
   void backfillLocalScreenshotGameIds().catch((error) => {
     logger.error("Failed to back-fill local screenshot game ids", error);
+  });
+
+  void importLegacyScreenshots().catch((error: unknown) => {
+    logger.error("Failed to import existing screenshots into Krysta gallery", error);
   });
 
   screenshotUploadWorker.start();
