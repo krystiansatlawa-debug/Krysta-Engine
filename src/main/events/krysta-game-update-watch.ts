@@ -52,15 +52,27 @@ function cachedSteamLibraries():Promise<string[]>{
  steamLibraries={until:Date.now()+30_000,task};
  return task;
 }
-async function detectExeVersion(exe:string|null|undefined):Promise<{installedVersion:string;versionSource?:"product"|"file"}>{
+type ExeFileVersion={installedVersion:string;versionSource?:"product"|"file"};
+const exeVersions=new Map<string,{mtimeMs:number;size:number;until:number;value:ExeFileVersion}>();
+async function detectExeVersion(exe:string|null|undefined):Promise<ExeFileVersion>{
  const unknown={installedVersion:""};
  if(process.platform!=="win32"||!exe||!path.isAbsolute(exe)||path.extname(exe).toLowerCase()!==".exe")return unknown;
  try{
   const st=await fs.stat(exe);if(!st.isFile())return unknown;
+  const cacheKey=exe.toLowerCase();
+  const cached=exeVersions.get(cacheKey);
+  if(cached&&cached.until>Date.now()&&cached.mtimeMs===st.mtimeMs&&cached.size===st.size)
+   return cached.value;
+  const remember=(value:ExeFileVersion)=>{
+   if(exeVersions.size>=256)exeVersions.delete(exeVersions.keys().next().value!);
+   exeVersions.set(cacheKey,{mtimeMs:st.mtimeMs,size:st.size,until:Date.now()+10*60_000,value});
+   return value;
+  };
   // The executable path is passed as environment data, never interpolated into PowerShell code.
   const script="$ErrorActionPreference='Stop'; $v=[System.Diagnostics.FileVersionInfo]::GetVersionInfo($env:KRYSTA_VERSION_TARGET); @{product=$v.ProductVersion;file=$v.FileVersion} | ConvertTo-Json -Compress";
   const {stdout}=await exec(path.join(process.env.SystemRoot||"C:\\Windows","System32","WindowsPowerShell","v1.0","powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-Command",script],{env:{...process.env,KRYSTA_VERSION_TARGET:exe},windowsHide:true,timeout:10000,maxBuffer:65536});
-  const v=JSON.parse(stdout);for(const source of ["product","file"] as const){const raw=v[source];if(typeof raw!=="string")continue;const match=raw.trim().match(/^v?(\d+(?:[.,]\s*\d+){1,4})(?:\s+\([^\r\n]{1,80}\))?$/i);if(!match)continue;const number=match[1].replace(/,\s*/g,".").replace(/\s/g,"");if(!number.split(".").some(n=>Number(n)>0))continue;return {installedVersion:number,versionSource:source};}
+  const v=JSON.parse(stdout);for(const source of ["product","file"] as const){const raw=v[source];if(typeof raw!=="string")continue;const match=raw.trim().match(/^v?(\d+(?:[.,]\s*\d+){1,4})(?:\s+\([^\r\n]{1,80}\))?$/i);if(!match)continue;const number=match[1].replace(/,\s*/g,".").replace(/\s/g,"");if(!number.split(".").some(n=>Number(n)>0))continue;return remember({installedVersion:number,versionSource:source});}
+  return remember(unknown);
  }catch{/* missing or unreadable metadata */}
  return unknown;
 }
