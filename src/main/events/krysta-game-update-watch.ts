@@ -346,11 +346,10 @@ async function getPendingBadges():Promise<PendingBadge[]>{
   effective(w,settings)&&(Boolean(w.pendingPatch)||w.updateState==="required")
  );
  const result:(PendingBadge|null)[]=Array(relevant.length).fill(null);
- const libraries=cachedSteamLibraries();
+ let libraries:Promise<string[]>|null=null;
  // Ignore a missing Steam client for non-Steam games and retain the last
  // confirmed status when manifest reads are temporarily unavailable.
- await runBoundedGameUpdateScan(relevant,async w=>{
-  const index=relevant.indexOf(w);
+ await runBoundedGameUpdateScan(relevant.map((watch,index)=>({watch,index})),async({watch:w,index})=>{
   try{
    const game=await gamesSublevel.get(keyFor(w.shop,w.id));
    if(!game||game.isDeleted)return;
@@ -358,7 +357,7 @@ async function getPendingBadges():Promise<PendingBadge[]>{
    let required=w.updateState==="required";
    if(required&&game.shop==="steam"){
     try{
-     const live=await readSteamUpdateState(game.objectId,await libraries,game.executablePath);
+     const live=await readSteamUpdateState(game.objectId,await(libraries??=cachedSteamLibraries()),game.executablePath);
      if(live){required=live.updateRequired;downloadPercent=live.downloadPercent;}
     }catch{/* retain last known status */}
    }
