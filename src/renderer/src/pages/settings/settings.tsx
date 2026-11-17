@@ -4,7 +4,7 @@ import {
   SettingsContextProvider,
 } from "@renderer/context";
 import { SettingsAccount } from "./settings-account";
-import { useFeature, useUserDetails } from "@renderer/hooks";
+import { useUserDetails } from "@renderer/hooks";
 import { Fragment, useMemo, useState } from "react";
 import type { SettingsCategoryId } from "@renderer/context/settings/settings.context";
 import "./settings.scss";
@@ -48,8 +48,6 @@ export default function Settings() {
   const [advancedCategoryId,setAdvancedCategoryId] = useState<SettingsCategoryId>("content_gameplay");
 
   const { userDetails } = useUserDetails();
-  const { isFeatureEnabled, Feature } = useFeature();
-  const isScreenshotsEnabled = isFeatureEnabled(Feature.Screenshots);
 
   const categories = useMemo(
     () => [
@@ -86,15 +84,11 @@ export default function Settings() {
       { id: "krysta_updates" as const, label: i18n.language.startsWith("pl") ? "Aktualizacje" : "Updates", icon: <RefreshCw size={16} /> },
       { id: "krysta_cloud" as const, label: "Krysta Cloud", icon: <CloudIcon size={16} /> },
       { id: "game" as const, label: t("krysta_game_category", { defaultValue: "Game" }), icon: <Gamepad2 size={16} /> },
-      ...(isScreenshotsEnabled
-        ? [
-            {
-              id: "screenshots" as const,
-              label: t("screenshots_category"),
-              icon: <Camera size={16} />,
-            },
-          ]
-        : []),
+      {
+        id: "screenshots" as const,
+        label: pl ? "Nagrania i zrzuty ekranu" : "Recordings & screenshots",
+        icon: <Camera size={16} />,
+      },
       {
         id: "integrations" as const,
         label: t("integrations"),
@@ -126,7 +120,7 @@ export default function Settings() {
         group: "classics" as const,
       },
     ],
-    [t, i18n.language, userDetails, isScreenshotsEnabled, pl]
+    [t, i18n.language, userDetails, pl]
   );
 
   return (
