@@ -1,6 +1,7 @@
 import { AppsIcon, GearIcon, HomeIcon, BookIcon } from "@primer/octicons-react";
 
 import { SidebarDownloadIcon } from "./sidebar-download-icon";
+import { Images } from "lucide-react";
 
 function LeaderboardsIcon() {
   return (
@@ -45,6 +46,11 @@ export const routes = [
     path: "/downloads",
     nameKey: "downloads",
     render: () => <SidebarDownloadIcon />,
+  },
+  {
+    path: "/media",
+    nameKey: "media",
+    render: () => <Images size={16} />,
   },
   {
     path: "/leaderboards",
