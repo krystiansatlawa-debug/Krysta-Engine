@@ -186,6 +186,7 @@ contextBridge.exposeInMainWorld("electron", {
   krystaRecordingDelete: (id:string) => ipcRenderer.invoke("krysta:recording-delete",id),
   krystaRecordingsFolder: () => ipcRenderer.invoke("krysta:recordings-folder"),
   krystaRecordingStop: () => ipcRenderer.invoke("krysta:recording-stop"),
+  openRockstarSignIn: (): Promise<{ opened: boolean }> => ipcRenderer.invoke("krysta:rockstar-sign-in"),
   scanRockstar: () => ipcRenderer.invoke("krysta:rockstar-scan"),
   importRockstar: () => ipcRenderer.invoke("krysta:rockstar-import"),
   openRockstarLauncher: () => ipcRenderer.invoke("krysta:rockstar-open"),
