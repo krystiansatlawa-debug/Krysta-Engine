@@ -189,25 +189,47 @@ async function perform(key:string,force=false){
  if(!snapshot)return null;
  const detected=await detectVersion(game);
  const smart=await smartState(game);
+ // Provider status and Steam news are separate. Failed news requests must not
+ // invalidate a confirmed update from a local launcher.
+ let news:Awaited<ReturnType<typeof getGameNews>>|null=null;
+ let newsError:string|undefined;
  try{
- const result=await getGameNews(game.catalogueGame?.shop==="steam"?game.catalogueGame.objectId:snapshot.shop==="steam"?snapshot.id:snapshot.steamId??"",game.title,true);
- if(!result.appId)throw Error("No verified Steam match");
- const patches=result.items.filter(x=>x.category==="patch").sort((a,b)=>b.date-a.date);
+  const response=await getGameNews(game.catalogueGame?.shop==="steam"?game.catalogueGame.objectId:snapshot.shop==="steam"?snapshot.id:snapshot.steamId??"",game.title,true);
+  if(response.appId)news=response;
+ }catch(error){newsError="Steam patch feed: "+String(error).slice(0,220);}
+ const patches=news?.items.filter(x=>x.category==="patch").sort((a,b)=>b.date-a.date)??[];
  const latest=patches[0];
- const newItems=snapshot.seen?patches.filter(x=>!snapshot.seen!.includes(x.id)): [];
- return await serial(async()=>{
- const all=await read(),w=all[key],settings=await readSettings();if(!w)return null;
- const enabled=effective(w,settings);
- if(enabled&&snapshot.enabled){
- if(smart.updateState==="required"&&w.updateState!=="required")await publishKrystaNotification("KRYSTA_UPDATE",game.title,(smart.updateProvider==="gog"?"GOG":game.shop==="epic"?"Epic Games":"Steam")+": aktualizacja wymagana / Update required",settings.notifications);
- const fresh=newItems.filter(x=>!w.seen?.includes(x.id));
- if(fresh.length)await publishKrystaNotification("KRYSTA_PATCH",game.title,"Nowy patch / New patch: "+fresh[0].title,settings.notifications);
- }
- const freshPatch=enabled&&snapshot.enabled&&w.seen?newItems.find(x=>!w.seen?.includes(x.id)):undefined;
- const next={...w,enabled,pendingPatch:enabled?(freshPatch?.title??w.pendingPatch):undefined,...detected,...smart,...recordBuild(w,smart),...platformHistory(w,smart),...localHistory(w,detected),versionSource:detected.versionSource,steamId:result.appId??undefined,lastChecked:new Date().toISOString(),latestTitle:latest?.title,latestPublishedAt:latest?.date?new Date(latest.date*1000).toISOString():w.latestPublishedAt,latestVersion:latest?version(latest.title)??undefined:undefined,patchHistory:mergePublishedPatches(w.patchHistory,patches),seen:[...new Set([...patches.map(x=>x.id),...(w.seen??[])])].slice(0,500),error:undefined};
- all[key]=next;await write(all);return next;
+ const newItems=snapshot.seen?patches.filter(x=>!snapshot.seen!.includes(x.id)):[];
+ return serial(async()=>{
+  const all=await read(),previous=all[key],settings=await readSettings();
+  if(!previous)return null;
+  const enabled=effective(previous,settings);
+  if(enabled&&snapshot.enabled){
+   if(smart.updateState==="required"&&previous.updateState!=="required")
+    await publishKrystaNotification("KRYSTA_UPDATE",game.title,(smart.updateProvider==="gog"?"GOG":game.shop==="epic"?"Epic Games":"Steam")+": aktualizacja wymagana / Update required",settings.notifications);
+   const fresh=newItems.filter(x=>!previous.seen?.includes(x.id));
+   if(fresh.length)await publishKrystaNotification("KRYSTA_PATCH",game.title,"Nowy patch / New patch: "+fresh[0].title,settings.notifications);
+  }
+  const freshPatch=enabled&&snapshot.enabled&&previous.seen?newItems.find(x=>!previous.seen?.includes(x.id)):undefined;
+  const next:Watch={
+   ...previous,enabled,pendingPatch:enabled?(freshPatch?.title??previous.pendingPatch):undefined,
+   ...detected,...smart,
+   ...recordBuild(previous,smart),...platformHistory(previous,smart),...localHistory(previous,detected),
+   versionSource:detected.versionSource,
+   ...(news?{
+    steamId:news.appId??undefined,
+    lastChecked:new Date().toISOString(),
+    latestTitle:latest?.title??previous.latestTitle,
+    latestPublishedAt:latest?.date?new Date(latest.date*1000).toISOString():previous.latestPublishedAt,
+    latestVersion:latest?version(latest.title)??undefined:previous.latestVersion,
+    patchHistory:mergePublishedPatches(previous.patchHistory,patches),
+    seen:[...new Set([...patches.map(x=>x.id),...(previous.seen??[])])].slice(0,500)
+   }:{}),
+   error:newsError,
+  };
+  all[key]=next;await write(all);return next;
  });
- }catch(e){return serial(async()=>{const all=await read(),w=all[key];if(!w)return null;const settings=await readSettings();if(effective(w,settings)&&snapshot.enabled&&smart.updateState==="required"&&w.updateState!=="required")await publishKrystaNotification("KRYSTA_UPDATE",game.title,(smart.updateProvider==="gog"?"GOG":game.shop==="epic"?"Epic Games":"Steam")+": aktualizacja wymagana / Update required",settings.notifications);all[key]={...w,...detected,...smart,...recordBuild(w,smart),...platformHistory(w,smart),...localHistory(w,detected),versionSource:detected.versionSource,error:String(e)};await write(all);return all[key];});}
+
 }
 const inflight=new Map<string,Promise<Watch|null>>();
 function check(key:string,force=false){const old=inflight.get(key);if(old)return old;const p=perform(key,force).finally(()=>inflight.delete(key));inflight.set(key,p);return p;}
