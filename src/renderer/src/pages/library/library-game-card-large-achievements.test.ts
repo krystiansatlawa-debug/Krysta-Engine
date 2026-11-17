@@ -48,6 +48,7 @@ it("refreshes grouped progress on member changes and preserves known offline tot
       }),
       useViewportCatalogueImageUrl: () => null,
     },
+    "./krysta-patch-badge": { KrystaPatchBadge: () => null },
     "./library-category": {
       getLibraryPresentationImportSources: () => ({
         steam: true,
