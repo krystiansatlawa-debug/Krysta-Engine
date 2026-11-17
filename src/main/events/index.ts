@@ -36,6 +36,7 @@ import "./retroarch";
 import "./epic";
 import "./krysta-ubisoft";
 import "./krysta-rockstar";
+import "./krysta-rockstar-sign-in";
 import "./krysta-ubisoft-account";
 import "./krysta-game-news";
 import "./krysta-game-update-watch";
