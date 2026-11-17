@@ -233,3 +233,30 @@ test("budget timeout returns pending facets while parent cancellation rejects th
     source.collect(context, [game()], controller.signal, targets)
   );
 });
+
+test("transient failure for shared sandbox is retried in a later chunk", async () => {
+  let calls = 0;
+  const source = new EpicAchievementSource(session, async () => {
+    calls++;
+    return Response.json(calls === 1
+      ? { errors: [{ extensions: { code: "FORBIDDEN" } }] }
+      : payload());
+  });
+  const games = Array.from({ length: EPIC_SNAPSHOT_CHUNK_GAMES + 1 }, (_, i) =>
+    game(String(i))
+  );
+  const result = await source.collect(
+    context,
+    games,
+    new AbortController().signal,
+    async (ids) => ids.map((objectId) => ({
+      objectId,
+      status: "supported" as const,
+      achievementSandboxId: "primary",
+    }))
+  );
+  assert.equal(calls, 2);
+  assert.equal(result.games[0].achievements, null);
+  assert.equal(result.games.at(-1)?.achievements?.length, 1);
+  assert.equal(result.pendingObjectIds.length, EPIC_SNAPSHOT_CHUNK_GAMES);
+});
