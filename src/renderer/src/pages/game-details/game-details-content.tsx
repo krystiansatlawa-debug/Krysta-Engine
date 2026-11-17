@@ -130,6 +130,7 @@ export function GameDetailsContent() {
     return () => window.removeEventListener("krysta:open-game-updates",openUpdates);
   }, []);
   const [backdropOpacity, setBackdropOpacity] = useState(1);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [isDescriptionOverflowing, setIsDescriptionOverflowing] =
     useState(false);
   const descriptionRef = useRef<HTMLDivElement>(null);
@@ -507,22 +508,13 @@ export function GameDetailsContent() {
         </div>
 
         <nav className="krysta-game-tabs" aria-label="Game details">
-          { [["description","Opis","Description"],...(aboutTheGame ? [["full-description","Pełny opis","Full description"]] : []),["updates","Aktualizacje","Updates"],["cloud","Zapisy w chmurze","Cloud saves"],...(game?.shop==="custom"&&/^(ubi-owned-|ubisoft-)/.test(game.objectId)?[["ubisoft-achievements","Osiągnięcia","Achievements"]]:[])].map(([id,pl,en]) => (
+          { [["description","Opis","Description"],["updates","Aktualizacje","Updates"],["cloud","Zapisy w chmurze","Cloud saves"],...(game?.shop==="custom"&&/^(ubi-owned-|ubisoft-)/.test(game.objectId)?[["ubisoft-achievements","Osiągnięcia","Achievements"]]:[])].map(([id,pl,en]) => (
             <button type="button" key={id} aria-pressed={detailTab === id} onClick={() => setDetailTab(id)}>{document.documentElement.lang.startsWith("pl") ? pl : en}</button>
           ))}
         </nav>
         {detailTab === "ubisoft-achievements" && game && <KrystaUbisoftAchievements key={game.objectId} objectId={game.objectId}/>}
         {detailTab === "updates" && <KrystaGameUpdates shop={game?.shop} objectId={game?.objectId} executablePath={game?.executablePath} appId={catalogueGame?.shop === "steam" ? String(catalogueGame.objectId) : shop === "steam" ? String(objectId ?? "") : ""} title={game?.title ?? shopDetails?.name ?? ""} />}
         {detailTab === "cloud" && (game && shop && objectId ? <KrystaGameCloud key={`${shop}:${objectId}`} shop={shop} objectId={String(objectId)} /> : <div className="krysta-game-extra">Dodaj grę do biblioteki / Add game to library</div>)}
-        {detailTab === "full-description" && (
-          <section className="game-details__description-container" aria-label={document.documentElement.lang.startsWith("pl") ? "Pełny opis gry" : "Full game description"}>
-            <div className="game-details__description-content">
-              <h2 className="game-details__description-title">{t("about_this_game")}</h2>
-              <div className="game-details__description game-details__description--expanded" dangerouslySetInnerHTML={{ __html: aboutTheGame }} />
-              <button type="button" className="game-details__description-toggle" onClick={() => setDetailTab("description")}>{t("show_less")}</button>
-            </div>
-          </section>
-        )}
         <div className="game-details__description-container" style={detailTab !== "description" ? {display:"none"} : undefined}>
           <div className="game-details__description-content">
             <DescriptionHeader />
@@ -554,7 +546,9 @@ export function GameDetailsContent() {
               // load late, and measuring first let it render at full height
               // before collapsing.
               className={`game-details__description ${
-                isDescriptionOverflowing
+                isDescriptionExpanded
+                  ? "game-details__description--expanded"
+                  : isDescriptionOverflowing
                     ? "game-details__description--clamped game-details__description--collapsed"
                     : "game-details__description--clamped"
               }`}
@@ -564,9 +558,9 @@ export function GameDetailsContent() {
               <button
                 type="button"
                 className="game-details__description-toggle"
-                onClick={() => setDetailTab("full-description")}
+                onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
               >
-                {t("show_more")}
+                {isDescriptionExpanded ? t("show_less") : t("show_more")}
               </button>
             )}
 
