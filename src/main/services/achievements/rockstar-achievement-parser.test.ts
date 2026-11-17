@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseRockstarUnlockedAchievements } from "./rockstar-achievement-parser";
+import { parseRockstarUnlockedAchievements } from "./rockstar-achievement-parser.js";
 
 test("only explicitly achieved Rockstar entries are unlocked", () => {
   assert.deepEqual(parseRockstarUnlockedAchievements({
