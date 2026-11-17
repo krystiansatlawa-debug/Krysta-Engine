@@ -10,13 +10,13 @@ import {GameExecutables} from "@main/services/game-executables";
 import {libraryWriteQueue} from "@main/services/library-sync/library-write-queue";
 import {updateGameExecutablePath} from "@main/helpers/update-executable-path";
 import {canAutoLinkKrystaExecutable} from "@main/helpers/krysta-executable-autolink";
+import {krystaCandidateInstallRoots,krystaCandidateWindowsDrives,krystaExecutableSteamId} from "@main/helpers/krysta-executable-search-roots";
 import {getSteamLibraryFolders} from "@main/services/steam";
 import {findInstalledSteamApp} from "@main/services/steam-integration/steam-installation-core";
 import {scanUbisoft} from "./krysta-ubisoft";
 
-const MAX_FILES=2800,MAX_DEPTH=4,MAX_MS=12000;
+const MAX_FILES=2800,MAX_DEPTH=4,MAX_MS=15000,MAX_SCANNED_ROOTS=32;
 const normalize=(v:string)=>v.normalize("NFKD").toLowerCase().replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");
-const folderNameSafe=(v:string)=>v.trim().replace(/[\\/<>:"|?*]/g,"").replace(/\.+$/,"").slice(0,100);
 async function listExe(root:string,budgetMs=MAX_MS):Promise<string[]>{
  const files:string[]=[],pending:[string,number][]=[[root,0]];
  const started=Date.now();let visited=0;
@@ -39,7 +39,7 @@ async function detectedRoots(game:{shop:string;objectId:string;title:string;exec
  const add=(root:unknown)=>{if(typeof root==="string"&&path.isAbsolute(root)&&!out.some(v=>v.toLowerCase()===root.toLowerCase()))out.push(root);};
  if(game.executablePath)add(path.dirname(game.executablePath));
  if(download)add(await getDownloadFolderPath(download));
- const steamId=game.shop==="steam"?game.objectId:game.catalogueGame?.shop==="steam"?game.catalogueGame.objectId:null;
+ const steamId=krystaExecutableSteamId(game);
  if(steamId&&/^\d{1,10}$/.test(steamId)){
   const installation=await getSteamLibraryFolders().then(folders=>findInstalledSteamApp(steamId,folders)).catch(()=>null);
   if(installation)add(installation.installDirectory);
@@ -62,13 +62,16 @@ async function detectedRoots(game:{shop:string;objectId:string;title:string;exec
     }catch{}
    }
   }
-  const safe=folderNameSafe(game.title);
-  if(safe.length>=4){
-   for(const drive of ["C:","D:"]){
-    for(const dir of ["Games","GOG Games","Epic Games","Ubisoft Games","Rockstar Games"])
-     add(path.win32.join(drive+"\\",dir,safe));
-   }
-  }
+  // Check mounted drive letters without recursively traversing any drive.
+  // Only exact game-title folders below known installation directories are scanned.
+  // The original C:/D: assumption skipped games on E:, F: and other drives.
+  const mounted=await Promise.all(
+   krystaCandidateWindowsDrives(process.env.SystemDrive).map(async drive=>{
+    const stat=await fs.lstat(drive+"\\").catch(()=>null);
+    return stat?.isDirectory()&&!stat.isSymbolicLink()?drive:null;
+   })
+  );
+  for(const root of krystaCandidateInstallRoots(game.title,mounted.filter((d):d is string=>Boolean(d))))add(root);
  }
  return out;
 }
@@ -82,15 +85,20 @@ export async function discoverKrystaGameExecutable(shop:unknown,id:unknown,folde
  await GameExecutables.ensureLoaded().catch(()=>false);
  const download=await downloadsSublevel.get(levelKeys.game(game.shop,game.objectId)).catch(()=>null);
  const roots=folder?[folder]:await detectedRoots(game,download??null);
+ const knownSteamId=krystaExecutableSteamId(game);
+ const knownExecutables=knownSteamId?GameExecutables.getExecutablesForGame(knownSteamId)??[]:[];
  const found:Candidate[]=[],seen=new Set<string>();
  const scanStarted=Date.now();
- for(const root of roots.slice(0,24)){
+ let scannedFolders=0;
+ for(const root of roots){
+  if(scannedFolders>=MAX_SCANNED_ROOTS)break;
   const remaining=MAX_MS-(Date.now()-scanStarted);
   if(remaining<1000)break;
   if(!path.isAbsolute(root)||path.parse(root).root===root)continue;
   const st=await fs.lstat(root).catch(()=>null);
   if(!st?.isDirectory()||st.isSymbolicLink())continue;
-  const candidates=rankKrystaExecutableSuggestions(await listExe(root,remaining),game.title,GameExecutables.getExecutablesForGame(game.objectId)??[]);
+  scannedFolders++;
+  const candidates=rankKrystaExecutableSuggestions(await listExe(root,remaining),game.title,knownExecutables);
   for(const item of candidates){
    const file=path.join(root,item.relativePath),key=process.platform==="win32"?file.toLowerCase():file;
    if(seen.has(key))continue;seen.add(key);
@@ -99,7 +107,7 @@ export async function discoverKrystaGameExecutable(shop:unknown,id:unknown,folde
  }
  found.sort((a,b)=>b.score-a.score||a.path.length-b.path.length||a.path.localeCompare(b.path));
  const safe=chooseKrystaAutomaticExecutable(found.map(v=>({...v,relativePath:v.path})));
- return {automaticPath:safe,candidates:found.slice(0,10).map(({path,highConfidence})=>({path,highConfidence})),searchedFolders:roots.length};
+ return {automaticPath:safe,candidates:found.slice(0,10).map(({path,highConfidence})=>({path,highConfidence})),searchedFolders:scannedFolders};
 }
 
 /** Auto-link in the background, never replacing a user-selected EXE or official launcher.
