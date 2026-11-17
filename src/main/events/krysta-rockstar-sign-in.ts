@@ -18,8 +18,11 @@ let pending = false;
 export async function openRockstarSignIn(): Promise<{ opened: boolean }> {
   if (pending) throw new Error("Rockstar sign-in is already open");
   pending = true;
-  const partition = session.fromPartition("krysta-rockstar-login-" + randomUUID());
-  const window = new BrowserWindow({
+  let window: BrowserWindow;
+  let partition: Electron.Session;
+  try {
+    partition = session.fromPartition("krysta-rockstar-login-" + randomUUID());
+    window = new BrowserWindow({
     width: 520,
     height: 760,
     title: "Rockstar Games — Sign in",
@@ -30,6 +33,10 @@ export async function openRockstarSignIn(): Promise<{ opened: boolean }> {
       sandbox: true,
     },
   });
+  } catch (error) {
+    pending = false;
+    throw error;
+  }
   window.webContents.setWindowOpenHandler(({ url }) => {
     try {
       const parsed = new URL(url);
