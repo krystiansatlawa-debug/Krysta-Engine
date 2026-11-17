@@ -182,28 +182,35 @@ async function smartState(game:Game):Promise<Pick<Watch,"steamBuildId"|"updateSt
 async function perform(key:string,force=false){
  const game=await gamesSublevel.get(key);
  if(!game||game.isDeleted||game.shop==="launchbox")return null;
+ // Do not write the entire library before performing any I/O: one write per
+ // completed result is enough and avoids a large source of scan latency.
  const snapshot=await serial(async()=>{
   const all=await read(),settings=await readSettings(),old=all[key];
   if(!effective(old,settings)&&!force)return null;
-  const w:Watch={...old,gameTitle:game.title,shop:game.shop,id:game.objectId,override:mode(old),enabled:effective(old,settings),installedVersion:old?.installedVersion??""};
-  all[key]=w;await write(all);return w;
+  return {...old,gameTitle:game.title,shop:game.shop,id:game.objectId,override:mode(old),enabled:effective(old,settings),installedVersion:old?.installedVersion??""} as Watch;
  });
  if(!snapshot)return null;
- const [detected,smart]=await Promise.all([detectVersion(game),smartState(game)]);
- // Provider status and Steam news are separate. Failed news requests must not
- // invalidate a confirmed update from a local launcher.
- let news:Awaited<ReturnType<typeof getGameNews>>|null=null;
- let newsError:string|undefined;
- try{
-  const response=await getGameNews(game.catalogueGame?.shop==="steam"?game.catalogueGame.objectId:snapshot.shop==="steam"?snapshot.id:snapshot.steamId??"",game.title,true);
-  if(response.appId)news=response;
- }catch(error){newsError="Steam patch feed: "+String(error).slice(0,220);}
+ // Local version, official client state and Steam announcements are independent.
+ // Run them together so one slow news service does not add its latency after
+ // the provider check. A failed feed cannot invalidate the official status.
+ const newsRequest=getGameNews(
+  game.catalogueGame?.shop==="steam"?game.catalogueGame.objectId:snapshot.shop==="steam"?snapshot.id:snapshot.steamId??"",
+  game.title,true
+ ).then(response=>({
+  news:response.appId?response:null,
+  newsError:undefined as string|undefined
+ })).catch(error=>({
+  news:null as Awaited<ReturnType<typeof getGameNews>>|null,
+  newsError:"Steam patch feed: "+String(error).slice(0,220)
+ }));
+ const [detected,smart,{news,newsError}]=await Promise.all([
+  detectVersion(game),smartState(game),newsRequest
+ ]);
  const patches=news?.items.filter(x=>x.category==="patch").sort((a,b)=>b.date-a.date)??[];
  const latest=patches[0];
  const newItems=snapshot.seen?patches.filter(x=>!snapshot.seen!.includes(x.id)&&isRecentGamePatchAnnouncement(x.date)):[];
  return serial(async()=>{
-  const all=await read(),previous=all[key],settings=await readSettings();
-  if(!previous)return null;
+  const all=await read(),previous=all[key]??snapshot,settings=await readSettings();
   const enabled=effective(previous,settings);
   if(enabled&&snapshot.enabled){
    if(smart.updateState==="required"&&previous.updateState!=="required")
@@ -236,15 +243,15 @@ const inflight=new Map<string,Promise<Watch|null>>();
 function check(key:string,force=false){const old=inflight.get(key);if(old)return old;const p=perform(key,force).finally(()=>inflight.delete(key));inflight.set(key,p);return p;}
 ipcMain.handle("krysta:game-watch-get",async(_e,shop:unknown,id:unknown)=>{
  const key=keyFor(shop,id),game=await gamesSublevel.get(key);if(!game||game.isDeleted)return null;
- // Show the local version without waiting for provider or news network calls.
- const detected=await detectVersion(game);
+ // Cached status is immediate. A full refresh runs in the background
+ // via "krysta:game-watch-check" only when the panel determines it is stale.
+ // In particular, do not start PowerShell or scan Epic manifests just to
+ // open a game details tab.
  return serial(async()=>{
   const all=await read(),prior=all[key],settings=await readSettings();
-  const local:Watch={...prior,gameTitle:game.title,shop:game.shop,id:game.objectId,override:mode(prior),enabled:effective(prior,settings),...detected,...localHistory(prior,detected),versionSource:detected.versionSource};
-  if(game.shop!=="launchbox"){
-   all[key]=local;await write(all);
-  }
-  return local;
+  return {...prior,gameTitle:game.title,shop:game.shop,id:game.objectId,
+   override:mode(prior),enabled:effective(prior,settings),
+   installedVersion:prior?.installedVersion??""} as Watch;
  });
 });
 ipcMain.handle("krysta:game-watch-set",async(_e,shop:GameShop,id:string,override:unknown)=>{
