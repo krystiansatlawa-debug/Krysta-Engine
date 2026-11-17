@@ -28,7 +28,7 @@ import { MyScreenshotsLightbox } from "./my-screenshots-lightbox";
 import { MyScreenshotsPartialNotice } from "./my-screenshots-partial-notice";
 import { useGameScreenshotsCollection } from "./use-game-screenshots-collection";
 import { useLocalScreenshotActions } from "./use-local-screenshot-actions";
-import { useMyGameScreenshots } from "./use-my-game-screenshots";
+import { useMyGameScreenshots, useMyLocalGameScreenshots } from "./use-my-game-screenshots";
 import { useMyScreenshotsViewer } from "./use-my-screenshots-viewer";
 
 import "./game-screenshots.scss";
@@ -339,13 +339,73 @@ function GameScreenshotsBox({
   );
 }
 
+// Local screenshots remain accessible even if the remote Hydra Screenshots
+// feature is unavailable (e.g. offline or feature flag not enabled).
+function LocalOnlyGameScreenshots({ libraryGame }: Readonly<{ libraryGame: ScreenshotsGame }>) {
+  const { t } = useTranslation("screenshots");
+  const local = useMyLocalGameScreenshots({
+    shop: libraryGame.shop,
+    objectId: libraryGame.objectId,
+    isEnabled: true,
+  });
+  const [selected, setSelected] = useState<string | null>(null);
+  const media: GalleryMediaItem[] = local.localScreenshots.map((item) => ({
+    id: item.clientId,
+    type: "image",
+    src: toLocalScreenshotUrl(item.path),
+    alt: item.gameTitle,
+  }));
+  const activeIndex = media.findIndex((item) => item.id === selected);
+
+  return (
+    <SidebarSection title={t("my_screenshots")}>
+      <div className="game-screenshots-box">
+        {!local.hasLoaded ? (
+          <output>{t("loading_screenshots")}</output>
+        ) : local.hasFailed ? (
+          <output>
+            {t("screenshots_load_failed")}
+            <Button theme="outline" onClick={local.retry}>{t("retry")}</Button>
+          </output>
+        ) : media.length > 0 ? (
+          <ul className="game-screenshots-box__grid">
+            {media.map((item) => (
+              <li key={item.id}>
+                <button type="button" className="game-screenshots-box__thumbnail" onClick={() => setSelected(item.id)}>
+                  <img className="game-screenshots-box__thumbnail-image" src={item.src} alt={item.alt} loading="lazy" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <output className="game-screenshots-box__empty">{t("no_game_screenshots_yet")}</output>
+        )}
+        <AchievementScreenshots shop={libraryGame.shop} objectId={libraryGame.objectId} />
+      </div>
+      {activeIndex >= 0 && (
+        <GalleryLightbox
+          visible
+          items={media}
+          index={activeIndex}
+          showFilmstrip={false}
+          trapFocus
+          onClose={() => setSelected(null)}
+          onNavigate={(index) => setSelected(media[index]?.id ?? null)}
+        />
+      )}
+    </SidebarSection>
+  );
+}
+
 export function GameScreenshots({
   libraryGame,
   catalogueGame,
 }: Readonly<GameScreenshotsProps>) {
   const { isFeatureEnabled, Feature } = useFeature();
 
-  if (!isFeatureEnabled(Feature.Screenshots)) return null;
+  if (!isFeatureEnabled(Feature.Screenshots)) {
+    return <LocalOnlyGameScreenshots libraryGame={libraryGame} />;
+  }
 
   return (
     <GameScreenshotsBox
