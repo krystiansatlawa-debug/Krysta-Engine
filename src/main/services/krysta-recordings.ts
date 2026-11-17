@@ -186,7 +186,7 @@ async function openCapture(prefs:Settings,expected:string|null,generation:number
  const a:Active={win,session:captureSession,game:match.game,key:match.target.gameKey,handle,pid,prefs,saving:false,stopped:false};
  current=a;
  const allowed=()=>current===a&&!a.stopped&&!win.isDestroyed()&&generation===epoch;
- captureSession.setPermissionRequestHandler((contents,permission,callback)=>callback(allowed()&&contents===win.webContents&&permission==="display-capture"));
+ captureSession.setPermissionRequestHandler((contents,permission,callback)=>callback(allowed()&&contents===win.webContents&&String(permission)==="display-capture"));
  captureSession.setPermissionCheckHandler((contents,permission)=>allowed()&&contents===win.webContents&&permission==="display-capture");
  captureSession.setDisplayMediaRequestHandler((request,callback)=>{
   if(!allowed()||request.frame!==win.webContents.mainFrame||!request.videoRequested){callback({});return;}
@@ -212,7 +212,7 @@ async function ensure(expected:string|null=null):Promise<Active|null>{
  const s=await settings();
  if(!s.enabled||quitting||process.platform!=="win32")return null;
  if(opening)return opening;
- if(current)return current.stopped?null:current;
+ if(current)return null;
  const generation=epoch;
  opening=openCapture(s,expected,generation).catch(error=>{if(generation===epoch){lastError=String(error).slice(0,500);retryAt=Date.now()+5000;}return null;}).finally(()=>{opening=null;});
  return opening;
