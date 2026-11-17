@@ -1,6 +1,6 @@
 import type { SteamAchievement, UserAchievement } from "@types";
-import type { RockstarUnlockedAchievement } from "./rockstar-achievement-parser";
-import { toHydraRockstarUnlocks } from "./rockstar-hydra-adapter";
+import type { RockstarUnlockedAchievement } from "./rockstar-achievement-parser.js";
+import { toHydraRockstarUnlocks } from "./rockstar-hydra-adapter.js";
 
 /**
  * Feed Rockstar unlocks to Hydra's EXISTING achievement list.
