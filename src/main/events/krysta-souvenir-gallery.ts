@@ -6,7 +6,7 @@ import {gamesSublevel} from "@main/level";
 import {LocalSouvenirAssetStore,PendingGroupedSouvenirStore} from "@main/services/achievements/grouped-souvenir-store";
 
 type Entry={id:string;gameKey:string;path:string;capturedAt:number;achievementNames:string[]};
-type GalleryRow={id:string;gameTitle:string;path:string;capturedAt:number;achievementNames:string[]};
+type GalleryRow={id:string;gameKey:string;gameTitle:string;path:string;capturedAt:number;achievementNames:string[]};
 /** Read-only gallery index. Only media owned by the currently authenticated user is exposed. */
 ipcMain.handle("krysta:souvenir-gallery",async():Promise<GalleryRow[]>=>{
  const context=HydraApi.getAuthContext();
@@ -39,7 +39,7 @@ ipcMain.handle("krysta:souvenir-gallery",async():Promise<GalleryRow[]>=>{
   }
   const gameTitle=await gameNames.get(entry.gameKey)!;
   rows.push({
-   id:entry.id,gameTitle:gameTitle||"Gra",path:entry.path,
+   id:entry.id,gameKey:entry.gameKey,gameTitle:gameTitle||"Gra",path:entry.path,
    capturedAt:entry.capturedAt>0?entry.capturedAt:info.mtimeMs,
    achievementNames:entry.achievementNames
   });

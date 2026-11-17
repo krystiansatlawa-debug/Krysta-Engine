@@ -525,3 +525,7 @@
     }
   }
 }
+
+.game-screenshots-box__achievements{display:flex;flex-direction:column;gap:10px;margin-top:12px;padding-top:14px;border-top:1px solid rgba(255,255,255,.15)}
+.game-screenshots-box__achievements h4{margin:0;font-size:14px;line-height:1.5}
+.game-screenshots-box__achievements .game-screenshots-box__grid{gap:8px}

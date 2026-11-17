@@ -1305,7 +1305,7 @@ declare global {
     getScreenshotsPath: () => Promise<string>;
     getScreenshotsFolderPath: () => Promise<string>;
     getLocalScreenshots: () => Promise<LocalScreenshot[]>;
-    getKrystaSouvenirGallery: () => Promise<{id:string;gameTitle:string;path:string;capturedAt:number;achievementNames:string[]}[]>;
+    getKrystaSouvenirGallery: () => Promise<{id:string;gameKey:string;gameTitle:string;path:string;capturedAt:number;achievementNames:string[]}[]>;
     getLocalScreenshotsForGame: (
       shop: GameShop,
       objectId: string
