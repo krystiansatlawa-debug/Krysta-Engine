@@ -269,7 +269,13 @@ ipcMain.handle("krysta:game-watch-open-client",async(_e,shop:unknown,id:unknown)
     if(answer.response!==1)return;
    }
    if(hasTrackedGamesRunning())throw Error("Zamknij uruchomione gry / Close running games");
-   return shell.openExternal("steam://open/downloads");
+   // Steam's downloads page only opens the queue. Request a validation of the
+   // installed app instead: Steam can then download missing/outdated game files.
+   // Check the installation identity before sending a modifying Steam command.
+   const installed=await findInstalledSteamApp(game.objectId,await getSteamLibraryFolders());
+   if(!installed||(game.executablePath&&!isPathInsideSteamInstallDirectory(game.executablePath,installed.installDirectory)))
+    throw Error("Nie znaleziono potwierdzonej instalacji Steam tej gry / No matching Steam installation");
+   return shell.openExternal("steam://validate/"+installed.appId);
   }
   return shell.openExternal("steam://nav/games/details/"+game.objectId);
  }
