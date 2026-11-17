@@ -1,0 +1,40 @@
+name: Krysta Patch Detection Tests
+
+on:
+  pull_request:
+    paths:
+      - "src/shared/game-update-*"
+      - "src/main/events/krysta-game-news.ts"
+      - "src/main/events/krysta-game-update-watch.ts"
+      - ".github/workflows/krysta-patch-detection.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: krysta-patch-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  patches:
+    name: Patch detection (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.21.0"
+          cache: yarn
+      - name: Install dependencies (no native packaging)
+        run: yarn --frozen-lockfile --ignore-scripts
+      - name: Check patch classification, version reading and scan scheduling
+        run: >
+          node --import ./scripts/register-ts-node.mjs --test
+          src/shared/game-update-patch-history.test.ts
+          src/shared/game-update-scan.test.ts
