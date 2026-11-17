@@ -30,6 +30,7 @@ import { UnlockedAchievementsCache } from "./unlocked-achievements-cache";
 import { CombinedAchievementsRequests } from "./combined-achievements-requests";
 import { achievementNotificationPresenter } from "../achievement-notification-presenter-electron";
 import { readRpcs3TrophyUnlocks } from "../emulators/rpcs3-trophy-sources";
+import { AchievementFileObservationTracker } from "./achievement-file-observation-tracker";
 
 const readEmulatorTrophyUnlocks = (game: Game) =>
   readRpcs3TrophyUnlocks(game).catch((error) => {
@@ -41,8 +42,7 @@ const readEmulatorTrophyUnlocks = (game: Game) =>
     return [];
   });
 
-const fileStats: Map<string, number> = new Map();
-const fltFiles: Map<string, Set<string>> = new Map();
+const observations = new AchievementFileObservationTracker();
 const processingGameKeys = new Set<string>();
 
 const mergeDetectedAchievements = async (
@@ -123,59 +123,33 @@ const watchAchievementsWithWine = async () => {
   }
 };
 
-const hasFltFolderChanged = (file: AchievementFile) => {
+const hasFltFolderChanged = (gameKey: string, file: AchievementFile) => {
   try {
-    const currentAchievements = new Set(readdirSync(file.filePath));
-    const previousAchievements = fltFiles.get(file.filePath);
-
-    fltFiles.set(file.filePath, currentAchievements);
-    if (
-      !previousAchievements ||
-      currentAchievements.difference(previousAchievements).size === 0
-    ) {
-      return false;
-    }
-
-    achievementsLogger.log("Detected change in FLT folder", file.filePath);
-    return true;
+    const changed = observations.folderChanged(gameKey, file.filePath, readdirSync(file.filePath));
+    if (changed) achievementsLogger.log("Detected change in FLT folder", gameKey, file.filePath);
+    return changed;
   } catch (err) {
     achievementsLogger.error(err);
-    fltFiles.set(file.filePath, new Set());
+    observations.forget(gameKey, file.filePath);
     return false;
   }
 };
 
-const hasAchievementFileChanged = (file: AchievementFile) => {
-  if (file.type === Cracker.flt) {
-    return hasFltFolderChanged(file);
-  }
+const hasAchievementFileChanged = (gameKey: string, file: AchievementFile) => {
+  if (file.type === Cracker.flt) return hasFltFolderChanged(gameKey, file);
 
   try {
-    const currentStat = fs.statSync(file.filePath);
-    const previousStat = fileStats.get(file.filePath);
-    fileStats.set(file.filePath, currentStat.mtimeMs);
-
-    if (previousStat === currentStat.mtimeMs) {
-      return false;
-    }
-
-    const isFirstChange = previousStat === undefined || previousStat === -1;
-
-    achievementsLogger.log(
-      isFirstChange ? "First change in file" : "Detected change in file",
-      file.filePath,
-      previousStat,
-      currentStat.mtimeMs
-    );
-
-    return true;
+    const stat = fs.statSync(file.filePath);
+    const changed = observations.fileChanged(gameKey, file.filePath, stat);
+    if (changed) achievementsLogger.log("Detected change in achievement file", gameKey, file.filePath, stat.mtimeMs, stat.size);
+    return changed;
   } catch (err) {
     achievementsLogger.error(
       "Error reading file",
       file.filePath,
       err instanceof Error ? err.message : err
     );
-    fileStats.set(file.filePath, -1);
+    observations.forget(gameKey, file.filePath);
     return false;
   }
 };
@@ -190,15 +164,20 @@ const processChangedAchievementFiles = async (
   processingGameKeys.add(gameKey);
 
   try {
-    const changedFiles = achievementFiles.filter(hasAchievementFileChanged);
+    const changedFiles = achievementFiles.filter(file => hasAchievementFileChanged(gameKey, file));
 
     if (!changedFiles.length) return 0;
 
-    const unlockedAchievements = changedFiles.flatMap((file) =>
-      parseAchievementFile(file.filePath, file.type)
-    );
-
-    return await mergeDetectedAchievements(game, unlockedAchievements);
+    try {
+      const unlockedAchievements = changedFiles.flatMap((file) =>
+        parseAchievementFile(file.filePath, file.type)
+      );
+      return await mergeDetectedAchievements(game, unlockedAchievements);
+    } catch (error) {
+      // A transient API/write error must not permanently mark these files as synced.
+      for (const file of changedFiles) observations.forget(gameKey, file.filePath);
+      throw error;
+    }
   } finally {
     processingGameKeys.delete(gameKey);
   }
@@ -260,8 +239,7 @@ export class AchievementWatcherManager {
     this.alreadySyncedGames.delete(gameKey);
 
     for (const filePath of filePaths) {
-      fileStats.delete(filePath);
-      fltFiles.delete(filePath);
+      observations.forget(gameKey, filePath);
     }
   }
 
@@ -486,10 +464,13 @@ export class AchievementWatcherManager {
       );
 
       try {
-        const currentStat = fs.statSync(achievementFile.filePath);
-        fileStats.set(achievementFile.filePath, currentStat.mtimeMs);
+        if (achievementFile.type === Cracker.flt) {
+          observations.seedFolder(levelKeys.game(game.shop, game.objectId), achievementFile.filePath, readdirSync(achievementFile.filePath));
+        } else {
+          observations.seedFile(levelKeys.game(game.shop, game.objectId), achievementFile.filePath, fs.statSync(achievementFile.filePath));
+        }
       } catch {
-        fileStats.set(achievementFile.filePath, -1);
+        observations.forget(levelKeys.game(game.shop, game.objectId), achievementFile.filePath);
       }
 
       if (parsedAchievements.length) {
