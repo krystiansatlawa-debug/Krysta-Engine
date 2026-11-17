@@ -43,6 +43,15 @@ async function read():Promise<Store>{try{return JSON.parse(await fs.readFile(fil
 async function write(s:Store){await fs.writeFile(filename()+".tmp",JSON.stringify(s),{mode:0o600});await fs.rename(filename()+".tmp",filename());}
 function keyFor(shop:unknown,id:unknown){if((shop!=="steam"&&shop!=="epic"&&shop!=="custom"&&shop!=="launchbox")||typeof id!=="string"||!id||id.length>200)throw Error("Invalid game");return levelKeys.game(shop,id);}
 const exec=promisify(execFile);
+// Games in the same scan share Steam libraries: avoid resolving them again
+// for every appmanifest read. Official modifying actions still use fresh data.
+let steamLibraries: {until:number;task:Promise<string[]>}|null=null;
+function cachedSteamLibraries():Promise<string[]>{
+ if(steamLibraries&&steamLibraries.until>Date.now())return steamLibraries.task;
+ const task=getSteamLibraryFolders().catch(error=>{steamLibraries=null;throw error;});
+ steamLibraries={until:Date.now()+30_000,task};
+ return task;
+}
 async function detectExeVersion(exe:string|null|undefined):Promise<{installedVersion:string;versionSource?:"product"|"file"}>{
  const unknown={installedVersion:""};
  if(process.platform!=="win32"||!exe||!path.isAbsolute(exe)||path.extname(exe).toLowerCase()!==".exe")return unknown;
@@ -175,7 +184,7 @@ async function smartState(game:Game):Promise<Pick<Watch,"steamBuildId"|"updateSt
  }
  if(game.shop!=="steam")return unknown;
  try{
- const found=await readSteamUpdateState(game.objectId,await getSteamLibraryFolders(),game.executablePath);
+ const found=await readSteamUpdateState(game.objectId,await cachedSteamLibraries(),game.executablePath);
  return found?{updateProvider:"steam",steamBuildId:found.buildId??undefined,updateState:found.updateRequired?"required":"not-reported",updateCheckedAt:unknown.updateCheckedAt}:unknown;
  }catch{return unknown;}
 }
@@ -337,7 +346,7 @@ ipcMain.handle("krysta:game-watch-badges",()=>serial(async()=>{
   let required=w.updateState==="required";
   if(required&&game.shop==="steam"){
    try{
-    steamFolders??=await getSteamLibraryFolders();
+    steamFolders??=await cachedSteamLibraries();
     const live=await readSteamUpdateState(game.objectId,steamFolders,game.executablePath);
     if(live){required=live.updateRequired;downloadPercent=live.downloadPercent;}
    }catch{/* retain last checked status when local state cannot be read */}
@@ -435,6 +444,10 @@ async function scan(manual=false){
    if(manual?mode(all[key])!=="off":effective(all[key],initialSettings))targets.push(key);
   }
   scanTotal=targets.length;
+  // Put games without a previous scan first, so new additions get status early.
+  targets.sort((a,b)=>Number(Boolean(all[a]?.lastChecked))-Number(Boolean(all[b]?.lastChecked)));
+  let settingsCheckedAt=0;
+  let scanPreferences=initialSettings;
   const complete=await runBoundedGameUpdateScan(
    targets,
    async key=>{
@@ -449,10 +462,15 @@ async function scan(manual=false){
     }finally{scanChecked++;}
    },
    async()=>{
-    const settings=await serial(readSettings);
-    return !(settings.pauseDuringPlay&&hasTrackedGamesRunning());
+    // Check setting changes at most once per second instead of opening the
+    // settings file for every game and every worker iteration.
+    if(Date.now()-settingsCheckedAt>1000){
+     settingsCheckedAt=Date.now();
+     scanPreferences=await serial(readSettings);
+    }
+    return !(scanPreferences.pauseDuringPlay&&hasTrackedGamesRunning());
    },
-   3
+   4
   );
   if(!complete){scanInterrupted=true;lastScan=0;return;}
   lastFinished=new Date().toISOString();
