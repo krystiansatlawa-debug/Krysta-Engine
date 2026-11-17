@@ -334,28 +334,46 @@ ipcMain.handle("krysta:game-integrity",async(_e,shop:unknown,id:unknown,action:u
   return {mode:"local",sha256:hash.digest("hex"),size:after.size};
  }finally{integrityLocks.delete(key);}
 });
-ipcMain.handle("krysta:game-watch-badges",()=>serial(async()=>{
- const all=await read(),settings=await readSettings();
- const badges:{shop:GameShop;id:string;gameTitle:string;title:string;kind:"required"|"patch";downloadPercent:number|null}[]=[];
- let steamFolders:Awaited<ReturnType<typeof getSteamLibraryFolders>>|undefined;
- for(const w of Object.values(all)){
-  if(!effective(w,settings)||(!w.pendingPatch&&w.updateState!=="required"))continue;
-  const game=await gamesSublevel.get(keyFor(w.shop,w.id));
-  if(!game||game.isDeleted)continue;
-  let downloadPercent:number|null=null;
-  let required=w.updateState==="required";
-  if(required&&game.shop==="steam"){
-   try{
-    steamFolders??=await cachedSteamLibraries();
-    const live=await readSteamUpdateState(game.objectId,steamFolders,game.executablePath);
-    if(live){required=live.updateRequired;downloadPercent=live.downloadPercent;}
-   }catch{/* retain last checked status when local state cannot be read */}
-  }
-  if(!required&&!w.pendingPatch)continue;
-  badges.push({shop:w.shop,id:w.id,gameTitle:game.title,title:required?(w.updateProvider==="gog"?"GOG: update required":game.shop==="epic"?"Epic Games: update required":"Steam: update required"):w.pendingPatch!,kind:required?"required":"patch",downloadPercent});
- }
- return badges;
-}));
+type PendingBadge={shop:GameShop;id:string;gameTitle:string;title:string;kind:"required"|"patch";downloadPercent:number|null};
+let badgeRead:Promise<PendingBadge[]>|null=null;
+async function getPendingBadges():Promise<PendingBadge[]>{
+ // A frequent badge refresh must not hold the serialized settings/patch-store
+ // write queue while reading dozens of Steam manifests.
+ const {all,settings}=await serial(async()=>({
+  all:await read(),settings:await readSettings()
+ }));
+ const relevant=Object.values(all).filter(w=>
+  effective(w,settings)&&(Boolean(w.pendingPatch)||w.updateState==="required")
+ );
+ const result:(PendingBadge|null)[]=Array(relevant.length).fill(null);
+ const libraries=cachedSteamLibraries();
+ // Ignore a missing Steam client for non-Steam games and retain the last
+ // confirmed status when manifest reads are temporarily unavailable.
+ await runBoundedGameUpdateScan(relevant,async w=>{
+  const index=relevant.indexOf(w);
+  try{
+   const game=await gamesSublevel.get(keyFor(w.shop,w.id));
+   if(!game||game.isDeleted)return;
+   let downloadPercent:number|null=null;
+   let required=w.updateState==="required";
+   if(required&&game.shop==="steam"){
+    try{
+     const live=await readSteamUpdateState(game.objectId,await libraries,game.executablePath);
+     if(live){required=live.updateRequired;downloadPercent=live.downloadPercent;}
+    }catch{/* retain last known status */}
+   }
+   if(!required&&!w.pendingPatch)return;
+   result[index]={shop:w.shop,id:w.id,gameTitle:game.title,
+    title:required?(w.updateProvider==="gog"?"GOG: update required":game.shop==="epic"?"Epic Games: update required":"Steam: update required"):w.pendingPatch!,
+    kind:required?"required":"patch",downloadPercent};
+  }catch{/* a missing library item must not block other badge updates */}
+ },async()=>true,4);
+ return result.filter((badge):badge is PendingBadge=>badge!==null);
+}
+ipcMain.handle("krysta:game-watch-badges",()=>{
+ badgeRead??=getPendingBadges().finally(()=>{badgeRead=null;});
+ return badgeRead;
+});
 ipcMain.handle("krysta:game-watch-history",()=>serial(async()=>{
  const all=await read();
  const rows:(BuildChange&{source:"steam"|"epic"|"gog"|"local";shop:GameShop;id:string;title:string})[]=[];
