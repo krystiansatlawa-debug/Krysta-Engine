@@ -53,6 +53,7 @@ export const isPathInsideSteamInstallDirectory=()=>s.sameInstall;
 export const hasTrackedGamesRunning=()=>s.running;
 export const mergePublishedPatches=()=>[];
 export const announcedGamePatchVersion=()=>null;
+export const isRecentGamePatchAnnouncement=()=>true;
 `;
   const outfile = path.join(tmp, "fixture.mjs");
   await build({
