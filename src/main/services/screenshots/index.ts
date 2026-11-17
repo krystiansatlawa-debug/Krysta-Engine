@@ -66,9 +66,22 @@ const GAME_HELPERS_WARMUP_TIMEOUT_MS = 5_000;
 
 let initialized = false;
 let legacyImportPromise: Promise<number> | null = null;
+let lastLegacyImportAt = 0;
+const LEGACY_IMPORT_INTERVAL_MS = 60_000;
 
-const awaitLegacyImport = async () => {
-  if (legacyImportPromise) await legacyImportPromise;
+const refreshLegacyScreenshots = async () => {
+  if (legacyImportPromise) return legacyImportPromise;
+  if (Date.now() - lastLegacyImportAt < LEGACY_IMPORT_INTERVAL_MS) return 0;
+  legacyImportPromise = importLegacyScreenshots()
+    .catch((error: unknown) => {
+      logger.error("Failed to import existing screenshots into Krysta gallery", error);
+      return 0;
+    })
+    .finally(() => {
+      lastLegacyImportAt = Date.now();
+      legacyImportPromise = null;
+    });
+  return legacyImportPromise;
 };
 
 const broadcastLocalScreenshots = (screenshots: LocalScreenshot[]) => {
@@ -109,10 +122,7 @@ export const initializeScreenshots = () => {
     logger.error("Failed to back-fill local screenshot game ids", error);
   });
 
-  legacyImportPromise = importLegacyScreenshots().catch((error: unknown) => {
-    logger.error("Failed to import existing screenshots into Krysta gallery", error);
-    return 0;
-  });
+  void refreshLegacyScreenshots();
 
   screenshotUploadWorker.start();
 };
@@ -197,7 +207,7 @@ export const applyScreenshotsEnabledPreference = async (
 };
 
 export const getLocalScreenshots = async () => {
-  await awaitLegacyImport();
+  await refreshLegacyScreenshots();
   return pruneMissingLocalScreenshots(
     filterLocalScreenshotsForSignedInOwner(await LocalScreenshotStore.list())
   );
