@@ -50,8 +50,8 @@ export class RockstarAchievementSync {
     updatedAt: string;
   }>();
 
-  getCached(gameId: string) {
-    const snapshot = this.snapshots.get(gameId);
+  getCached(gameId: string, rockstarId: string) {
+    const snapshot = this.snapshots.get(`${rockstarId}:${gameId}`);
     return snapshot ? { ...snapshot, items: [...snapshot.items] } : null;
   }
 
@@ -62,7 +62,7 @@ export class RockstarAchievementSync {
   ) {
     const items = await fetchRockstarAchievements(gameId, rockstarId, authorizedFetch);
     const snapshot = { items, updatedAt: new Date().toISOString() };
-    this.snapshots.set(gameId, snapshot);
+    this.snapshots.set(`${rockstarId}:${gameId}`, snapshot);
     return { ...snapshot, items: [...items] };
   }
 
