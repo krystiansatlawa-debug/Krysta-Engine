@@ -40,9 +40,19 @@ test("failed refresh retains last successful Rockstar snapshot", async () => {
   await assert.rejects(sync.sync("rdr2", "123", async () => {
     throw new Error("Network unavailable");
   }));
-  assert.deepEqual(sync.getCached("rdr2"), first);
+  assert.deepEqual(sync.getCached("rdr2", "123"), first);
   await assert.rejects(sync.sync("rdr2", "123", async () => ({})));
-  assert.deepEqual(sync.getCached("rdr2"), first);
+  assert.deepEqual(sync.getCached("rdr2", "123"), first);
   sync.clear();
-  assert.equal(sync.getCached("rdr2"), null);
+  assert.equal(sync.getCached("rdr2", "123"), null);
+});
+
+
+test("switching Rockstar accounts never exposes previous account unlocks", async () => {
+  const sync = new RockstarAchievementSync();
+  await sync.sync("rdr2", "123", async () => ({ awardedAchievements: { one: { achieved: true } } }));
+  assert.equal(sync.getCached("rdr2", "456"), null);
+  await sync.sync("rdr2", "456", async () => ({ awardedAchievements: { two: { achieved: true } } }));
+  assert.equal(sync.getCached("rdr2", "123")?.items[0].id, "one");
+  assert.equal(sync.getCached("rdr2", "456")?.items[0].id, "two");
 });
