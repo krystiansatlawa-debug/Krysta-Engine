@@ -12,13 +12,20 @@ export function needsAutomaticGameUpdateRefresh(
   ttlMs = 5 * 60_000
 ): boolean {
   if (!watch) return true;
+  const providerTime = watch.updateCheckedAt
+    ? Date.parse(watch.updateCheckedAt) : NaN;
+  // Official provider status matters more than a recent unrelated news post.
+  // Do not keep stale "update required" or "up to date" flags merely because
+  // the Steam news feed was fetched more recently.
+  if (watch.updateState && watch.updateState !== "unknown" &&
+      Number.isFinite(providerTime))
+    return providerTime > now || now - providerTime >= ttlMs;
+
   const dates = [watch.lastChecked, watch.updateCheckedAt]
-    .filter((s): s is string => typeof s === "string" && !!s)
-    .map((s) => Date.parse(s))
+    .filter((date): date is string => typeof date === "string" && !!date)
+    .map((date) => Date.parse(date))
     .filter(Number.isFinite);
   if (dates.length === 0) return true;
-  // News can fail independently from the platform. A recent provider status
-  // is enough to avoid duplicating a remote check immediately on navigation.
   const newest = Math.max(...dates);
   return newest > now || now - newest >= ttlMs;
 }
