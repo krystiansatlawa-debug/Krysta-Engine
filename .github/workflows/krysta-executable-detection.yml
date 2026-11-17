@@ -1,0 +1,40 @@
+name: Krysta EXE Detection
+
+on:
+  pull_request:
+    paths:
+      - "src/main/events/krysta-executable-discovery.ts"
+      - "src/main/helpers/krysta-executable-*"
+      - ".github/workflows/krysta-executable-detection.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: krysta-exe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: EXE detection (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.21.0"
+          cache: yarn
+      - name: Install dependencies
+        run: yarn --frozen-lockfile --ignore-scripts
+      - name: Test EXE selection and automatic game-folder detection
+        run: >
+          node --import ./scripts/register-ts-node.mjs --test
+          src/main/helpers/krysta-executable-ranking.test.ts
+          src/main/helpers/krysta-executable-autolink.test.ts
+          src/main/helpers/krysta-executable-search-roots.test.ts
