@@ -1,4 +1,4 @@
-import {isRedistributablePath, type KnownGameExecutable} from "./game-executable-ranking";
+import {isRedistributablePath, type KnownGameExecutable} from "./game-executable-ranking.js";
 
 /** Never silently select a setup program, shared runtime or ambiguous EXE. */
 const BLOCKED=/^(?:setup|install|unins|uninstall|unwise|update|updater|patcher|crash|crashreport|crashhandler|reporter|benchmark|config|configuration|anticheat|easyanticheat|eac|vcredist|dxsetup|unitycrashhandler|epicwebhelper|start_protected_game)(?:[._\d-]|\.exe)/i;
