@@ -100,7 +100,7 @@ export async function importLegacyScreenshots(): Promise<number> {
      height: dimensions.height,
      state: "local",
      isSpoiler: false,
-     visibility: "private",
+     visibility: "PRIVATE",
      screenshotId: null,
      moderationStatus: null,
      moderationReason: null,
