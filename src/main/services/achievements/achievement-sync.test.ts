@@ -54,6 +54,9 @@ async function fixture(
     recordReadStarted: null as (() => void) | null,
     requests,
     updates: [] as Array<{ channel: string; achievements: unknown }>,
+    recordings: [] as Array<{ game: Game; names: string[] }>,
+    recordingWarnings: [] as unknown[][],
+    failRecording: false,
     catalogueGate: null as Promise<unknown> | null,
     resetGate: null as Promise<void> | null,
     remoteGate: null as Promise<unknown> | null,
@@ -99,7 +102,7 @@ async function fixture(
     export const presentCombinedAchievements = () => [];
     export const createCombinedDefinitionLookup = () => () => undefined;
     export const publishNewAchievementNotification = () => {};
-    export const recordAchievementClip = async () => {};
+    export const recordAchievementClip = async (game, names) => { state.recordings.push({game, names}); if (state.failRecording) throw new Error("Recording unavailable"); };
     export const registerEvent = (name, handler) => state.events.set(name, handler);
     export const gamesSublevel = {get: async () => state.game};
     export const collectGameAchievementFiles = async () => [];
@@ -113,7 +116,7 @@ async function fixture(
     export const AchievementSouvenirStore = {invalidate: () => {}, set: () => {}};
     export const fetchRemoteUserGameAchievements = async () => state.remoteGate ? await state.remoteGate : {souvenirs:new Map(),unlocked:[],achievements:[]};
     export const logger = {error: () => {}};
-    export const achievementsLogger = {error: () => {}, warn: () => {}, log: () => {}};
+    export const achievementsLogger = {error: () => {}, warn: (...args) => state.recordingWarnings.push(args), log: () => {}};
     export const getGameAchievementData = async () => [];
     export const AchievementWatcherManager = {hasFinishedPreSearch: true, alreadySyncedGames: new Map(), forgetAchievementFiles: () => {}};
     export const achievementNotificationPresenter = {enqueueAchievements: () => {}};
@@ -198,6 +201,46 @@ async function fixture(
     root,
   };
 }
+
+test("a failed optional achievement recording does not abort unlock sync", async (t) => {
+  const f = await fixture(t);
+  f.state.failRecording = true;
+  f.AchievementMemoryStore.set("steam", "620", {
+    achievements: [
+      {
+        name: "A",
+        displayName: "First achievement",
+        description: "Fixture",
+        icon: "",
+        icongray: "",
+        hidden: false,
+      },
+    ],
+    unlockedAchievements: [],
+  });
+
+  const count = await f.mergeAchievements(
+    f.game,
+    [{ name: "A", unlockTime: 1 }],
+    true
+  );
+  assert.equal(count, 1);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(f.state.recordings.length, 1);
+  assert.equal(f.state.recordings[0]!.game.objectId, "620");
+  assert.deepEqual(f.state.recordings[0]!.names, ["First achievement"]);
+  assert.equal(f.state.recordingWarnings.length, 1);
+  assert.equal(
+    f.AchievementMemoryStore.get("steam", "620").unlockedAchievements.length,
+    1
+  );
+
+  await f.untilRequest(1);
+  f.requests[0]!.gate.resolve(undefined);
+  await f.achievementSyncWorker.trigger();
+  assert.equal(f.records.size, 0);
+});
 
 test("sixteen local merges preserve every unlock and coalesce into at most two PUTs", async (t) => {
   const f = await fixture(t);
