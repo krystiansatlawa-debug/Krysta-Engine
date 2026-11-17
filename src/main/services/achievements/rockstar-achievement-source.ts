@@ -38,3 +38,35 @@ export async function fetchRockstarAchievements(
   url.searchParams.set("rockstarId", rockstarId);
   return parseRockstarUnlockedAchievements(await authorizedFetch(url.toString()));
 }
+
+/**
+ * In-memory last-known-good snapshots. An API outage must never turn previously
+ * unlocked achievements into an empty result. The caller can persist a verified
+ * snapshot separately after successful retrieval.
+ */
+export class RockstarAchievementSync {
+  private readonly snapshots = new Map<string, {
+    items: RockstarUnlockedAchievement[];
+    updatedAt: string;
+  }>();
+
+  getCached(gameId: string) {
+    const snapshot = this.snapshots.get(gameId);
+    return snapshot ? { ...snapshot, items: [...snapshot.items] } : null;
+  }
+
+  async sync(
+    gameId: string,
+    rockstarId: string,
+    authorizedFetch: (url: string) => Promise<unknown>
+  ) {
+    const items = await fetchRockstarAchievements(gameId, rockstarId, authorizedFetch);
+    const snapshot = { items, updatedAt: new Date().toISOString() };
+    this.snapshots.set(gameId, snapshot);
+    return { ...snapshot, items: [...items] };
+  }
+
+  clear() {
+    this.snapshots.clear();
+  }
+}
