@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { toHydraRockstarUnlocks } from "./rockstar-hydra-adapter";
+import { toHydraRockstarUnlocks } from "./rockstar-hydra-adapter.js";
 
 test("Rockstar unlocks use Hydra's internal timestamp format", () => {
   assert.deepEqual(toHydraRockstarUnlocks([
