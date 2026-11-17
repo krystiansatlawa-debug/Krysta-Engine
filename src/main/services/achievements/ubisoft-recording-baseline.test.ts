@@ -19,3 +19,15 @@ test("new account, game, or long interruption does not produce a clip",()=>{
  assert.deepEqual(advance(baseline,"account:game",[unlocked],61000).newTitles,[]);
  assert.deepEqual(advance(null,"account:game",[unlocked],11000).newTitles,[]);
 });
+
+test("duplicate Ubisoft achievement records produce only one notification",()=>{
+ const initial=advance(null,"account:game",[{id:"A",title:"First",unlocked:false}],1000);
+ const next=advance(initial.baseline,"account:game",[
+  {id:"A",title:"First",unlocked:true},
+  {id:"A",title:"First duplicate",unlocked:true},
+  {id:"",title:"Invalid",unlocked:true}
+ ],2000);
+ assert.deepEqual(next.newTitles,["First"]);
+ assert.deepEqual([...next.baseline.unlocked],["A"]);
+ assert.deepEqual(advance(next.baseline,"account:game",[{id:"A",title:"First",unlocked:true}],3000).newTitles,[]);
+});
