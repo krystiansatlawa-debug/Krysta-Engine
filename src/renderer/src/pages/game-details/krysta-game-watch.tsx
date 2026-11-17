@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "./krysta-game-updates.scss";
-import { providerStatusIsStale } from "@shared/game-update-patch-history";
+import { providerStatusIsStale } from "../../../../shared/game-update-patch-history";
 type Watch=Awaited<ReturnType<typeof window.electron.krystaGameWatchGet>>;
 export function KrystaGameWatch({shop,id,executablePath}:{shop:string;id:string;executablePath?:string|null}){
  const {i18n}=useTranslation();const pl=i18n.language.startsWith("pl");

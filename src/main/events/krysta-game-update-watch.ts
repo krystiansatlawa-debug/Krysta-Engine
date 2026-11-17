@@ -16,7 +16,7 @@ import { getSteamLibraryFolders } from "@main/services/steam";
 import { readSteamUpdateState, findInstalledSteamApp, isPathInsideSteamInstallDirectory } from "@main/services/steam-integration/steam-installation-core";
 import { hasTrackedGamesRunning } from "@main/services/game-running-state";
 import type { GameShop, Game } from "@types";
-import { mergePublishedPatches, type PatchAnnouncement } from "@main/services/game-update-patch-history";
+import { mergePublishedPatches, type PatchAnnouncement } from "../../shared/game-update-patch-history";
 
 type BuildChange={from:string;to:string;detectedAt:string};
 type Watch={gameTitle?:string;installedBuild?:string;installedBuildSource?:"epic"|"gog";platformBuildHistory?:(BuildChange&{source:"epic"|"gog"})[];lastPlatformBuild?:string;lastPlatformSource?:"epic"|"gog";localVersionHistory?:BuildChange[];lastLocalVersion?:string;lastLocalSource?:string;updateProvider?:"steam"|"epic"|"gog";buildHistory?:BuildChange[];lastKnownBuildId?:string;shop:GameShop;id:string;enabled:boolean;override?:"on"|"off"|"inherit";installedVersion:string;versionSource?:"product"|"file"|"epic-manifest"|"version-file"|"gog-manifest";seen?:string[];lastChecked?:string;latestTitle?:string;latestPublishedAt?:string;patchHistory?:PatchAnnouncement[];latestVersion?:string;error?:string;steamId?:string;pendingPatch?:string;steamBuildId?:string;updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string};
