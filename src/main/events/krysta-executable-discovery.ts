@@ -82,7 +82,17 @@ export async function discoverKrystaGameExecutable(shop:unknown,id:unknown,folde
  if(!game||game.isDeleted)throw Error("Game not found");
  if(folder!==undefined&&(typeof folder!=="string"||!path.isAbsolute(folder)))throw Error("Invalid folder");
  // The official executable catalogue helps identify games whose EXE differs from their display title.
- await GameExecutables.ensureLoaded().catch(()=>false);
+ // A slow/offline catalogue endpoint must not block discovery of local files.
+ let catalogueTimeout:ReturnType<typeof setTimeout>|undefined;
+ try{
+  await Promise.race([
+   GameExecutables.ensureLoaded().catch(()=>false),
+   new Promise<boolean>(resolve=>{
+    catalogueTimeout=setTimeout(()=>resolve(false),1500);
+    catalogueTimeout.unref?.();
+   })
+  ]);
+ }finally{if(catalogueTimeout)clearTimeout(catalogueTimeout);}
  const download=await downloadsSublevel.get(levelKeys.game(game.shop,game.objectId)).catch(()=>null);
  const roots=folder?[folder]:await detectedRoots(game,download??null);
  const knownSteamId=krystaExecutableSteamId(game);
