@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { Gamepad2, Download, Settings, RefreshCw, Film } from "lucide-react";
+import { RefreshCw, Film } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   DashIcon,
@@ -91,7 +91,6 @@ export function AppTitleBar({
 
       <NavigationArrows className="title-bar__navigation" />
       <nav className="krysta-top-nav">
-        {[{to:"/library",icon:Gamepad2,pl:"Biblioteka",en:"Library"},{to:"/downloads",icon:Download,pl:"Pobieranie",en:"Downloads"},{to:"/settings",icon:Settings,pl:"Ustawienia",en:"Settings"}].map(({to,icon:Icon,pl:polish,en}) => <NavLink key={to} to={to} className={({isActive})=>isActive&&!(to==="/library"&&updatesSelected)?"active":""} onClick={()=>{if(to==="/library"&&localStorage.getItem("library-collection")==="__krysta_updates__")localStorage.removeItem("library-collection");}} title={pl?polish:en} aria-current={to==="/library"&&updatesSelected?false:undefined} aria-label={pl?polish:en}><Icon size={17}/><span>{pl?polish:en}</span></NavLink>)}
         <NavLink to="/recordings" className={({isActive})=>isActive?"active":""} title={pl?"Nagrania":"Recordings"}><Film size={17}/><span>{pl?"Nagrania":"Recordings"}</span></NavLink>
         <Link to="/library?collection=__krysta_updates__" className={updatesSelected?"active":""} aria-current={updatesSelected?"page":undefined} title={updatesLabel} aria-label={updatesLabel+" ("+patchCount+")"}><RefreshCw size={17}/><span>{updatesLabel} ({patchCount})</span></Link>
       </nav>
