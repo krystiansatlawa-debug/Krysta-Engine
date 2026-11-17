@@ -6,8 +6,7 @@ import { gamesSublevel } from "@main/level";
 import type { Game, LocalScreenshot } from "@types";
 import { LocalScreenshotStore } from "./local-screenshot-store";
 import { getScreenshotFolderCandidates } from "./screenshots-folder";
-import { getScreenshotsRoot } from "./screenshots-root-marker";
-import { readRootMarkerId } from "./screenshots-root-marker";
+import { getScreenshotsRoot, ensureRootMarkerId } from "./screenshots-root-marker";
 import { getSignedInScreenshotOwnerId } from "./local-screenshot-owner";
 import { toScreenshotFolderName } from "./screenshot-file-path";
 
@@ -40,7 +39,7 @@ export async function importLegacyScreenshots(): Promise<number> {
    const game = matchGame(folder.name, games);
    if (!game) continue;
    const directory = path.join(root, folder.name);
-   const files = await fs.readdir(directory, { withFileTypes: true });
+   const files = await fs.readdir(directory, { withFileTypes: true }).catch(() => []);
    for (const file of files) {
     if (++inspected > MAX_FILES) return imported;
     if (!file.isFile() || file.isSymbolicLink() || !IMAGE_EXTENSION.test(file.name)) continue;
@@ -57,7 +56,7 @@ export async function importLegacyScreenshots(): Promise<number> {
      shop: game.shop,
      objectId: game.objectId,
      gameTitle: game.title,
-     customGameTitle: null,
+     customGameTitle: game.shop === "custom" ? game.title.slice(0, 120) : null,
      path: filePath,
      capturedAt: stat.mtimeMs,
      width: dimensions.width,
@@ -71,7 +70,7 @@ export async function importLegacyScreenshots(): Promise<number> {
      uploadProgress: null,
      lastError: null,
      gameSessionId: null,
-     rootMarkerId: await readRootMarkerId(getScreenshotsRoot(filePath)),
+     rootMarkerId: await ensureRootMarkerId(getScreenshotsRoot(filePath)),
      previewPath: null,
     };
     await LocalScreenshotStore.put(screenshot);
