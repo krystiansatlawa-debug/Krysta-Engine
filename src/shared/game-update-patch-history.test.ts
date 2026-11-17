@@ -39,6 +39,7 @@ test("identifies patch announcements without confusing generic community updates
   "Hotfix 1.06",
   "Content Update - Season 3",
   "Lista zmian: aktualizacja 1.7",
+  "v1.8.7 Hotfix",
   "Naprawy — poprawki błędów",
  ])assert.equal(isLikelyGamePatchAnnouncement(title),true,title);
  for(const title of ["Development update", "Community update", "Upcoming events", "Weekly roundup", "Update on our team"])assert.equal(isLikelyGamePatchAnnouncement(title),false,title);
@@ -52,4 +53,5 @@ test("extracts announced versions but never treats dates or news as installed up
  assert.equal(announcedGamePatchVersion("Community update 1.2.3"),null);
  assert.equal(announcedGamePatchVersion("Update 2026.11.17"),null);
  assert.equal(announcedGamePatchVersion("New Update: improvements"),null);
+ assert.equal(announcedGamePatchVersion("v1.8.7 Hotfix"),"1.8.7");
 });
