@@ -4,7 +4,7 @@ import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import { Provider } from "react-redux";
 import LanguageDetector from "i18next-browser-languagedetector";
-import { HashRouter, Route, Routes } from "react-router-dom";
+import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import "@fontsource/noto-sans/400.css";
 import "@fontsource/noto-sans/500.css";
@@ -31,8 +31,7 @@ import { levelDBService } from "./services/leveldb.service";
 import Catalogue from "./pages/catalogue/catalogue";
 import Home from "./pages/home/home";
 import Downloads from "./pages/downloads/downloads";
-import KrystaRecordings from "./pages/recordings/krysta-recordings";
-import KrystaScreenshots from "./pages/screenshots/krysta-screenshots";
+import KrystaMedia from "./pages/media/krysta-media";
 import GameDetails from "./pages/game-details/game-details";
 import RecompilationPage from "./pages/recompilation/recompilation-page";
 import Settings from "./pages/settings/settings";
@@ -145,8 +144,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                   <Route path="/catalogue" element={<Catalogue />} />
                   <Route path="/library" element={<Library />} />
                   <Route path="/downloads" element={<Downloads />} />
-                  <Route path="/recordings" element={<KrystaRecordings />} />
-                  <Route path="/screenshots" element={<KrystaScreenshots />} />
+                  <Route path="/media" element={<KrystaMedia />} />
+                  <Route path="/recordings" element={<Navigate to="/media?tab=recordings" replace />} />
+                  <Route path="/screenshots" element={<Navigate to="/media?tab=screenshots" replace />} />
                   <Route
                     path="/game/:shop/:objectId"
                     element={<GameDetails />}
