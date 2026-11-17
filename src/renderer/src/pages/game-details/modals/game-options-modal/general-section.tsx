@@ -609,13 +609,13 @@ function AutoExecutableDiscovery({game}:Readonly<AutoExecutableDiscoveryProps>){
   finally{binding.current=false;}
  };
  const discover=async(folder?:string,automatic=false)=>{
-  if(busy||binding.current||game.executablePath)return;
+  if((busy&&!automatic)||binding.current||game.executablePath)return;
   const counter=++scanCounter.current;
   setBusy(true);setMessage("");setSuggestions([]);
   try{
    const result=await window.electron.krystaDiscoverGameExecutable(game.shop,game.objectId,folder);
    if(!active.current||counter!==scanCounter.current)return;
-   if(result.automaticPath&&automatic){
+   if(result.automaticPath&&automatic&&!game.hasActiveSteamImport&&!game.hasActiveEpicImport){
     await setExecutable(result.automaticPath);
     return;
    }
@@ -629,7 +629,7 @@ function AutoExecutableDiscovery({game}:Readonly<AutoExecutableDiscoveryProps>){
  const chooseFolder=async()=>{
   if(busy)return;
   const result=await window.electron.showOpenDialog({properties:["openDirectory"]});
-  if(!result.canceled&&result.filePaths[0])void discover(result.filePaths[0],false);
+  if(!result.canceled&&result.filePaths[0])void discover(result.filePaths[0],true);
  };
  useEffect(()=>{
   active.current=true;scanCounter.current++;
@@ -641,7 +641,7 @@ function AutoExecutableDiscovery({game}:Readonly<AutoExecutableDiscoveryProps>){
  if(window.electron.platform!=="win32")return null;
  return <div className="game-options-modal__executable-discovery" style={{display:"flex",flexDirection:"column",gap:9,margin:"12px 0"}}>
    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-    <Button type="button" theme="outline" disabled={busy||Boolean(game.executablePath)} onClick={()=>void discover(undefined,false)}>
+    <Button type="button" theme="outline" disabled={busy||Boolean(game.executablePath)} onClick={()=>void discover(undefined,true)}>
      <RefreshCw size={16}/>{busy?(pl?"Szukam EXE…":"Searching…"):(pl?"Wykryj EXE automatycznie":"Auto-detect EXE")}
     </Button>
     <Button type="button" theme="outline" disabled={busy||Boolean(game.executablePath)} onClick={()=>void chooseFolder()}>

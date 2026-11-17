@@ -37,7 +37,7 @@ async function detectedRoots(game:{shop:string;objectId:string;title:string;exec
  if(download)add(await getDownloadFolderPath(download as Parameters<typeof getDownloadFolderPath>[0]));
  const steamId=game.shop==="steam"?game.objectId:game.catalogueGame?.shop==="steam"?game.catalogueGame.objectId:null;
  if(steamId&&/^\d{1,10}$/.test(steamId)){
-  const installation=await findInstalledSteamApp(steamId,await getSteamLibraryFolders()).catch(()=>null);
+  const installation=await getSteamLibraryFolders().then(folders=>findInstalledSteamApp(steamId,folders)).catch(()=>null);
   if(installation)add(installation.installDirectory);
  }
  if(process.platform==="win32"){
