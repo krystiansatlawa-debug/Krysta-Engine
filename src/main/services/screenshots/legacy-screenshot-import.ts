@@ -38,6 +38,7 @@ export async function importLegacyScreenshots(): Promise<number> {
  const games = await gamesSublevel.values().all();
  const existing = await LocalScreenshotStore.listIncludingDeleted();
  const known = new Set(existing.map(item => normalizeScreenshotPath(item.path)));
+ const existingByPath = new Map(existing.map(item => [normalizeScreenshotPath(item.path), item]));
  const ownerId = getSignedInScreenshotOwnerId();
  let imported = 0;
  let inspected = 0;
@@ -63,7 +64,15 @@ export async function importLegacyScreenshots(): Promise<number> {
     if (++inspected > MAX_FILES) return imported;
     const filePath = path.join(directory, file.name);
     const key = normalizeScreenshotPath(filePath);
-    if (known.has(key)) continue;
+    if (known.has(key)) {
+     const current = existingByPath.get(key);
+     if (current && !current.objectId && current.state !== "deleted") {
+      await LocalScreenshotStore.update(current.clientId, record =>
+       record.objectId ? {} : { shop: game.shop, objectId: game.objectId, gameTitle: game.title }
+      );
+     }
+     continue;
+    }
     const stat = await fs.stat(filePath).catch(() => null);
     if (!stat || !stat.isFile() || stat.size === 0 || stat.size > MAX_IMAGE_BYTES) continue;
     let dimensions: { width: number; height: number };
