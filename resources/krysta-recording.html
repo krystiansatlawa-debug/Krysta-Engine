@@ -1,86 +1,257 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Krysta capture worker</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; media-src blob:"></head>
-<body><script>
-"use strict";
-let config, stream, video, rotation=null, started=false, ended=false, saving=false, selected=null, finishTimer=null;
-const rolling=new Set();
-let chosenMime="";
-async function chooseMime(){
- const candidates=["vp8","vp9"].filter(codec=>MediaRecorder.isTypeSupported("video/webm;codecs="+codec+(config.audio?",opus":"")));
- for(const codec of candidates){
-  try{
-   const result=await navigator.mediaCapabilities?.encodingInfo({type:"record",video:{contentType:"video/webm;codecs="+codec,width:Math.round(config.quality*16/9),height:config.quality,bitrate:5000000,framerate:config.fps}});
-   if(result?.supported&&result.powerEfficient)return "video/webm;codecs="+codec+(config.audio?",opus":"");
-  }catch{/* encoder reporting is optional */}
- }
- return candidates.length?"video/webm;codecs="+candidates[0]+(config.audio?",opus":""):MediaRecorder.isTypeSupported("video/webm")?"video/webm":"";
-}
-function stopSegment(s){
- if(!s||s.recorder.state==="inactive")return;
- try{s.recorder.stop();}catch{}
-}
-function segment(){
- if(!stream?.active||ended)throw Error("Capture stream ended");
- const mime=chosenMime;if(!mime)throw Error("WebM recording not supported");
- const bitrate=Math.round(({720:3000000,1080:5000000,1440:7000000}[config.quality]||5000000)*(config.fps===60?1.3:1));
- const recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:bitrate,audioBitsPerSecond:128000});
- const s={recorder,start:performance.now(),chunks:[],size:0,discard:false,error:null,done:null};
- s.done=new Promise(resolve=>{
-  recorder.ondataavailable=e=>{if(s.discard||!e.data.size)return;s.size+=e.data.size;if(s.size>config.maxBytes){s.error=Error("Recording size limit reached");s.chunks=[];stopSegment(s);return;}s.chunks.push(e.data);};
-  recorder.onerror=e=>{s.error=e.error||Error("Recording failed");stopSegment(s);};
-  recorder.onstop=()=>resolve(Math.max(0,(performance.now()-s.start)/1000));
- });
- recorder.start(500);
- return s;
-}
-function discard(s){s.discard=true;s.chunks=[];rolling.delete(s);stopSegment(s);}
-function stopRotation(){if(rotation)clearInterval(rotation);rotation=null;}
-function rotate(){
- if(ended||saving||config.preSeconds===0)return;
- for(const s of rolling)if(s.recorder.state==="inactive"||performance.now()-s.start>=config.preSeconds*1000-200)discard(s);
- try{while(rolling.size>1){const oldest=[...rolling].sort((a,b)=>a.start-b.start)[0];discard(oldest);}rolling.add(segment());}
- catch{globalThis.krystaStop();}
-}
-function startRotation(){
- if(ended||config.preSeconds===0)return;
- rotate();
- rotation=setInterval(rotate,config.preSeconds*500);
-}
-function thumb(){
- if(!video||!video.videoWidth)return undefined;
- try{const canvas=document.createElement("canvas");canvas.width=240;canvas.height=Math.max(1,Math.round(240*video.videoHeight/video.videoWidth));canvas.getContext("2d").drawImage(video,0,0,canvas.width,canvas.height);const v=canvas.toDataURL("image/jpeg",0.6);return v.length<=24000?v:undefined;}catch{return undefined;}
-}
-function finish(){if(finishTimer)clearTimeout(finishTimer);finishTimer=null;stopSegment(selected);}
-globalThis.krystaStop=()=>{
- ended=true;stopRotation();for(const s of [...rolling])discard(s);finish();
- stream?.getTracks().forEach(t=>t.stop());if(video)video.srcObject=null;
-};
-globalThis.krystaStart=async prefs=>{
- if(started)throw Error("Capture already started");config=prefs;
- stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:config.fps,max:config.fps},width:{ideal:Math.round(config.quality*16/9),max:Math.round(config.quality*16/9)},height:{ideal:config.quality,max:config.quality}},audio:config.audio});
- if(ended){stream.getTracks().forEach(t=>t.stop());throw Error("Capture cancelled");}
- if(!stream.getVideoTracks().length||(config.audio&&!stream.getAudioTracks().length)){globalThis.krystaStop();throw Error("Requested video or system audio unavailable");}
- stream.getVideoTracks()[0].addEventListener("ended",()=>globalThis.krystaStop(),{once:true});
- video=document.createElement("video");video.muted=true;video.srcObject=stream;void video.play().catch(()=>{});
- chosenMime=await chooseMime();if(ended||!chosenMime){globalThis.krystaStop();throw Error("Video encoder unavailable");}
- started=true;startRotation();return true;
-};
-globalThis.krystaSave=async()=>{
- if(!started||ended||saving)throw Error("Capture not ready");
- saving=true;stopRotation();
- try{
-  const now=performance.now();
-  const available=[...rolling].filter(s=>s.recorder.state==="recording"&&!s.error&&now-s.start<=config.preSeconds*1000+500).sort((a,b)=>a.start-b.start);
-  selected=available[0]||segment();rolling.delete(selected);
-  for(const s of [...rolling])discard(s);
-  const before=Math.min(config.preSeconds,Math.max(0,(now-selected.start)/1000));
-  const thumbnail=thumb(),audio=stream.getAudioTracks().length>0;
-  finishTimer=setTimeout(finish,config.seconds*1000);
-  const duration=await selected.done;if(selected.error)throw selected.error;
-  const blob=new Blob(selected.chunks,{type:"video/webm"});
-  const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(",")[1]);r.onerror=()=>reject(r.error);r.readAsDataURL(blob);});
-  return {data,duration,audio,thumbnail,before};
- }finally{finish();selected=null;saving=false;if(!ended)startRotation();}
-};
-</script></body></html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Krysta capture worker</title>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; media-src blob:"
+    />
+  </head>
+  <body>
+    <script>
+      "use strict";
+      let config,
+        stream,
+        video,
+        rotation = null,
+        started = false,
+        ended = false,
+        saving = false,
+        selected = null,
+        finishTimer = null;
+      const rolling = new Set();
+      let chosenMime = "";
+      async function chooseMime() {
+        const candidates = ["vp8", "vp9"].filter((codec) =>
+          MediaRecorder.isTypeSupported(
+            "video/webm;codecs=" + codec + (config.audio ? ",opus" : "")
+          )
+        );
+        for (const codec of candidates) {
+          try {
+            const result = await navigator.mediaCapabilities?.encodingInfo({
+              type: "record",
+              video: {
+                contentType: "video/webm;codecs=" + codec,
+                width: Math.round((config.quality * 16) / 9),
+                height: config.quality,
+                bitrate: 5000000,
+                framerate: config.fps,
+              },
+            });
+            if (result?.supported && result.powerEfficient)
+              return (
+                "video/webm;codecs=" + codec + (config.audio ? ",opus" : "")
+              );
+          } catch {
+            /* encoder reporting is optional */
+          }
+        }
+        return candidates.length
+          ? "video/webm;codecs=" + candidates[0] + (config.audio ? ",opus" : "")
+          : MediaRecorder.isTypeSupported("video/webm")
+            ? "video/webm"
+            : "";
+      }
+      function stopSegment(s) {
+        if (!s || s.recorder.state === "inactive") return;
+        try {
+          s.recorder.stop();
+        } catch {}
+      }
+      function segment() {
+        if (!stream?.active || ended) throw Error("Capture stream ended");
+        const mime = chosenMime;
+        if (!mime) throw Error("WebM recording not supported");
+        const bitrate = Math.round(
+          ({ 720: 3000000, 1080: 5000000, 1440: 7000000 }[config.quality] ||
+            5000000) * (config.fps === 60 ? 1.3 : 1)
+        );
+        const recorder = new MediaRecorder(stream, {
+          mimeType: mime,
+          videoBitsPerSecond: bitrate,
+          audioBitsPerSecond: 128000,
+        });
+        const s = {
+          recorder,
+          start: performance.now(),
+          chunks: [],
+          size: 0,
+          discard: false,
+          error: null,
+          done: null,
+        };
+        s.done = new Promise((resolve) => {
+          recorder.ondataavailable = (e) => {
+            if (s.discard || !e.data.size) return;
+            s.size += e.data.size;
+            if (s.size > config.maxBytes) {
+              s.error = Error("Recording size limit reached");
+              s.chunks = [];
+              stopSegment(s);
+              return;
+            }
+            s.chunks.push(e.data);
+          };
+          recorder.onerror = (e) => {
+            s.error = e.error || Error("Recording failed");
+            stopSegment(s);
+          };
+          recorder.onstop = () =>
+            resolve(Math.max(0, (performance.now() - s.start) / 1000));
+        });
+        recorder.start(500);
+        return s;
+      }
+      function discard(s) {
+        s.discard = true;
+        s.chunks = [];
+        rolling.delete(s);
+        stopSegment(s);
+      }
+      function stopRotation() {
+        if (rotation) clearInterval(rotation);
+        rotation = null;
+      }
+      function rotate() {
+        if (ended || saving || config.preSeconds === 0) return;
+        for (const s of rolling)
+          if (
+            s.recorder.state === "inactive" ||
+            performance.now() - s.start >= config.preSeconds * 1000 - 200
+          )
+            discard(s);
+        try {
+          while (rolling.size > 1) {
+            const oldest = [...rolling].sort((a, b) => a.start - b.start)[0];
+            discard(oldest);
+          }
+          rolling.add(segment());
+        } catch {
+          globalThis.krystaStop();
+        }
+      }
+      function startRotation() {
+        if (ended || config.preSeconds === 0) return;
+        rotate();
+        rotation = setInterval(rotate, config.preSeconds * 500);
+      }
+      function thumb() {
+        if (!video || !video.videoWidth) return undefined;
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = 240;
+          canvas.height = Math.max(
+            1,
+            Math.round((240 * video.videoHeight) / video.videoWidth)
+          );
+          canvas
+            .getContext("2d")
+            .drawImage(video, 0, 0, canvas.width, canvas.height);
+          const v = canvas.toDataURL("image/jpeg", 0.6);
+          return v.length <= 24000 ? v : undefined;
+        } catch {
+          return undefined;
+        }
+      }
+      function finish() {
+        if (finishTimer) clearTimeout(finishTimer);
+        finishTimer = null;
+        stopSegment(selected);
+      }
+      globalThis.krystaStop = () => {
+        ended = true;
+        stopRotation();
+        for (const s of [...rolling]) discard(s);
+        finish();
+        stream?.getTracks().forEach((t) => t.stop());
+        if (video) video.srcObject = null;
+      };
+      globalThis.krystaStart = async (prefs) => {
+        if (started) throw Error("Capture already started");
+        config = prefs;
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            frameRate: { ideal: config.fps, max: config.fps },
+            width: {
+              ideal: Math.round((config.quality * 16) / 9),
+              max: Math.round((config.quality * 16) / 9),
+            },
+            height: { ideal: config.quality, max: config.quality },
+          },
+          audio: config.audio,
+        });
+        if (ended) {
+          stream.getTracks().forEach((t) => t.stop());
+          throw Error("Capture cancelled");
+        }
+        if (
+          !stream.getVideoTracks().length ||
+          (config.audio && !stream.getAudioTracks().length)
+        ) {
+          globalThis.krystaStop();
+          throw Error("Requested video or system audio unavailable");
+        }
+        stream
+          .getVideoTracks()[0]
+          .addEventListener("ended", () => globalThis.krystaStop(), {
+            once: true,
+          });
+        video = document.createElement("video");
+        video.muted = true;
+        video.srcObject = stream;
+        void video.play().catch(() => {});
+        chosenMime = await chooseMime();
+        if (ended || !chosenMime) {
+          globalThis.krystaStop();
+          throw Error("Video encoder unavailable");
+        }
+        started = true;
+        startRotation();
+        return true;
+      };
+      globalThis.krystaSave = async () => {
+        if (!started || ended || saving) throw Error("Capture not ready");
+        saving = true;
+        stopRotation();
+        try {
+          const now = performance.now();
+          const available = [...rolling]
+            .filter(
+              (s) =>
+                s.recorder.state === "recording" &&
+                !s.error &&
+                now - s.start <= config.preSeconds * 1000 + 500
+            )
+            .sort((a, b) => a.start - b.start);
+          selected = available[0] || segment();
+          rolling.delete(selected);
+          for (const s of [...rolling]) discard(s);
+          const before = Math.min(
+            config.preSeconds,
+            Math.max(0, (now - selected.start) / 1000)
+          );
+          const thumbnail = thumb(),
+            audio = stream.getAudioTracks().length > 0;
+          finishTimer = setTimeout(finish, config.seconds * 1000);
+          const duration = await selected.done;
+          if (selected.error) throw selected.error;
+          const blob = new Blob(selected.chunks, { type: "video/webm" });
+          const data = await new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(String(r.result).split(",")[1]);
+            r.onerror = () => reject(r.error);
+            r.readAsDataURL(blob);
+          });
+          return { data, duration, audio, thumbnail, before };
+        } finally {
+          finish();
+          selected = null;
+          saving = false;
+          if (!ended) startRotation();
+        }
+      };
+    </script>
+  </body>
+</html>

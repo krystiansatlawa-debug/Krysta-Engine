@@ -118,7 +118,10 @@ import {
   hasDismissedClassicsOnboarding,
 } from "@renderer/components/classics-onboarding-modal/classics-onboarding-modal";
 import "./library.scss";
-import {useKrystaPendingPatches,findKrystaPendingPatch} from "./krysta-patch-badge";
+import {
+  useKrystaPendingPatches,
+  findKrystaPendingPatch,
+} from "./krysta-patch-badge";
 
 const FAVORITES_COLLECTION_ID = "__favorites__";
 const HIDDEN_COLLECTION_ID = "__hidden__";
@@ -410,7 +413,7 @@ export default function Library() {
   const { t } = useTranslation(["library", "sidebar"]);
 
   const selectedCollectionId = searchParams.get("collection");
-  const pendingPatches=useKrystaPendingPatches();
+  const pendingPatches = useKrystaPendingPatches();
 
   const handleCollectionSelect = useCallback(
     (collectionId: string | null) => {
@@ -541,7 +544,12 @@ export default function Library() {
 
   useEffect(() => {
     if (!selectedCollectionId) return;
-    if (selectedCollectionId === FAVORITES_COLLECTION_ID || selectedCollectionId === UNCATEGORIZED_COLLECTION_ID || selectedCollectionId === UPDATES_COLLECTION_ID) return;
+    if (
+      selectedCollectionId === FAVORITES_COLLECTION_ID ||
+      selectedCollectionId === UNCATEGORIZED_COLLECTION_ID ||
+      selectedCollectionId === UPDATES_COLLECTION_ID
+    )
+      return;
     if (selectedCollectionId === HIDDEN_COLLECTION_ID) {
       if (!userDetails) handleCollectionSelect(null);
       return;
@@ -810,9 +818,13 @@ export default function Library() {
       if (selectedCollectionId === FAVORITES_COLLECTION_ID) {
         filtered = filtered.filter((game) => game.favorite);
       } else if (selectedCollectionId === UPDATES_COLLECTION_ID) {
-        filtered=filtered.filter(game=>Boolean(findKrystaPendingPatch(game,pendingPatches)));
+        filtered = filtered.filter((game) =>
+          Boolean(findKrystaPendingPatch(game, pendingPatches))
+        );
       } else if (selectedCollectionId === UNCATEGORIZED_COLLECTION_ID) {
-        filtered = filtered.filter((game) => getGameCollectionIds(game).length === 0);
+        filtered = filtered.filter(
+          (game) => getGameCollectionIds(game).length === 0
+        );
       } else if (selectedCollectionId === HIDDEN_COLLECTION_ID) {
         // Hidden games are populated by the authenticated owner's private list.
       } else {
@@ -903,13 +915,21 @@ export default function Library() {
         : []),
       {
         id: UPDATES_COLLECTION_ID,
-        name: document.documentElement.lang.startsWith("pl") ? "Gry z nowymi patchami" : "Games with new patches",
-        gamesCount: groupedLibrary.filter(game=>Boolean(findKrystaPendingPatch(game,pendingPatches))).length,
+        name: document.documentElement.lang.startsWith("pl")
+          ? "Gry z nowymi patchami"
+          : "Games with new patches",
+        gamesCount: groupedLibrary.filter((game) =>
+          Boolean(findKrystaPendingPatch(game, pendingPatches))
+        ).length,
       },
       {
         id: UNCATEGORIZED_COLLECTION_ID,
-        name: document.documentElement.lang.startsWith("pl") ? "Gry bez kategorii" : "Uncategorized games",
-        gamesCount: groupedLibrary.filter((game) => getGameCollectionIds(game).length === 0).length,
+        name: document.documentElement.lang.startsWith("pl")
+          ? "Gry bez kategorii"
+          : "Uncategorized games",
+        gamesCount: groupedLibrary.filter(
+          (game) => getGameCollectionIds(game).length === 0
+        ).length,
       },
       ...collections.map((collection) => ({
         ...collection,
@@ -934,7 +954,8 @@ export default function Library() {
     [containerWidth, viewMode]
   );
 
-  const isCustomOrder = sortBy === "custom" && selectedCollectionId !== UPDATES_COLLECTION_ID;
+  const isCustomOrder =
+    sortBy === "custom" && selectedCollectionId !== UPDATES_COLLECTION_ID;
   const gridRef = useRef<HTMLDivElement>(null);
   const pendingSettleRef = useRef<{ key: string; fromRect: DOMRect } | null>(
     null

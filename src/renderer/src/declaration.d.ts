@@ -186,77 +186,452 @@ declare global {
     isFile: boolean;
   };
 
-  interface UbisoftAccountState { connected: boolean; username: string | null; lastSync: string | null; games: {id:string; title:string}[] }
+  interface UbisoftAccountState {
+    connected: boolean;
+    username: string | null;
+    lastSync: string | null;
+    games: { id: string; title: string }[];
+  }
   interface Electron {
-    scanRockstar: () => Promise<{supported:boolean;installed:boolean;launcher:string|null;games:{id:string;title:string;folder:string;executablePath:string;steamId:string;aliases:string[]}[];lastSync:string|null}>;
-    importRockstar: () => Promise<{added:number;linked:number;existing:number;skipped:number;lastSync:string;detected:number}>;
+    scanRockstar: () => Promise<{
+      supported: boolean;
+      installed: boolean;
+      launcher: string | null;
+      games: {
+        id: string;
+        title: string;
+        folder: string;
+        executablePath: string;
+        steamId: string;
+        aliases: string[];
+      }[];
+      lastSync: string | null;
+    }>;
+    importRockstar: () => Promise<{
+      added: number;
+      linked: number;
+      existing: number;
+      skipped: number;
+      lastSync: string;
+      detected: number;
+    }>;
     openRockstarLauncher: () => Promise<void>;
     importUbisoft: () => Promise<number>;
-    getUbisoftAchievements: (objectId:string,force?:boolean) => Promise<{items:{id:string;title:string;description:string;icon:string|null;unlocked:boolean;completionDate:string|null}[];total:number;completed:number;updatedAt:string}>;
+    getUbisoftAchievements: (
+      objectId: string,
+      force?: boolean
+    ) => Promise<{
+      items: {
+        id: string;
+        title: string;
+        description: string;
+        icon: string | null;
+        unlocked: boolean;
+        completionDate: string | null;
+      }[];
+      total: number;
+      completed: number;
+      updatedAt: string;
+    }>;
     getUbisoftAccount: () => Promise<UbisoftAccountState>;
     connectUbisoftAccount: () => Promise<UbisoftAccountState>;
     syncUbisoftAccount: () => Promise<UbisoftAccountState>;
     disconnectUbisoftAccount: () => Promise<UbisoftAccountState>;
-    krystaRecordingsState: () => Promise<{supported:boolean;settings:{enabled:boolean;seconds:number;audio:boolean;preSeconds:number;quality:number;fps:number;limitGb:number;hotkey:string;folder?:string};folder:string;recording:boolean;buffering:boolean;shortcutError:boolean;usedBytes:number;lastError:string;clips:{id:string;game:string;achievement:string;createdAt:string;duration:number;audio:boolean;size:number;thumbnail?:string;before?:number}[]}>;
-    krystaRecordingsSettings: (value:{enabled:boolean;seconds:number;audio:boolean;preSeconds:number;quality:number;fps:number;limitGb:number;hotkey:string;folder?:string}) => Promise<void>;
-    krystaRecordingRead: (id:string) => Promise<Uint8Array>;
-    krystaRecordingTrimSave: (id:string,start:number,end:number,data:Uint8Array,duration:number,audio:boolean) => Promise<void>;
-    krystaRecordingsChooseFolder: (reset?:boolean) => Promise<void>;
-    krystaRecordingOpen: (id:string) => Promise<void>;
-    krystaRecordingDelete: (id:string) => Promise<void>;
+    krystaRecordingsState: () => Promise<{
+      supported: boolean;
+      settings: {
+        enabled: boolean;
+        seconds: number;
+        audio: boolean;
+        preSeconds: number;
+        quality: number;
+        fps: number;
+        limitGb: number;
+        hotkey: string;
+        folder?: string;
+      };
+      folder: string;
+      recording: boolean;
+      buffering: boolean;
+      shortcutError: boolean;
+      usedBytes: number;
+      lastError: string;
+      clips: {
+        id: string;
+        game: string;
+        achievement: string;
+        createdAt: string;
+        duration: number;
+        audio: boolean;
+        size: number;
+        thumbnail?: string;
+        before?: number;
+      }[];
+    }>;
+    krystaRecordingsSettings: (value: {
+      enabled: boolean;
+      seconds: number;
+      audio: boolean;
+      preSeconds: number;
+      quality: number;
+      fps: number;
+      limitGb: number;
+      hotkey: string;
+      folder?: string;
+    }) => Promise<void>;
+    krystaRecordingRead: (id: string) => Promise<Uint8Array>;
+    krystaRecordingTrimSave: (
+      id: string,
+      start: number,
+      end: number,
+      data: Uint8Array,
+      duration: number,
+      audio: boolean
+    ) => Promise<void>;
+    krystaRecordingsChooseFolder: (reset?: boolean) => Promise<void>;
+    krystaRecordingOpen: (id: string) => Promise<void>;
+    krystaRecordingDelete: (id: string) => Promise<void>;
     krystaRecordingsFolder: () => Promise<void>;
     krystaRecordingStop: () => Promise<void>;
     krystaFpsHotkey: () => Promise<string>;
-    krystaFpsSetHotkey: (value:string) => Promise<string>;
-    krystaFpsPosition: () => Promise<"tl"|"tr"|"bl"|"br">;
-    krystaFpsSetPosition: (position:"tl"|"tr"|"bl"|"br") => Promise<"tl"|"tr"|"bl"|"br">;
-    krystaCloudAuto: (enabled:boolean) => Promise<{provider:string;folder?:string;autoBackup?:boolean;syncBeforeLaunch?:boolean}>;
-    krystaCloudSyncBeforeLaunch: (enabled:boolean) => Promise<{provider:string;folder?:string;autoBackup?:boolean;syncBeforeLaunch?:boolean}>;
-    krystaCloudAutoStatus: (shop:string,id:string) => Promise<{state:"saved"|"skipped"|"error";at:string;message?:string}|null>;
-    krystaCloudCompare: (shop:string,id:string) => Promise<{state:"same"|"different"|"no-backup"|"unavailable";version?:string;createdAt?:string;localFiles:number;cloudFiles:number}>;
-    krystaCloudAccountStatus: () => Promise<{google:boolean;synology:boolean;googleConfigured:boolean}>;
+    krystaFpsSetHotkey: (value: string) => Promise<string>;
+    krystaFpsPosition: () => Promise<"tl" | "tr" | "bl" | "br">;
+    krystaFpsSetPosition: (
+      position: "tl" | "tr" | "bl" | "br"
+    ) => Promise<"tl" | "tr" | "bl" | "br">;
+    krystaCloudAuto: (enabled: boolean) => Promise<{
+      provider: string;
+      folder?: string;
+      autoBackup?: boolean;
+      syncBeforeLaunch?: boolean;
+    }>;
+    krystaCloudSyncBeforeLaunch: (enabled: boolean) => Promise<{
+      provider: string;
+      folder?: string;
+      autoBackup?: boolean;
+      syncBeforeLaunch?: boolean;
+    }>;
+    krystaCloudAutoStatus: (
+      shop: string,
+      id: string
+    ) => Promise<{
+      state: "saved" | "skipped" | "error";
+      at: string;
+      message?: string;
+    } | null>;
+    krystaCloudCompare: (
+      shop: string,
+      id: string
+    ) => Promise<{
+      state: "same" | "different" | "no-backup" | "unavailable";
+      version?: string;
+      createdAt?: string;
+      localFiles: number;
+      cloudFiles: number;
+    }>;
+    krystaCloudAccountStatus: () => Promise<{
+      google: boolean;
+      synology: boolean;
+      googleConfigured: boolean;
+    }>;
     krystaCloudGoogleConnect: () => Promise<boolean>;
     krystaCloudGoogleConnectJson: () => Promise<boolean>;
     krystaCloudGoogleTest: () => Promise<boolean>;
     krystaCloudOpenPreUpdateFolder: () => Promise<void>;
-    krystaCloudSynologyConnect: (url:string,username:string,password:string) => Promise<boolean>;
-    krystaCloudAccountDisconnect: (provider:string) => Promise<boolean>;
-    installUbisoftGame: (id:string) => Promise<"client"|"launched">;
-    krystaGameWatchBadges: () => Promise<{shop:string;id:string;title:string;kind?:"required"|"patch";gameTitle?:string;downloadPercent?:number|null}[]>;
-    krystaGameWatchDismiss: (shop:string,id:string) => Promise<void>;
-    krystaGameWatchHistory: () => Promise<{from:string;to:string;detectedAt:string;source:"steam"|"epic"|"gog"|"local";shop:string;id:string;title:string}[]>;
-    krystaGameIntegrity: (shop:string,id:string,action:"official"|"local") => Promise<{mode:"official"|"manual";provider:string}|{mode:"local";sha256:string;size:number}>;
-    krystaGameWatchGet: (shop:string,id:string) => Promise<{enabled:boolean;override?:"inherit"|"on"|"off";installedVersion:string;installedBuild?:string;installedBuildSource?:"epic"|"gog";versionSource?:"product"|"file"|"epic-manifest"|"version-file"|"gog-manifest";updateProvider?:"steam"|"epic"|"gog";platformBuildHistory?:{from:string;to:string;detectedAt:string;source:"epic"|"gog"}[];localVersionHistory?:{from:string;to:string;detectedAt:string}[];pendingPatch?:string;steamBuildId?:string;buildHistory?:{from:string;to:string;detectedAt:string}[];updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string;latestVersion?:string;latestTitle?:string;latestPublishedAt?:string;patchHistory?:{id:string;title:string;publishedAt:string}[];lastChecked?:string;error?:string}|null>;
-    krystaGameWatchSet: (shop:string,id:string,override:"inherit"|"on"|"off") => Promise<{enabled:boolean;override?:"inherit"|"on"|"off";installedVersion:string;installedBuild?:string;installedBuildSource?:"epic"|"gog";versionSource?:"product"|"file"|"epic-manifest"|"version-file"|"gog-manifest";updateProvider?:"steam"|"epic"|"gog";platformBuildHistory?:{from:string;to:string;detectedAt:string;source:"epic"|"gog"}[];localVersionHistory?:{from:string;to:string;detectedAt:string}[];pendingPatch?:string;steamBuildId?:string;buildHistory?:{from:string;to:string;detectedAt:string}[];updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string;latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}>;
-    krystaGameWatchCheck: (shop:string,id:string) => Promise<{enabled:boolean;override?:"inherit"|"on"|"off";installedVersion:string;installedBuild?:string;installedBuildSource?:"epic"|"gog";versionSource?:"product"|"file"|"epic-manifest"|"version-file"|"gog-manifest";updateProvider?:"steam"|"epic"|"gog";platformBuildHistory?:{from:string;to:string;detectedAt:string;source:"epic"|"gog"}[];localVersionHistory?:{from:string;to:string;detectedAt:string}[];pendingPatch?:string;steamBuildId?:string;buildHistory?:{from:string;to:string;detectedAt:string}[];updateState?:"required"|"not-reported"|"unknown";updateCheckedAt?:string;latestVersion?:string;latestTitle?:string;lastChecked?:string;error?:string}|null>;
-    krystaGameWatchSettings: () => Promise<{enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;pauseDuringPlay:boolean;autoOpenSteamQueue:boolean;autoDownloadEpic:boolean;backupBeforeUpdate:boolean;pausedDuringPlay:boolean;scanning:boolean;scanChecked:number;scanTotal:number;scanRequired:number;scanUnknown:number;scanInterrupted:boolean;lastFinished:string|null;lastError:string|null}>;
-    krystaGameWatchSettingsSet: (value:{enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;pauseDuringPlay?:boolean;autoOpenSteamQueue?:boolean;autoDownloadEpic?:boolean;backupBeforeUpdate?:boolean}) => ReturnType<Window["electron"]["krystaGameWatchSettings"]>;
-    krystaGameWatchScan: () => ReturnType<Window["electron"]["krystaGameWatchSettings"]>;
-    krystaGameWatchOpenClient: (shop:string,id:string) => Promise<void>;
-    krystaSettingsRepair: () => Promise<Array<{name:"cloud"|"fps"|"updates"|"game-updates";state:"valid"|"missing"|"restored"|"defaults"|"error"}>>;
-    krystaSettingsRepairStatus: () => Promise<Array<{name:"cloud"|"fps"|"updates"|"game-updates";state:"valid"|"missing"|"restored"|"defaults"|"error"}>|null>;
-    krystaUpdatesSyncStatus: () => Promise<{base:string|null;upstream:string|null;phase:"integrated"|"pending"|"running"|"review"|"failed"|"unknown";checkedAt:string}>;
-    krystaUpdatesSyncRefresh: () => Promise<{base:string|null;upstream:string|null;phase:"integrated"|"pending"|"running"|"review"|"failed"|"unknown";checkedAt:string}>;
-    krystaUpdatesStatus: () => Promise<{phase:"idle"|"checking"|"downloading"|"ready"|"manual"|"error";version:string;received:number;total:number;error?:string}>;
+    krystaCloudSynologyConnect: (
+      url: string,
+      username: string,
+      password: string
+    ) => Promise<boolean>;
+    krystaCloudAccountDisconnect: (provider: string) => Promise<boolean>;
+    installUbisoftGame: (id: string) => Promise<"client" | "launched">;
+    krystaGameWatchBadges: () => Promise<
+      {
+        shop: string;
+        id: string;
+        title: string;
+        kind?: "required" | "patch";
+        gameTitle?: string;
+        downloadPercent?: number | null;
+      }[]
+    >;
+    krystaGameWatchDismiss: (shop: string, id: string) => Promise<void>;
+    krystaGameWatchHistory: () => Promise<
+      {
+        from: string;
+        to: string;
+        detectedAt: string;
+        source: "steam" | "epic" | "gog" | "local";
+        shop: string;
+        id: string;
+        title: string;
+      }[]
+    >;
+    krystaGameIntegrity: (
+      shop: string,
+      id: string,
+      action: "official" | "local"
+    ) => Promise<
+      | { mode: "official" | "manual"; provider: string }
+      | { mode: "local"; sha256: string; size: number }
+    >;
+    krystaGameWatchGet: (
+      shop: string,
+      id: string
+    ) => Promise<{
+      enabled: boolean;
+      override?: "inherit" | "on" | "off";
+      installedVersion: string;
+      installedBuild?: string;
+      installedBuildSource?: "epic" | "gog";
+      versionSource?:
+        | "product"
+        | "file"
+        | "epic-manifest"
+        | "version-file"
+        | "gog-manifest";
+      updateProvider?: "steam" | "epic" | "gog";
+      platformBuildHistory?: {
+        from: string;
+        to: string;
+        detectedAt: string;
+        source: "epic" | "gog";
+      }[];
+      localVersionHistory?: { from: string; to: string; detectedAt: string }[];
+      pendingPatch?: string;
+      steamBuildId?: string;
+      buildHistory?: { from: string; to: string; detectedAt: string }[];
+      updateState?: "required" | "not-reported" | "unknown";
+      updateCheckedAt?: string;
+      latestVersion?: string;
+      latestTitle?: string;
+      latestPublishedAt?: string;
+      patchHistory?: { id: string; title: string; publishedAt: string }[];
+      lastChecked?: string;
+      error?: string;
+    } | null>;
+    krystaGameWatchSet: (
+      shop: string,
+      id: string,
+      override: "inherit" | "on" | "off"
+    ) => Promise<{
+      enabled: boolean;
+      override?: "inherit" | "on" | "off";
+      installedVersion: string;
+      installedBuild?: string;
+      installedBuildSource?: "epic" | "gog";
+      versionSource?:
+        | "product"
+        | "file"
+        | "epic-manifest"
+        | "version-file"
+        | "gog-manifest";
+      updateProvider?: "steam" | "epic" | "gog";
+      platformBuildHistory?: {
+        from: string;
+        to: string;
+        detectedAt: string;
+        source: "epic" | "gog";
+      }[];
+      localVersionHistory?: { from: string; to: string; detectedAt: string }[];
+      pendingPatch?: string;
+      steamBuildId?: string;
+      buildHistory?: { from: string; to: string; detectedAt: string }[];
+      updateState?: "required" | "not-reported" | "unknown";
+      updateCheckedAt?: string;
+      latestVersion?: string;
+      latestTitle?: string;
+      lastChecked?: string;
+      error?: string;
+    }>;
+    krystaGameWatchCheck: (
+      shop: string,
+      id: string
+    ) => Promise<{
+      enabled: boolean;
+      override?: "inherit" | "on" | "off";
+      installedVersion: string;
+      installedBuild?: string;
+      installedBuildSource?: "epic" | "gog";
+      versionSource?:
+        | "product"
+        | "file"
+        | "epic-manifest"
+        | "version-file"
+        | "gog-manifest";
+      updateProvider?: "steam" | "epic" | "gog";
+      platformBuildHistory?: {
+        from: string;
+        to: string;
+        detectedAt: string;
+        source: "epic" | "gog";
+      }[];
+      localVersionHistory?: { from: string; to: string; detectedAt: string }[];
+      pendingPatch?: string;
+      steamBuildId?: string;
+      buildHistory?: { from: string; to: string; detectedAt: string }[];
+      updateState?: "required" | "not-reported" | "unknown";
+      updateCheckedAt?: string;
+      latestVersion?: string;
+      latestTitle?: string;
+      lastChecked?: string;
+      error?: string;
+    } | null>;
+    krystaGameWatchSettings: () => Promise<{
+      enabled: boolean;
+      intervalHours: number;
+      notifications: boolean;
+      startup: boolean;
+      pauseDuringPlay: boolean;
+      autoOpenSteamQueue: boolean;
+      autoDownloadEpic: boolean;
+      backupBeforeUpdate: boolean;
+      pausedDuringPlay: boolean;
+      scanning: boolean;
+      scanChecked: number;
+      scanTotal: number;
+      scanRequired: number;
+      scanUnknown: number;
+      scanInterrupted: boolean;
+      lastFinished: string | null;
+      lastError: string | null;
+    }>;
+    krystaGameWatchSettingsSet: (value: {
+      enabled: boolean;
+      intervalHours: number;
+      notifications: boolean;
+      startup: boolean;
+      pauseDuringPlay?: boolean;
+      autoOpenSteamQueue?: boolean;
+      autoDownloadEpic?: boolean;
+      backupBeforeUpdate?: boolean;
+    }) => ReturnType<Window["electron"]["krystaGameWatchSettings"]>;
+    krystaGameWatchScan: () => ReturnType<
+      Window["electron"]["krystaGameWatchSettings"]
+    >;
+    krystaGameWatchOpenClient: (shop: string, id: string) => Promise<void>;
+    krystaSettingsRepair: () => Promise<
+      Array<{
+        name: "cloud" | "fps" | "updates" | "game-updates";
+        state: "valid" | "missing" | "restored" | "defaults" | "error";
+      }>
+    >;
+    krystaSettingsRepairStatus: () => Promise<Array<{
+      name: "cloud" | "fps" | "updates" | "game-updates";
+      state: "valid" | "missing" | "restored" | "defaults" | "error";
+    }> | null>;
+    krystaUpdatesSyncStatus: () => Promise<{
+      base: string | null;
+      upstream: string | null;
+      phase:
+        | "integrated"
+        | "pending"
+        | "running"
+        | "review"
+        | "failed"
+        | "unknown";
+      checkedAt: string;
+    }>;
+    krystaUpdatesSyncRefresh: () => Promise<{
+      base: string | null;
+      upstream: string | null;
+      phase:
+        | "integrated"
+        | "pending"
+        | "running"
+        | "review"
+        | "failed"
+        | "unknown";
+      checkedAt: string;
+    }>;
+    krystaUpdatesStatus: () => Promise<{
+      phase: "idle" | "checking" | "downloading" | "ready" | "manual" | "error";
+      version: string;
+      received: number;
+      total: number;
+      error?: string;
+    }>;
     krystaUpdatesInstall: () => Promise<void>;
-    krystaUpdatesCheck: () => Promise<{version:string;hydra:{tag:string;body:string;publishedAt:string}|null;krysta:{tag:string;body:string;publishedAt:string}|null;hydraNew:boolean|null;krystaNew:boolean|null;checkedAt:string}>;
-    krystaUpdatesPrefs: () => Promise<{automatic:boolean;notifications:boolean}>;
-    krystaUpdatesSet: (automatic:boolean,notifications:boolean) => Promise<{automatic:boolean;notifications:boolean}>;
-    krystaUpdatesOpen: (kind:string) => Promise<void>;
-    krystaCloudConfig: () => Promise<{provider:string;folder?:string;autoBackup?:boolean;syncBeforeLaunch?:boolean}>;
-    krystaCloudProvider: (provider:string) => Promise<{provider:string;folder?:string;autoBackup?:boolean;syncBeforeLaunch?:boolean}>;
-    krystaCloudFolder: () => Promise<{provider:string;folder?:string;autoBackup?:boolean;syncBeforeLaunch?:boolean}>;
-    krystaCloudList: (shop:string,id:string) => Promise<{id:string;createdAt:string;files:number}[]>;
-    krystaCloudRestore: (shop:string,id:string,version:string) => Promise<boolean>;
-    krystaCloudBackup: (shop:string,id:string) => Promise<boolean>;
-    krystaFpsStatus: () => Promise<{available:boolean;status:string;shortcutError:boolean;lastError:string;hidden:boolean}>;
+    krystaUpdatesCheck: () => Promise<{
+      version: string;
+      hydra: { tag: string; body: string; publishedAt: string } | null;
+      krysta: { tag: string; body: string; publishedAt: string } | null;
+      hydraNew: boolean | null;
+      krystaNew: boolean | null;
+      checkedAt: string;
+    }>;
+    krystaUpdatesPrefs: () => Promise<{
+      automatic: boolean;
+      notifications: boolean;
+    }>;
+    krystaUpdatesSet: (
+      automatic: boolean,
+      notifications: boolean
+    ) => Promise<{ automatic: boolean; notifications: boolean }>;
+    krystaUpdatesOpen: (kind: string) => Promise<void>;
+    krystaCloudConfig: () => Promise<{
+      provider: string;
+      folder?: string;
+      autoBackup?: boolean;
+      syncBeforeLaunch?: boolean;
+    }>;
+    krystaCloudProvider: (provider: string) => Promise<{
+      provider: string;
+      folder?: string;
+      autoBackup?: boolean;
+      syncBeforeLaunch?: boolean;
+    }>;
+    krystaCloudFolder: () => Promise<{
+      provider: string;
+      folder?: string;
+      autoBackup?: boolean;
+      syncBeforeLaunch?: boolean;
+    }>;
+    krystaCloudList: (
+      shop: string,
+      id: string
+    ) => Promise<{ id: string; createdAt: string; files: number }[]>;
+    krystaCloudRestore: (
+      shop: string,
+      id: string,
+      version: string
+    ) => Promise<boolean>;
+    krystaCloudBackup: (shop: string, id: string) => Promise<boolean>;
+    krystaFpsStatus: () => Promise<{
+      available: boolean;
+      status: string;
+      shortcutError: boolean;
+      lastError: string;
+      hidden: boolean;
+    }>;
     krystaFpsSelectTool: () => Promise<boolean>;
     krystaFpsPreference: () => Promise<boolean>;
-    krystaSetFpsPreference: (enabled:boolean) => Promise<boolean>;
-    translateKrystaNews: (title:string,content:string) => Promise<{title:string;content:string}|null>;
-    getKrystaGameNews: (id: string, title: string) => Promise<{appId:string|null;items:{id:string;title:string;date:number;contents:string;url:string;author:string;category:"patch"|"news"}[]}>;
-    scanUbisoft: () => Promise<{supported:boolean; installed:boolean; games:{id:string; title:string; path:string}[]}>;
-    launchUbisoft: (id:string) => Promise<void>;
+    krystaSetFpsPreference: (enabled: boolean) => Promise<boolean>;
+    translateKrystaNews: (
+      title: string,
+      content: string
+    ) => Promise<{ title: string; content: string } | null>;
+    getKrystaGameNews: (
+      id: string,
+      title: string
+    ) => Promise<{
+      appId: string | null;
+      items: {
+        id: string;
+        title: string;
+        date: number;
+        contents: string;
+        url: string;
+        author: string;
+        category: "patch" | "news";
+      }[];
+    }>;
+    scanUbisoft: () => Promise<{
+      supported: boolean;
+      installed: boolean;
+      games: { id: string; title: string; path: string }[];
+    }>;
+    launchUbisoft: (id: string) => Promise<void>;
     onCloudSaveAutomaticSyncModeChanged: (
       callback: (event: CloudSaveAutomaticSyncModeChangedEvent) => void
     ) => () => void;
@@ -643,8 +1018,15 @@ declare global {
       shop: GameShop,
       objectId: string,
       folder?: string
-    ) => Promise<{automaticPath:string|null;candidates:{path:string;highConfidence:boolean}[];searchedFolders:number}>;
-    krystaAutoLinkGameExecutable: (shop: GameShop, objectId: string) => Promise<string|null>;
+    ) => Promise<{
+      automaticPath: string | null;
+      candidates: { path: string; highConfidence: boolean }[];
+      searchedFolders: number;
+    }>;
+    krystaAutoLinkGameExecutable: (
+      shop: GameShop,
+      objectId: string
+    ) => Promise<string | null>;
     openGameInstallerPath: (shop: GameShop, objectId: string) => Promise<void>;
     openGameWinetricks: (shop: GameShop, objectId: string) => Promise<boolean>;
     openGameExecutablePath: (shop: GameShop, objectId: string) => Promise<void>;
@@ -1312,7 +1694,16 @@ declare global {
     getScreenshotsPath: () => Promise<string>;
     getScreenshotsFolderPath: () => Promise<string>;
     getLocalScreenshots: () => Promise<LocalScreenshot[]>;
-    getKrystaSouvenirGallery: () => Promise<{id:string;gameKey:string;gameTitle:string;path:string;capturedAt:number;achievementNames:string[]}[]>;
+    getKrystaSouvenirGallery: () => Promise<
+      {
+        id: string;
+        gameKey: string;
+        gameTitle: string;
+        path: string;
+        capturedAt: number;
+        achievementNames: string[];
+      }[]
+    >;
     getLocalScreenshotsForGame: (
       shop: GameShop,
       objectId: string

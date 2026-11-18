@@ -275,28 +275,54 @@ export const findSteamAppInstallDirectories = async (
 };
 
 /** Local Steam client state; announcement versions are deliberately not compared to build IDs. */
-export const readSteamUpdateState = async (appId:string, libraryFolders:string[], executablePath?:string|null) => {
- if(!/^\d{1,10}$/.test(appId))return null;
- for(const folder of libraryFolders){
-  const manifest=path.join(folder,"steamapps",`appmanifest_${appId}.acf`);
-  const installed=await readInstalledSteamApp(folder,manifest,appId);
-  if(!installed||(executablePath&&!isPathInsideSteamInstallDirectory(executablePath,installed.installDirectory)))continue;
-  const content=await fs.promises.readFile(manifest,"utf8").catch(()=>null);
-  if(!content||readManifestValue(content,"appid")!==appId)continue;
-  const raw=readManifestValue(content,"StateFlags");
-  if(raw===null||!/^\d+$/.test(raw))continue;
-  const flags=Number(raw);
-  // UpdateRequired is bit 2 in Steam's local app state.
-  const counter=(key:string)=>{
-   const value=readManifestValue(content,key);
-   if(value===null||!/^\d+$/.test(value))return null;
-   const n=Number(value);
-   return Number.isSafeInteger(n)?n:null;
-  };
-  const total=counter("BytesToDownload"),done=counter("BytesDownloaded");
-  const updateRequired=(flags&2)!==0;
-  const downloadPercent=updateRequired&&total!==null&&total>0&&done!==null&&done<=total?Math.floor(done/total*100):null;
-  return {buildId:readManifestValue(content,"buildid"),updateRequired,downloadPercent};
- }
- return null;
+export const readSteamUpdateState = async (
+  appId: string,
+  libraryFolders: string[],
+  executablePath?: string | null
+) => {
+  if (!/^\d{1,10}$/.test(appId)) return null;
+  for (const folder of libraryFolders) {
+    const manifest = path.join(folder, "steamapps", `appmanifest_${appId}.acf`);
+    const installed = await readInstalledSteamApp(folder, manifest, appId);
+    if (
+      !installed ||
+      (executablePath &&
+        !isPathInsideSteamInstallDirectory(
+          executablePath,
+          installed.installDirectory
+        ))
+    )
+      continue;
+    const content = await fs.promises
+      .readFile(manifest, "utf8")
+      .catch(() => null);
+    if (!content || readManifestValue(content, "appid") !== appId) continue;
+    const raw = readManifestValue(content, "StateFlags");
+    if (raw === null || !/^\d+$/.test(raw)) continue;
+    const flags = Number(raw);
+    // UpdateRequired is bit 2 in Steam's local app state.
+    const counter = (key: string) => {
+      const value = readManifestValue(content, key);
+      if (value === null || !/^\d+$/.test(value)) return null;
+      const n = Number(value);
+      return Number.isSafeInteger(n) ? n : null;
+    };
+    const total = counter("BytesToDownload"),
+      done = counter("BytesDownloaded");
+    const updateRequired = (flags & 2) !== 0;
+    const downloadPercent =
+      updateRequired &&
+      total !== null &&
+      total > 0 &&
+      done !== null &&
+      done <= total
+        ? Math.floor((done / total) * 100)
+        : null;
+    return {
+      buildId: readManifestValue(content, "buildid"),
+      updateRequired,
+      downloadPercent,
+    };
+  }
+  return null;
 };

@@ -2384,7 +2384,10 @@ describe("Epic managed UI lifecycle", () => {
           },
           "@renderer/context": { gameDetailsContext: context },
           "react-i18next": {
-            useTranslation: () => ({ t: (key: string) => key }),
+            useTranslation: () => ({
+              t: (key: string) => key,
+              i18n: { language: "en" },
+            }),
           },
           "react-router-dom": {
             useNavigate: () => () => {},
@@ -2419,6 +2422,9 @@ describe("Epic managed UI lifecycle", () => {
                     "data-epic-save-conflict": conflictGame.objectId,
                   })
                 : null,
+          },
+          "../../library/krysta-patch-badge": {
+            useKrystaPendingPatches: () => [],
           },
           "./hero-panel-actions.scss": {},
         }

@@ -6,6 +6,7 @@ import { SystemPath } from "../system-path";
 import { readUserPreferences } from "./screenshot-user-preferences";
 
 const SCREENSHOTS_FOLDER_NAME = "Hydra";
+const KRYSTA_SCREENSHOTS_FOLDER_NAME = "Krysta";
 
 const getPicturesDirectory = () => {
   try {
@@ -31,6 +32,12 @@ export const getScreenshotFolderCandidates = async () => [
   ...new Set([
     await getScreenshotsFolder(),
     getDefaultScreenshotsFolder(),
+    path.join(getPicturesDirectory(), KRYSTA_SCREENSHOTS_FOLDER_NAME),
     path.join(SystemPath.getPath("home"), "Pictures", SCREENSHOTS_FOLDER_NAME),
+    path.join(
+      SystemPath.getPath("home"),
+      "Pictures",
+      KRYSTA_SCREENSHOTS_FOLDER_NAME
+    ),
   ]),
 ];

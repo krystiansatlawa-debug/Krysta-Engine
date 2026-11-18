@@ -30,6 +30,10 @@ it("refreshes grouped progress on member changes and preserves known offline tot
     },
   });
   const stubs: Record<string, unknown> = {
+    "./krysta-patch-badge": {
+      findKrystaPendingPatch: () => undefined,
+      useKrystaPendingPatches: () => [],
+    },
     "@renderer/hooks": {
       useGameCard: () => ({
         formatPlayTime: () => "0",

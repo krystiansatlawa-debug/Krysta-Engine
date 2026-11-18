@@ -5,6 +5,7 @@ Google Drive login uses **Desktop app OAuth**, a localhost loopback callback (`1
 ## One-click login in released builds
 
 To make **Connect Google account** open the browser without a JSON picker for new users, the Krysta release maintainer must:
+
 1. Create a Google Cloud project, enable Google Drive API and configure the OAuth consent screen.
 2. Create an **OAuth client ID → Desktop app**. Copy the Client ID and the matching Client Secret from the **same Desktop client**. Do not use credentials from separate clients.
 3. In the GitHub repository, configure variable `KRYSTA_GOOGLE_CLIENT_ID` and Actions secret `KRYSTA_GOOGLE_CLIENT_SECRET`. The Windows release workflow passes these as `MAIN_VITE_KRYSTA_GOOGLE_CLIENT_ID` and `MAIN_VITE_KRYSTA_GOOGLE_CLIENT_SECRET` to the packaged app.

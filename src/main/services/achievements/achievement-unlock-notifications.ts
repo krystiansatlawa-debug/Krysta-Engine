@@ -50,7 +50,10 @@ export const publishAchievementUnlockNotifications = ({
   userPreferences,
 }: AchievementUnlockNotificationOptions) => {
   if (achievements.length) {
-    void recordAchievementClip(game, achievements.map(a => a.displayName));
+    void recordAchievementClip(
+      game,
+      achievements.map((a) => a.displayName)
+    );
   }
   if (
     !achievements.length ||

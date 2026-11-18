@@ -185,39 +185,104 @@ const getWindowsLauncherRoots = async (): Promise<string[]> => {
     if (full === path.win32.parse(full).root) return;
     roots.add(full);
   };
-  const folders = ["Games","GOG Games","SteamLibrary","Epic Games","Ubisoft Games","Rockstar Games","EA Games","Origin Games","Battle.net","Riot Games","XboxGames"];
-  const programFolders = ["Epic Games","GOG Galaxy\\Games","Ubisoft\\Ubisoft Game Launcher\\games","Rockstar Games","EA Games","Origin Games","Blizzard Entertainment"];
+  const folders = [
+    "Games",
+    "GOG Games",
+    "SteamLibrary",
+    "Epic Games",
+    "Ubisoft Games",
+    "Rockstar Games",
+    "EA Games",
+    "Origin Games",
+    "Battle.net",
+    "Riot Games",
+    "XboxGames",
+  ];
+  const programFolders = [
+    "Epic Games",
+    "GOG Galaxy\\Games",
+    "Ubisoft\\Ubisoft Game Launcher\\games",
+    "Rockstar Games",
+    "EA Games",
+    "Origin Games",
+    "Blizzard Entertainment",
+  ];
   try {
-    const script = "$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | Select-Object -ExpandProperty DeviceID) | ConvertTo-Json -Compress";
-    const {stdout}=await execScanCommand(path.join(process.env.SystemRoot||"C:\\Windows","System32","WindowsPowerShell","v1.0","powershell.exe"),["-NoProfile","-NonInteractive","-Command",script],{windowsHide:true,timeout:10000,maxBuffer:65536});
-    const parsed=JSON.parse(stdout), drives=Array.isArray(parsed)?parsed:[parsed];
-    for(const drive of drives)if(typeof drive==="string"&&/^[a-z]:$/i.test(drive)){
-      for(const folder of folders)add(path.win32.join(drive+"\\",folder));
-    }
-  } catch { /* default C/D roots still available */ }
-  for(const base of [process.env.ProgramFiles,process.env["ProgramFiles(x86)"]])if(base)for(const folder of programFolders)add(path.win32.join(base,folder));
-  const ubi=await scanUbisoft().catch(()=>null);
-  for(const game of ubi?.games??[])add(game.path);
-  if(process.env.ProgramData){
-    const manifestDir=path.join(process.env.ProgramData,"Epic","EpicGamesLauncher","Data","Manifests");
-    for(const name of (await fs.promises.readdir(manifestDir).catch(()=>[])).filter(n=>n.endsWith(".item")).slice(0,2000)){
-      try{
-        const file=path.join(manifestDir,name),st=await fs.promises.lstat(file);
-        if(!st.isFile()||st.size>2*1024**2)continue;
-        const m=JSON.parse(await fs.promises.readFile(file,"utf8"));
-        if(m.bIsIncompleteInstall!==true)add(m.InstallLocation);
-      }catch{/* invalid manifest */}
+    const script =
+      "$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | Select-Object -ExpandProperty DeviceID) | ConvertTo-Json -Compress";
+    const { stdout } = await execScanCommand(
+      path.join(
+        process.env.SystemRoot || "C:\\Windows",
+        "System32",
+        "WindowsPowerShell",
+        "v1.0",
+        "powershell.exe"
+      ),
+      ["-NoProfile", "-NonInteractive", "-Command", script],
+      { windowsHide: true, timeout: 10000, maxBuffer: 65536 }
+    );
+    const parsed = JSON.parse(stdout),
+      drives = Array.isArray(parsed) ? parsed : [parsed];
+    for (const drive of drives)
+      if (typeof drive === "string" && /^[a-z]:$/i.test(drive)) {
+        for (const folder of folders)
+          add(path.win32.join(drive + "\\", folder));
+      }
+  } catch {
+    /* default C/D roots still available */
+  }
+  for (const base of [
+    process.env.ProgramFiles,
+    process.env["ProgramFiles(x86)"],
+  ])
+    if (base)
+      for (const folder of programFolders) add(path.win32.join(base, folder));
+  const ubi = await scanUbisoft().catch(() => null);
+  for (const game of ubi?.games ?? []) add(game.path);
+  if (process.env.ProgramData) {
+    const manifestDir = path.join(
+      process.env.ProgramData,
+      "Epic",
+      "EpicGamesLauncher",
+      "Data",
+      "Manifests"
+    );
+    for (const name of (await fs.promises.readdir(manifestDir).catch(() => []))
+      .filter((n) => n.endsWith(".item"))
+      .slice(0, 2000)) {
+      try {
+        const file = path.join(manifestDir, name),
+          st = await fs.promises.lstat(file);
+        if (!st.isFile() || st.size > 2 * 1024 ** 2) continue;
+        const m = JSON.parse(await fs.promises.readFile(file, "utf8"));
+        if (m.bIsIncompleteInstall !== true) add(m.InstallLocation);
+      } catch {
+        /* invalid manifest */
+      }
     }
   }
   // Known vendor uninstall records only; do not sweep all installed software.
-  for(const hive of ["HKLM\\SOFTWARE\\GOG.com\\Games","HKLM\\SOFTWARE\\WOW6432Node\\GOG.com\\Games","HKLM\\SOFTWARE\\Rockstar Games","HKLM\\SOFTWARE\\WOW6432Node\\Rockstar Games"]){
-    try{
-      const {stdout}=await execScanCommand("reg.exe",["query",hive,"/s"],{windowsHide:true,timeout:8000,maxBuffer:1024**2});
-      for(const line of stdout.split(/\r?\n/)){
-        const match=line.match(/^\s*(?:path|InstallFolder|InstallDir|InstallLocation|InstallPath)\s+REG_SZ\s+(.+?)\s*$/i);
-        if(match)add(match[1]);
+  for (const hive of [
+    "HKLM\\SOFTWARE\\GOG.com\\Games",
+    "HKLM\\SOFTWARE\\WOW6432Node\\GOG.com\\Games",
+    "HKLM\\SOFTWARE\\Rockstar Games",
+    "HKLM\\SOFTWARE\\WOW6432Node\\Rockstar Games",
+  ]) {
+    try {
+      const { stdout } = await execScanCommand(
+        "reg.exe",
+        ["query", hive, "/s"],
+        { windowsHide: true, timeout: 8000, maxBuffer: 1024 ** 2 }
+      );
+      for (const line of stdout.split(/\r?\n/)) {
+        const match = line.match(
+          /^\s*(?:path|InstallFolder|InstallDir|InstallLocation|InstallPath)\s+REG_SZ\s+(.+?)\s*$/i
+        );
+        if (match) add(match[1]);
       }
-    }catch{/* vendor not installed */}
+    } catch {
+      /* vendor not installed */
+    }
   }
   return [...roots];
 };
@@ -235,7 +300,7 @@ const getDefaultScanDirectories = async (
 
   return [
     ...WINDOWS_GAME_DIRECTORIES,
-    ...await getWindowsLauncherRoots(),
+    ...(await getWindowsLauncherRoots()),
     ...steamFallbackDirectories,
     ...(downloadsPath ? [downloadsPath] : []),
   ];
@@ -1189,9 +1254,11 @@ const runScan = async (
 
   const existingGames = await gamesSublevel.iterator().all();
   const claimedPaths = new Set(
-    existingGames.filter(([,game])=>!game.isDeleted).flatMap(([, game]) =>
-      game.executablePath ? [normalizePath(game.executablePath)] : []
-    )
+    existingGames
+      .filter(([, game]) => !game.isDeleted)
+      .flatMap(([, game]) =>
+        game.executablePath ? [normalizePath(game.executablePath)] : []
+      )
   );
   const gamesToScan = games.filter(({ game }) => !game.executablePath);
   const linkedGames = await linkLibraryGames(

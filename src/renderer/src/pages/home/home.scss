@@ -110,7 +110,21 @@
   }
 }
 
-.home__cards { grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
-@include globals.page-min-width(950px) { .home__cards { grid-template-columns:repeat(5,minmax(0,1fr)); } }
-.home__cards .game-card,.home__cards .home__card-skeleton { height:auto; aspect-ratio: 1 / 1; min-height:150px; }
-.home__header { padding-block: 4px; }
+.home__cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+@include globals.page-min-width(950px) {
+  .home__cards {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+.home__cards .game-card,
+.home__cards .home__card-skeleton {
+  height: auto;
+  aspect-ratio: 1 / 1;
+  min-height: 150px;
+}
+.home__header {
+  padding-block: 4px;
+}

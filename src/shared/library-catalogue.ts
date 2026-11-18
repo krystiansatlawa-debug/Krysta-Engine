@@ -39,7 +39,10 @@ export const mergeLibraryCatalogueMetadata = (
 const identityKey = ({ shop, objectId }: CatalogueGameIdentity) =>
   `${shop}:${objectId}`;
 
-const isLinkedUbisoft = (game: LibraryGame) => game.shop === "custom" && /^(ubi-owned-|ubisoft-)/.test(game.objectId) && game.catalogueGame?.shop === "steam";
+const isLinkedUbisoft = (game: LibraryGame) =>
+  game.shop === "custom" &&
+  /^(ubi-owned-|ubisoft-)/.test(game.objectId) &&
+  game.catalogueGame?.shop === "steam";
 
 const storePriority = (shop: GameShop) => (shop === "steam" ? 0 : 1);
 
@@ -284,20 +287,31 @@ export const groupLibraryGames = (
     canonicalIds.add(game.canonicalId);
     confirmedIdentities.set(key, canonicalIds);
   }
-  const linkedUbisoftIdentities = new Set(games.filter(g => !g.isDeleted && isLinkedUbisoft(g)).map(g => identityKey(getGameCatalogueIdentity(g))));
+  const linkedUbisoftIdentities = new Set(
+    games
+      .filter((g) => !g.isDeleted && isLinkedUbisoft(g))
+      .map((g) => identityKey(getGameCatalogueIdentity(g)))
+  );
   for (const game of games) {
     const identity = identityKey(game);
     if (game.isDeleted || seen.has(identity)) continue;
     seen.add(identity);
     const catalogueIdentity = identityKey(getGameCatalogueIdentity(game));
-    const confirmed = confirmedIdentities.get(isLinkedUbisoft(game) ? catalogueIdentity : identity);
+    const confirmed = confirmedIdentities.get(
+      isLinkedUbisoft(game) ? catalogueIdentity : identity
+    );
     const canonicalId =
       game.canonicalId ??
       (confirmed?.size === 1 ? [...confirmed][0] : undefined);
     const groupKey =
-      (game.shop === "steam" || game.shop === "epic" || isLinkedUbisoft(game)) && canonicalId
+      (game.shop === "steam" ||
+        game.shop === "epic" ||
+        isLinkedUbisoft(game)) &&
+      canonicalId
         ? `catalogue:${canonicalId}`
-        : (game.shop === "steam" || isLinkedUbisoft(game)) && linkedUbisoftIdentities.has(catalogueIdentity) && (confirmedIdentities.get(catalogueIdentity)?.size ?? 0) <= 1
+        : (game.shop === "steam" || isLinkedUbisoft(game)) &&
+            linkedUbisoftIdentities.has(catalogueIdentity) &&
+            (confirmedIdentities.get(catalogueIdentity)?.size ?? 0) <= 1
           ? `ubisoft-catalogue:${catalogueIdentity}`
           : identity;
     const group = groups.get(groupKey) ?? [];

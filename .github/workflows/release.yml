@@ -16,7 +16,8 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-2022, ubuntu-latest]
+        # The bundled FPM needs the older rpmbuild layout on Ubuntu 24.04.
+        os: [windows-2022, ubuntu-24.04]
 
     runs-on: ${{ matrix.os }}
 
@@ -74,7 +75,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           rustup target add x86_64-pc-windows-gnu
-          sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build pkg-config curl zip unzip tar autoconf automake libtool gcc-mingw-w64-x86-64
+          sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build pkg-config curl zip unzip tar autoconf automake libtool gcc-mingw-w64-x86-64 rpm
 
       - name: Install dependencies
         run: yarn --frozen-lockfile
@@ -88,7 +89,7 @@ jobs:
           key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
 
       - name: Build Linux
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: |
           yarn build:linux
         env:

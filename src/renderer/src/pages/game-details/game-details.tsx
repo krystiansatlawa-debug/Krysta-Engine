@@ -28,21 +28,46 @@ import "./game-details.scss";
 import "./hero.scss";
 
 /** Also repairs previously imported Krysta library entries when their game page is opened. */
-function AutoDetectLaunchExecutable({game,updateGame}:{
-  game:LibraryGame;updateGame:()=>Promise<unknown>|void
+function AutoDetectLaunchExecutable({
+  game,
+  updateGame,
+}: {
+  game: LibraryGame;
+  updateGame: () => Promise<unknown> | void;
 }) {
-  const updateRef=useRef(updateGame);
-  useEffect(()=>{updateRef.current=updateGame;},[updateGame]);
-  useEffect(()=>{
-    if(window.electron.platform!=="win32"||game.executablePath||
-       game.shop==="launchbox"||game.hasActiveSteamImport||game.hasActiveEpicImport||
-       game.source==="steam"||game.source==="epic")return;
-    let active=true;
-    void window.electron.krystaAutoLinkGameExecutable(game.shop,game.objectId)
-      .then(file=>{if(active&&file)void updateRef.current();})
-      .catch(()=>{});
-    return()=>{active=false;};
-  },[game.shop,game.objectId,Boolean(game.executablePath),game.hasActiveSteamImport,game.hasActiveEpicImport,game.source]);
+  const updateRef = useRef(updateGame);
+  useEffect(() => {
+    updateRef.current = updateGame;
+  }, [updateGame]);
+  useEffect(() => {
+    if (
+      window.electron.platform !== "win32" ||
+      game.executablePath ||
+      game.shop === "launchbox" ||
+      game.hasActiveSteamImport ||
+      game.hasActiveEpicImport ||
+      game.source === "steam" ||
+      game.source === "epic"
+    )
+      return;
+    let active = true;
+    void window.electron
+      .krystaAutoLinkGameExecutable(game.shop, game.objectId)
+      .then((file) => {
+        if (active && file) void updateRef.current();
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [
+    game.shop,
+    game.objectId,
+    Boolean(game.executablePath),
+    game.hasActiveSteamImport,
+    game.hasActiveEpicImport,
+    game.source,
+  ]);
   return null;
 }
 
@@ -209,7 +234,12 @@ export default function GameDetails() {
                     clickOutsideToClose={false}
                   />
 
-                  {game && <AutoDetectLaunchExecutable game={game} updateGame={updateGame} />}
+                  {game && (
+                    <AutoDetectLaunchExecutable
+                      game={game}
+                      updateGame={updateGame}
+                    />
+                  )}
                   {game && (
                     <GameOptionsModal
                       visible={showGameOptionsModal}

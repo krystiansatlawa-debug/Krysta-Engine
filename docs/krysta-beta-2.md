@@ -19,7 +19,7 @@ Beta 1 wymaga jednorazowego ręcznego przejścia na Beta 2. Test aktualizacji mi
 ## Naprawa ustawień
 
 - Walidacja i automatyczne odzyskiwanie ustawień czterech modułów: Krysta Cloud, FPS, aktualizator launchera oraz monitor aktualizacji gier.
-- Zapis ostatniej poprawnej wersji do lokalnej kopii .bak; zachowanie uszkodzonego pliku .corrupt-* przed odzyskaniem.
+- Zapis ostatniej poprawnej wersji do lokalnej kopii .bak; zachowanie uszkodzonego pliku .corrupt-\* przed odzyskaniem.
 - W przypadku braku poprawnej kopii uszkodzone ustawienia modułu są odtwarzane z bezpiecznych wartości domyślnych.
 - Ręczne sprawdzanie i raport w Ustawienia > Ogólne > Naprawa ustawień Krysty.
 - Mechanizm nie naprawia całej bazy LevelDB, nie usuwa biblioteki, historii aktualizacji, tokenów kont ani zapisów gier. Dodano testy regresji uruchamiane przed publikacją Windows.

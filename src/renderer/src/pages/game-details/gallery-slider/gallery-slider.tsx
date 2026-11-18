@@ -65,7 +65,6 @@ export function GallerySlider() {
   );
   const autoplayEnabled = userPreferences?.autoplayGameTrailers !== false;
 
-
   const [emblaRef, emblaApi] = useEmblaCarousel({
     loop: false,
     watchDrag: (_api, event) =>
@@ -189,11 +188,12 @@ export function GallerySlider() {
   const hasMedia = mediaItems.length > 0;
 
   const previews = useMemo(
-    () => mediaItems.map(({ id, thumbnail, type, poster }) => ({
-      id,
-      thumbnail: thumbnail ?? poster,
-      type,
-    })),
+    () =>
+      mediaItems.map(({ id, thumbnail, type, poster }) => ({
+        id,
+        thumbnail: thumbnail ?? poster,
+        type,
+      })),
     [mediaItems]
   );
 

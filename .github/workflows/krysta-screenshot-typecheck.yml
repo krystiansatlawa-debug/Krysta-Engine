@@ -1,0 +1,23 @@
+name: Krysta screenshot typecheck
+on:
+  pull_request:
+    paths:
+      - "src/main/services/screenshots/**"
+      - "src/main/services/achievement-screenshot-path.ts"
+      - ".github/workflows/krysta-screenshot-typecheck.yml"
+  workflow_dispatch:
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: yarn
+      - name: Install dependencies without building installers
+        run: yarn install --frozen-lockfile --ignore-scripts
+      - name: Check main-process TypeScript
+        run: yarn typecheck:node

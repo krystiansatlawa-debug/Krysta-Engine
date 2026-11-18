@@ -265,9 +265,16 @@ export function RepacksModal({
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const steamOptionTerm = filterTerm.trim().toLowerCase();
   const isNonSteamExecutable = useIsNonSteamExecutable(steamGame);
-  const ubisoftGame = (presentation?.members ?? (game ? [game] : [])).find(g=>g.shop==="custom" && /^(ubi-owned-|ubisoft-)/.test(g.objectId));
-  const showUbisoftOption = !!ubisoftGame && selectedFingerprints.length===0 && (!steamOptionTerm || "ubisoft connect".includes(steamOptionTerm) || ubisoftGame.title.toLowerCase().includes(steamOptionTerm));
-  const [ubisoftError,setUbisoftError]=useState("");
+  const ubisoftGame = (presentation?.members ?? (game ? [game] : [])).find(
+    (g) => g.shop === "custom" && /^(ubi-owned-|ubisoft-)/.test(g.objectId)
+  );
+  const showUbisoftOption =
+    !!ubisoftGame &&
+    selectedFingerprints.length === 0 &&
+    (!steamOptionTerm ||
+      "ubisoft connect".includes(steamOptionTerm) ||
+      ubisoftGame.title.toLowerCase().includes(steamOptionTerm));
+  const [ubisoftError, setUbisoftError] = useState("");
   const showSteamOption =
     (canDownloadOnSteam(steamGame) ||
       (isSteamImportedGame(steamGame) && isNonSteamExecutable)) &&
@@ -380,7 +387,26 @@ export function RepacksModal({
         </div>
 
         <div className="repacks-modal__repacks">
-          {showUbisoftOption && ubisoftGame && <Button theme="dark" className="repacks-modal__repack-button" onClick={()=>{setUbisoftError("");void window.electron.installUbisoftGame(ubisoftGame.objectId).then(()=>onClose()).catch(e=>setUbisoftError(String(e)));}}><p className="repacks-modal__repack-title repacks-modal__steam-title">Ubisoft Connect · {ubisoftGame.title}</p><p className="repacks-modal__repack-info">Otwórz w Ubisoft Connect / Open in Ubisoft Connect</p></Button>}
+          {showUbisoftOption && ubisoftGame && (
+            <Button
+              theme="dark"
+              className="repacks-modal__repack-button"
+              onClick={() => {
+                setUbisoftError("");
+                void window.electron
+                  .installUbisoftGame(ubisoftGame.objectId)
+                  .then(() => onClose())
+                  .catch((e) => setUbisoftError(String(e)));
+              }}
+            >
+              <p className="repacks-modal__repack-title repacks-modal__steam-title">
+                Ubisoft Connect · {ubisoftGame.title}
+              </p>
+              <p className="repacks-modal__repack-info">
+                Otwórz w Ubisoft Connect / Open in Ubisoft Connect
+              </p>
+            </Button>
+          )}
           {ubisoftError && <p role="alert">{ubisoftError}</p>}
           {showSteamOption && game && (
             <Button
@@ -432,7 +458,8 @@ export function RepacksModal({
 
           {filteredRepacks.length === 0
             ? !showSteamOption &&
-              !showEpicOption && !showUbisoftOption && (
+              !showEpicOption &&
+              !showUbisoftOption && (
                 <div className="repacks-modal__no-results">
                   <div className="repacks-modal__no-results-content">
                     <div className="repacks-modal__no-results-text">

@@ -123,11 +123,14 @@ export function GameDetailsContent() {
   }, [shopDetails, t, game?.shop]);
 
   const [detailTab, setDetailTab] = useState("description");
-  useEffect(() => { setDetailTab("description"); }, [objectId]);
+  useEffect(() => {
+    setDetailTab("description");
+  }, [objectId]);
   useEffect(() => {
     const openUpdates = () => setDetailTab("updates");
-    window.addEventListener("krysta:open-game-updates",openUpdates);
-    return () => window.removeEventListener("krysta:open-game-updates",openUpdates);
+    window.addEventListener("krysta:open-game-updates", openUpdates);
+    return () =>
+      window.removeEventListener("krysta:open-game-updates", openUpdates);
   }, []);
   const [backdropOpacity, setBackdropOpacity] = useState(1);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
@@ -508,14 +511,62 @@ export function GameDetailsContent() {
         </div>
 
         <nav className="krysta-game-tabs" aria-label="Game details">
-          { [["description","Opis","Description"],["updates","Aktualizacje","Updates"],["cloud","Zapisy w chmurze","Cloud saves"],...(game?.shop==="custom"&&/^(ubi-owned-|ubisoft-)/.test(game.objectId)?[["ubisoft-achievements","Osiągnięcia","Achievements"]]:[])].map(([id,pl,en]) => (
-            <button type="button" key={id} aria-pressed={detailTab === id} onClick={() => setDetailTab(id)}>{document.documentElement.lang.startsWith("pl") ? pl : en}</button>
+          {[
+            ["description", "Opis", "Description"],
+            ["updates", "Aktualizacje", "Updates"],
+            ["cloud", "Zapisy w chmurze", "Cloud saves"],
+            ...(game?.shop === "custom" &&
+            /^(ubi-owned-|ubisoft-)/.test(game.objectId)
+              ? [["ubisoft-achievements", "Osiągnięcia", "Achievements"]]
+              : []),
+          ].map(([id, pl, en]) => (
+            <button
+              type="button"
+              key={id}
+              aria-pressed={detailTab === id}
+              onClick={() => setDetailTab(id)}
+            >
+              {document.documentElement.lang.startsWith("pl") ? pl : en}
+            </button>
           ))}
         </nav>
-        {detailTab === "ubisoft-achievements" && game && <KrystaUbisoftAchievements key={game.objectId} objectId={game.objectId}/>}
-        {detailTab === "updates" && <KrystaGameUpdates shop={game?.shop} objectId={game?.objectId} executablePath={game?.executablePath} appId={catalogueGame?.shop === "steam" ? String(catalogueGame.objectId) : shop === "steam" ? String(objectId ?? "") : ""} title={game?.title ?? shopDetails?.name ?? ""} />}
-        {detailTab === "cloud" && (game && shop && objectId ? <KrystaGameCloud key={`${shop}:${objectId}`} shop={shop} objectId={String(objectId)} /> : <div className="krysta-game-extra">Dodaj grę do biblioteki / Add game to library</div>)}
-        <div className="game-details__description-container" style={detailTab !== "description" ? {display:"none"} : undefined}>
+        {detailTab === "ubisoft-achievements" && game && (
+          <KrystaUbisoftAchievements
+            key={game.objectId}
+            objectId={game.objectId}
+          />
+        )}
+        {detailTab === "updates" && (
+          <KrystaGameUpdates
+            shop={game?.shop}
+            objectId={game?.objectId}
+            executablePath={game?.executablePath}
+            appId={
+              catalogueGame?.shop === "steam"
+                ? String(catalogueGame.objectId)
+                : shop === "steam"
+                  ? String(objectId ?? "")
+                  : ""
+            }
+            title={game?.title ?? shopDetails?.name ?? ""}
+          />
+        )}
+        {detailTab === "cloud" &&
+          (game && shop && objectId ? (
+            <KrystaGameCloud
+              key={`${shop}:${objectId}`}
+              shop={shop}
+              objectId={String(objectId)}
+            />
+          ) : (
+            <div className="krysta-game-extra">
+              Dodaj grę do biblioteki / Add game to library
+            </div>
+          ))}
+        <div
+          className="game-details__description-container"
+          style={detailTab !== "description" ? { display: "none" } : undefined}
+        >
           <div className="game-details__description-content">
             <DescriptionHeader />
             {detailTab === "description" && !hasNSFWContentBlocked && (
@@ -529,7 +580,6 @@ export function GameDetailsContent() {
                 onLaterClick={handleReviewPromptLater}
               />
             )}
-
 
             {shopDetails?.about_the_game && (
               <h2 className="game-details__description-title">

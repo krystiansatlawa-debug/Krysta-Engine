@@ -31,6 +31,7 @@ import {
   isLocalScreenshotVisibleToSignedInOwner,
 } from "./local-screenshot-owner";
 import { LocalScreenshotStore } from "./local-screenshot-store";
+import { importLegacyScreenshots } from "./legacy-screenshot-import";
 import {
   pruneMissingLocalScreenshots,
   removeLocalScreenshotIfMissing,
@@ -64,6 +65,27 @@ export { stopWaylandFocusWatch } from "./wayland-focus";
 const GAME_HELPERS_WARMUP_TIMEOUT_MS = 5_000;
 
 let initialized = false;
+let legacyImportPromise: Promise<number> | null = null;
+let lastLegacyImportAt = 0;
+const LEGACY_IMPORT_INTERVAL_MS = 60_000;
+
+const refreshLegacyScreenshots = async () => {
+  if (legacyImportPromise) return legacyImportPromise;
+  if (Date.now() - lastLegacyImportAt < LEGACY_IMPORT_INTERVAL_MS) return 0;
+  legacyImportPromise = importLegacyScreenshots()
+    .catch((error: unknown) => {
+      logger.error(
+        "Failed to import existing screenshots into Krysta gallery",
+        error
+      );
+      return 0;
+    })
+    .finally(() => {
+      lastLegacyImportAt = Date.now();
+      legacyImportPromise = null;
+    });
+  return legacyImportPromise;
+};
 
 const broadcastLocalScreenshots = (screenshots: LocalScreenshot[]) => {
   WindowManager.sendToAppWindows(
@@ -102,6 +124,8 @@ export const initializeScreenshots = () => {
   void backfillLocalScreenshotGameIds().catch((error) => {
     logger.error("Failed to back-fill local screenshot game ids", error);
   });
+
+  void refreshLegacyScreenshots();
 
   screenshotUploadWorker.start();
 };
@@ -185,20 +209,24 @@ export const applyScreenshotsEnabledPreference = async (
   );
 };
 
-export const getLocalScreenshots = async () =>
-  pruneMissingLocalScreenshots(
+export const getLocalScreenshots = async () => {
+  await refreshLegacyScreenshots();
+  return pruneMissingLocalScreenshots(
     filterLocalScreenshotsForSignedInOwner(await LocalScreenshotStore.list())
   );
+};
 
 export const getLocalScreenshotsForGame = async (
   shop: GameShop,
   objectId: string
-) =>
-  pruneMissingLocalScreenshots(
+) => {
+  await refreshLegacyScreenshots();
+  return pruneMissingLocalScreenshots(
     filterLocalScreenshotsForSignedInOwner(
       await LocalScreenshotStore.listForGame(shop, objectId)
     )
   );
+};
 
 export const getScreenshotsFolderPath = () => getScreenshotsFolder();
 

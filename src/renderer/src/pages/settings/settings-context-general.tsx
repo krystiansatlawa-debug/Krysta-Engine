@@ -82,16 +82,42 @@ export function SettingsContextGeneral({
 }: Readonly<SettingsContextGeneralProps>) {
   const { t, i18n } = useTranslation("settings");
   const pl = i18n.language.startsWith("pl");
-  const [repairResults, setRepairResults] = useState<Awaited<ReturnType<typeof window.electron.krystaSettingsRepairStatus>>>(null);
+  const [repairResults, setRepairResults] =
+    useState<
+      Awaited<ReturnType<typeof window.electron.krystaSettingsRepairStatus>>
+    >(null);
   const [repairing, setRepairing] = useState(false);
   const [repairError, setRepairError] = useState(false);
-  useEffect(() => { void window.electron.krystaSettingsRepairStatus().then(setRepairResults).catch(() => {}); }, []);
+  useEffect(() => {
+    void window.electron
+      .krystaSettingsRepairStatus()
+      .then(setRepairResults)
+      .catch(() => {});
+  }, []);
   const repairSettings = async () => {
-    setRepairing(true); setRepairError(false);
-    try { setRepairResults(await window.electron.krystaSettingsRepair()); } catch { setRepairError(true); } finally { setRepairing(false); }
+    setRepairing(true);
+    setRepairError(false);
+    try {
+      setRepairResults(await window.electron.krystaSettingsRepair());
+    } catch {
+      setRepairError(true);
+    } finally {
+      setRepairing(false);
+    }
   };
-  const repairNames = { cloud: "Krysta Cloud", fps: "FPS", updates: pl ? "Aktualizator launchera" : "Launcher updater", "game-updates": pl ? "Aktualizacje gier" : "Game updates" };
-  const repairStates = { valid: pl ? "Poprawne" : "Valid", missing: pl ? "Domyślne (brak pliku)" : "Defaults (no file)", restored: pl ? "Przywrócono z kopii" : "Restored from backup", defaults: pl ? "Odzyskano ustawienia domyślne" : "Recovered defaults", error: pl ? "Nie udało się sprawdzić" : "Could not check" };
+  const repairNames = {
+    cloud: "Krysta Cloud",
+    fps: "FPS",
+    updates: pl ? "Aktualizator launchera" : "Launcher updater",
+    "game-updates": pl ? "Aktualizacje gier" : "Game updates",
+  };
+  const repairStates = {
+    valid: pl ? "Poprawne" : "Valid",
+    missing: pl ? "Domyślne (brak pliku)" : "Defaults (no file)",
+    restored: pl ? "Przywrócono z kopii" : "Restored from backup",
+    defaults: pl ? "Odzyskano ustawienia domyślne" : "Recovered defaults",
+    error: pl ? "Nie udało się sprawdzić" : "Could not check",
+  };
   const { updateUserPreferences } = useContext(settingsContext);
 
   const userPreferences = useAppSelector(
@@ -330,11 +356,49 @@ export function SettingsContextGeneral({
 
       <div className="settings-context-panel__group">
         <h3>{pl ? "Naprawa ustawień Krysty" : "Krysta settings repair"}</h3>
-        <p>{pl ? "Sprawdza ustawienia modułów Krysty i naprawia wyłącznie uszkodzone pliki. Biblioteka, konta i zapisy gier nie są usuwane." : "Checks Krysta module settings and repairs only damaged files. Library, accounts and game saves are not deleted."}</p>
-        <Button theme="outline" disabled={repairing} onClick={() => void repairSettings()}>{repairing ? (pl ? "Sprawdzanie…" : "Checking…") : (pl ? "Sprawdź i napraw ustawienia" : "Check and repair settings")}</Button>
-        {repairResults && <div role="status">{repairResults.map(item => <p key={item.name}>{repairNames[item.name]}: {repairStates[item.state]}</p>)}</div>}
-        {repairResults?.some(item => item.state === "restored" || item.state === "defaults") && <p>{pl ? "Uruchom ponownie Krystę, aby wszystkie moduły odczytały odzyskane ustawienia." : "Restart Krysta to reload recovered settings in every module."}</p>}
-        {repairError && <p role="alert">{pl ? "Nie udało się uruchomić naprawy." : "Could not start repair."}</p>}
+        <p>
+          {pl
+            ? "Sprawdza ustawienia modułów Krysty i naprawia wyłącznie uszkodzone pliki. Biblioteka, konta i zapisy gier nie są usuwane."
+            : "Checks Krysta module settings and repairs only damaged files. Library, accounts and game saves are not deleted."}
+        </p>
+        <Button
+          theme="outline"
+          disabled={repairing}
+          onClick={() => void repairSettings()}
+        >
+          {repairing
+            ? pl
+              ? "Sprawdzanie…"
+              : "Checking…"
+            : pl
+              ? "Sprawdź i napraw ustawienia"
+              : "Check and repair settings"}
+        </Button>
+        {repairResults && (
+          <div role="status">
+            {repairResults.map((item) => (
+              <p key={item.name}>
+                {repairNames[item.name]}: {repairStates[item.state]}
+              </p>
+            ))}
+          </div>
+        )}
+        {repairResults?.some(
+          (item) => item.state === "restored" || item.state === "defaults"
+        ) && (
+          <p>
+            {pl
+              ? "Uruchom ponownie Krystę, aby wszystkie moduły odczytały odzyskane ustawienia."
+              : "Restart Krysta to reload recovered settings in every module."}
+          </p>
+        )}
+        {repairError && (
+          <p role="alert">
+            {pl
+              ? "Nie udało się uruchomić naprawy."
+              : "Could not start repair."}
+          </p>
+        )}
       </div>
 
       <DownloadDirectoryReplacementModal
