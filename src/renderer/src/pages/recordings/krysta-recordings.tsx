@@ -170,6 +170,7 @@ export default function KrystaRecordings() {
               {pl ? "Otwórz zewnętrznie" : "Open externally"}
             </button>
           </header>
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption -- Locally captured gameplay clips do not include caption tracks. */}
           <video
             key={playing.id}
             controls

@@ -49,9 +49,12 @@ async function preparePresentMon({
     const chunks = [];
     let received = 0;
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      for (
+        let chunk = await reader.read();
+        !chunk.done;
+        chunk = await reader.read()
+      ) {
+        const { value } = chunk;
         received += value.byteLength;
         if (received > artifact.size)
           throw new Error("PresentMon size mismatch");

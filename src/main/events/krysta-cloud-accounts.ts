@@ -121,7 +121,9 @@ ipcMain.handle("krysta:cloud-account-status", async () => {
     try {
       builtInClient();
       configured = true;
-    } catch {}
+    } catch {
+      // No OAuth client is configured for this installation.
+    }
   }
   return {
     google: !!c.google,
@@ -387,7 +389,7 @@ export async function uploadCloudSnapshot(
       });
     if (!t.access_token) throw Error("Google access token unavailable");
     const auth = { Authorization: "Bearer " + t.access_token };
-    async function createFolder(name: string, parent?: string) {
+    const createFolder = async (name: string, parent?: string) => {
       const response = await fetch(
         "https://www.googleapis.com/drive/v3/files?fields=id",
         {
@@ -409,7 +411,7 @@ export async function uploadCloudSnapshot(
       const data = (await response.json()) as { id?: string };
       if (!data.id) throw Error("Missing Google folder ID");
       return data.id;
-    }
+    };
     const q =
       "trashed = false and mimeType = 'application/vnd.google-apps.folder' and name = 'Krysta Cloud'";
     const list = await fetch(
@@ -527,9 +529,12 @@ async function boundedBody(response: Response, limit: number) {
   const chunks: Buffer[] = [];
   let total = 0;
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    for (
+      let chunk = await reader.read();
+      !chunk.done;
+      chunk = await reader.read()
+    ) {
+      const { value } = chunk;
       total += value.byteLength;
       if (total > limit) throw Error("Cloud response exceeds size limit");
       chunks.push(Buffer.from(value));
@@ -600,7 +605,7 @@ async function remoteCloud(
       });
     if (!t.access_token) throw Error("Google access token unavailable");
     const auth = { Authorization: "Bearer " + t.access_token };
-    async function list(q: string) {
+    const list = async (q: string) => {
       const result: { id: string; name: string }[] = [];
       let page = "";
       do {
@@ -633,7 +638,7 @@ async function remoteCloud(
         if (result.length > 10000) throw Error("Cloud history too large");
       } while (page);
       return result;
-    }
+    };
     const roots = await list(
       "trashed = false and mimeType = 'application/vnd.google-apps.folder' and name = 'Krysta Cloud'"
     );

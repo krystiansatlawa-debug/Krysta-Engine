@@ -131,7 +131,9 @@ async function detectedRoots(
           )
             continue;
           add(data.InstallLocation);
-        } catch {}
+        } catch {
+          // Keep scanning if an Epic manifest is unreadable or malformed.
+        }
       }
     }
     const safe = folderNameSafe(game.title);

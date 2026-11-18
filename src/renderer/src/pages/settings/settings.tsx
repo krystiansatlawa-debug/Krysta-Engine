@@ -59,7 +59,9 @@ export default function Settings() {
     setShowAdvanced(next);
     try {
       localStorage.setItem(ADVANCED_VISIBILITY_KEY, String(next));
-    } catch {}
+    } catch {
+      // The in-memory preference still applies if storage is unavailable.
+    }
   };
 
   const { userDetails } = useUserDetails();

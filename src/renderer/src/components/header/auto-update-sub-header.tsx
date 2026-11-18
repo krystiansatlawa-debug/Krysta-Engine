@@ -23,7 +23,9 @@ export function AutoUpdateSubHeader() {
         if (disposed) return;
         setState(s);
         delay = s.phase === "downloading" ? 1000 : 15000;
-      } catch {}
+      } catch {
+        // Preserve the last status and retry at the next poll.
+      }
       if (!disposed) timer = setTimeout(poll, delay);
     };
     void poll();

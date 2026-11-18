@@ -420,7 +420,9 @@ async function getUbisoftAchievementsInternal(
       const u = new URL(node.icon);
       if (u.protocol === "https:" && u.hostname === "ubiservices.cdn.ubi.com")
         icon = u.href;
-    } catch {}
+    } catch {
+      // Keep the achievement when its optional icon URL is invalid.
+    }
     items.push({
       id: node.id,
       title: node.title.slice(0, 500),

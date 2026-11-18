@@ -108,7 +108,7 @@ function parseContent(contents: string) {
   }
   if (!image) {
     const clan = decoded.match(
-      /\{STEAM_CLAN_IMAGE\}\/[^\s"'<>\[\]]+\.(?:jpg|jpeg|png|webp|gif)/i
+      /\{STEAM_CLAN_IMAGE\}\/[^\s"'<>[\]]+\.(?:jpg|jpeg|png|webp|gif)/i
     )?.[0];
     if (clan) image = safeImage(clan);
   }

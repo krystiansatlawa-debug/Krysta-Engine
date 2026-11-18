@@ -10,7 +10,6 @@ function waitFor(
   timeout = 10000
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    let timer: ReturnType<typeof setTimeout>;
     const clean = () => {
       clearTimeout(timer);
       target.removeEventListener(event, done);
@@ -29,7 +28,7 @@ function waitFor(
       clean();
       reject(Error("Trim cancelled"));
     };
-    timer = setTimeout(fail, timeout);
+    const timer = setTimeout(fail, timeout);
     target.addEventListener(event, done, { once: true });
     target.addEventListener("error", fail, { once: true });
     signal.addEventListener("abort", cancel, { once: true });
@@ -85,8 +84,6 @@ export async function trimWebm(
         video.src = url;
         await ready;
         await new Promise<void>((resolve, reject) => {
-          let tick: ReturnType<typeof setInterval>,
-            deadline: ReturnType<typeof setTimeout>;
           const clean = () => {
             clearInterval(tick);
             clearTimeout(deadline);
@@ -102,13 +99,13 @@ export async function trimWebm(
             clean();
             reject(Error("Trim cancelled"));
           };
-          tick = setInterval(() => {
+          const tick = setInterval(() => {
             if (video.currentTime >= start) {
               clean();
               resolve();
             }
           }, 30);
-          deadline = setTimeout(fail, (start + 12) * 1000);
+          const deadline = setTimeout(fail, (start + 12) * 1000);
           signal.addEventListener("abort", cancel, { once: true });
           video.addEventListener("ended", fail, { once: true });
           if (signal.aborted) {
@@ -141,9 +138,9 @@ export async function trimWebm(
     });
     const r = recorder;
     const duration = await new Promise<number>((resolve, reject) => {
-      let finished = false,
-        actualStart = video.currentTime,
-        actualEnd = actualStart;
+      const actualStart = video.currentTime;
+      let finished = false;
+      let actualEnd = actualStart;
       const stop = () => {
         if (finished) return;
         finished = true;

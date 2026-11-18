@@ -84,6 +84,15 @@ jobs:
       - name: Install dependencies
         run: yarn --frozen-lockfile
 
+      - name: Test Windows achievement and local file handling
+        if: runner.os == 'Windows' && github.event_name == 'pull_request'
+        run: >
+          node --import ./scripts/register-ts-node.mjs --test
+          src/main/services/achievements/ubisoft-recording-baseline.test.ts
+          src/main/services/steam-integration/steam-community-achievements.test.ts
+          src/main/services/steam-integration/steam-game-exit-sync.test.ts
+          src/main/services/krysta-local-media-and-executable.test.ts
+
       # Save before packaging so later failures do not discard compiled dependencies.
       - name: Save vcpkg binary packages
         if: steps.torrent-bridge.outputs.current != 'true' && steps.vcpkg-cache.outputs.cache-hit != 'true'

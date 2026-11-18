@@ -79,7 +79,9 @@ export function SettingsContextKrystaUpdates() {
         if (disposed) return;
         setDownload(value);
         delay = value.phase === "downloading" ? 1000 : 10000;
-      } catch {}
+      } catch {
+        // Preserve the last status and retry at the next poll.
+      }
       if (!disposed) timer = setTimeout(poll, delay);
     };
     void poll();

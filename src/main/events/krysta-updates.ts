@@ -286,7 +286,7 @@ async function download(release: Release) {
       const reader = response.body.getReader(),
         hash = createHash("sha256");
       let bytes = 0;
-      async function* chunks() {
+      const chunks = async function* () {
         try {
           while (true) {
             const r = await reader.read();
@@ -297,7 +297,7 @@ async function download(release: Release) {
           await reader.cancel().catch(() => {});
           reader.releaseLock();
         }
-      }
+      };
       const meter = new Transform({
         transform(chunk: Buffer, _enc, callback) {
           bytes += chunk.length;
