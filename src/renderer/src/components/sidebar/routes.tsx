@@ -1,7 +1,7 @@
 import { AppsIcon, GearIcon, HomeIcon, BookIcon } from "@primer/octicons-react";
 
 import { SidebarDownloadIcon } from "./sidebar-download-icon";
-import { ImagesIcon } from "@primer/octicons-react";
+import { ImageIcon } from "@primer/octicons-react";
 
 function LeaderboardsIcon() {
   return (
@@ -56,7 +56,7 @@ export const routes = [
   {
     path: "/multimedia",
     nameKey: "multimedia",
-    render: () => <ImagesIcon />,
+    render: () => <ImageIcon />,
   },
   {
     path: "/settings",
