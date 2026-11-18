@@ -90,9 +90,16 @@ const addGameToLibrary = async (
 
     // Do not block adding a game while scanning its installation on disk.
     // Official Steam/Epic imports and manually assigned executables are protected.
-    if (process.platform === "win32" && (game.shop === "steam" || game.shop === "epic" || game.shop === "custom")) {
-      void autoLinkKrystaGameExecutable(game.shop, game.objectId).catch((error) =>
-        logger.warn("Automatic game executable detection failed", {gameKey, error})
+    if (
+      process.platform === "win32" &&
+      (game.shop === "steam" || game.shop === "epic" || game.shop === "custom")
+    ) {
+      void autoLinkKrystaGameExecutable(game.shop, game.objectId).catch(
+        (error) =>
+          logger.warn("Automatic game executable detection failed", {
+            gameKey,
+            error,
+          })
       );
     }
   }

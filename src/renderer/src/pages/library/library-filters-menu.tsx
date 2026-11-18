@@ -177,7 +177,10 @@ export function LibraryFiltersMenu({
                   value={collection.id}
                   onSelect={keepOpen}
                   onContextMenu={
-                    isFavorites || isHidden || collection.id === uncategorizedCollectionId || collection.id === updatesCollectionId
+                    isFavorites ||
+                    isHidden ||
+                    collection.id === uncategorizedCollectionId ||
+                    collection.id === updatesCollectionId
                       ? undefined
                       : (event) => onCollectionContextMenu(event, collection)
                   }

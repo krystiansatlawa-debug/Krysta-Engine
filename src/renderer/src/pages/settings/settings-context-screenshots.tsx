@@ -93,12 +93,20 @@ export function SettingsContextScreenshots() {
     resolveScreenshotPreferences(userPreferences)
   );
   const [screenshotsPath, setScreenshotsPath] = useState("");
-  const [captureSection, setCaptureSection] = useState<"screenshots" | "recordings" | "library">(() =>
-    requestedSection === "recordings" || requestedSection === "library" ? requestedSection : "screenshots"
+  const [captureSection, setCaptureSection] = useState<
+    "screenshots" | "recordings" | "library"
+  >(() =>
+    requestedSection === "recordings" || requestedSection === "library"
+      ? requestedSection
+      : "screenshots"
   );
 
   useEffect(() => {
-    if (requestedSection === "recordings" || requestedSection === "screenshots" || requestedSection === "library") {
+    if (
+      requestedSection === "recordings" ||
+      requestedSection === "screenshots" ||
+      requestedSection === "library"
+    ) {
       setCaptureSection(requestedSection);
     }
   }, [requestedSection]);
@@ -198,169 +206,197 @@ export function SettingsContextScreenshots() {
 
   return (
     <div className="settings-context-panel settings-screenshots">
-      <nav className="settings-screenshots__section-tabs" aria-label={pl ? "Ustawienia multimediów" : "Media settings"}>
-        {(["screenshots", "recordings", "library"] as const).map(section => (
-          <button key={section} type="button" aria-pressed={captureSection === section}
-            onClick={() => setCaptureSection(section)}>
-            {section === "screenshots" ? (pl ? "Zrzuty ekranu" : "Screenshots") : section === "recordings" ? (pl ? "Nagrania" : "Recordings") : (pl ? "Galeria i prywatność" : "Gallery and privacy")}
+      <nav
+        className="settings-screenshots__section-tabs"
+        aria-label={pl ? "Ustawienia multimediów" : "Media settings"}
+      >
+        {(["screenshots", "recordings", "library"] as const).map((section) => (
+          <button
+            key={section}
+            type="button"
+            aria-pressed={captureSection === section}
+            onClick={() => setCaptureSection(section)}
+          >
+            {section === "screenshots"
+              ? pl
+                ? "Zrzuty ekranu"
+                : "Screenshots"
+              : section === "recordings"
+                ? pl
+                  ? "Nagrania"
+                  : "Recordings"
+                : pl
+                  ? "Galeria i prywatność"
+                  : "Gallery and privacy"}
           </button>
         ))}
       </nav>
       {captureSection === "screenshots" && (
         <div className="settings-context-panel__group">
-        <h3>{t("screenshots_capture_group")}</h3>
+          <h3>{t("screenshots_capture_group")}</h3>
 
-        <CheckboxField
-          label={t("screenshots_enable")}
-          checked={form.enabled}
-          onChange={() =>
-            savePreferences(
-              { enabled: !form.enabled },
-              { screenshotsEnabled: !form.enabled }
-            )
-          }
-        />
-
-        <SettingsScreenshotsHotkey
-          binding={form.hotkey}
-          disabled={isCaptureDisabled}
-          onChange={handleHotkeyChange}
-        />
-
-        <ScreenshotInputStatusLine status={inputStatus} />
-
-        <details className="settings-screenshots__advanced">
-          <summary>{pl?"Dodatkowe opcje zdjęć (pad, dźwięk, powiadomienia)":"Extra capture options (gamepad, sound, notifications)"}</summary>
-          <div className="settings-context-panel__group">
-        <CheckboxField
-          label={t("screenshots_gamepad_enable")}
-          checked={form.gamepadEnabled}
-          disabled={isCaptureDisabled}
-          onChange={() =>
-            savePreferences(
-              { gamepadEnabled: !form.gamepadEnabled },
-              { screenshotGamepadEnabled: !form.gamepadEnabled }
-            )
-          }
-        />
-
-        <SettingsScreenshotsGamepad
-          combo={form.gamepadCombo}
-          disabled={isCaptureDisabled || !form.gamepadEnabled}
-          onChange={handleGamepadComboChange}
-        />
-
-        <CheckboxField
-          label={t("screenshots_capture_sound")}
-          checked={form.captureSoundEnabled}
-          disabled={isCaptureDisabled}
-          onChange={() =>
-            savePreferences(
-              { captureSoundEnabled: !form.captureSoundEnabled },
-              { screenshotCaptureSoundEnabled: !form.captureSoundEnabled }
-            )
-          }
-        />
-
-        <CheckboxField
-          label={t("screenshots_toast")}
-          checked={form.toastEnabled}
-          disabled={isCaptureDisabled}
-          onChange={() =>
-            savePreferences(
-              { toastEnabled: !form.toastEnabled },
-              { screenshotToastEnabled: !form.toastEnabled }
-            )
-          }
-        />
-          </div>
-        </details>
-      </div>
-      )}
-
-      {captureSection === "recordings" && <div className="settings-context-panel__group">
-        <h3>{pl ? "Nagrywanie osiągnięć" : "Achievement recordings"}</h3>
-        <SettingsAchievementRecordings />
-      </div>}
-
-      {captureSection === "library" && <>
-      <div className="settings-context-panel__group">
-        <h3>{t("screenshots_upload_group")}</h3>
-
-        <SelectField
-          className="settings-screenshots__select"
-          label={t("screenshots_default_visibility")}
-          value={form.defaultVisibility}
-          options={visibilityOptions}
-          onChange={(event) => {
-            const { value } = event.target;
-            if (!isScreenshotVisibility(value)) return;
-
-            savePreferences(
-              { defaultVisibility: value },
-              { screenshotDefaultVisibility: value }
-            );
-          }}
-        />
-      </div>
-
-      <div className="settings-context-panel__group">
-        <h3>{t("screenshots_community_group")}</h3>
-
-        <CheckboxField
-          id={HIDE_COMMUNITY_SCREENSHOTS_SETTING_ID}
-          label={t("screenshots_hide_community")}
-          checked={form.hideCommunity}
-          onChange={() =>
-            savePreferences(
-              { hideCommunity: !form.hideCommunity },
-              { hideCommunityScreenshots: !form.hideCommunity }
-            )
-          }
-        />
-      </div>
-
-      <div className="settings-context-panel__group">
-        <h3>{t("screenshots_folder_group")}</h3>
-
-        <div className="settings-screenshots__folder">
-          <TextField
-            label={t("screenshots_directory")}
-            value={screenshotsPath}
-            readOnly
-            disabled
-            rightContent={
-              <>
-                <Button theme="outline" onClick={handleChooseScreenshotsPath}>
-                  <FileDirectoryIcon size={14} />
-                  {t("change_screenshots_directory")}
-                </Button>
-                {hasCustomScreenshotsPath && (
-                  <Button
-                    className="settings-screenshots__icon-button"
-                    theme="outline"
-                    tooltip={t("reset_screenshots_directory")}
-                    aria-label={t("reset_screenshots_directory")}
-                    onClick={handleResetScreenshotsPath}
-                  >
-                    <HistoryIcon size={14} />
-                  </Button>
-                )}
-              </>
+          <CheckboxField
+            label={t("screenshots_enable")}
+            checked={form.enabled}
+            onChange={() =>
+              savePreferences(
+                { enabled: !form.enabled },
+                { screenshotsEnabled: !form.enabled }
+              )
             }
           />
 
-          <Button
-            className="settings-screenshots__open-folder"
-            theme="outline"
-            onClick={handleOpenScreenshotsFolder}
-          >
-            <FileDirectoryIcon size={14} />
-            {t("open_screenshots_directory")}
-          </Button>
+          <SettingsScreenshotsHotkey
+            binding={form.hotkey}
+            disabled={isCaptureDisabled}
+            onChange={handleHotkeyChange}
+          />
+
+          <ScreenshotInputStatusLine status={inputStatus} />
+
+          <details className="settings-screenshots__advanced">
+            <summary>
+              {pl
+                ? "Dodatkowe opcje zdjęć (pad, dźwięk, powiadomienia)"
+                : "Extra capture options (gamepad, sound, notifications)"}
+            </summary>
+            <div className="settings-context-panel__group">
+              <CheckboxField
+                label={t("screenshots_gamepad_enable")}
+                checked={form.gamepadEnabled}
+                disabled={isCaptureDisabled}
+                onChange={() =>
+                  savePreferences(
+                    { gamepadEnabled: !form.gamepadEnabled },
+                    { screenshotGamepadEnabled: !form.gamepadEnabled }
+                  )
+                }
+              />
+
+              <SettingsScreenshotsGamepad
+                combo={form.gamepadCombo}
+                disabled={isCaptureDisabled || !form.gamepadEnabled}
+                onChange={handleGamepadComboChange}
+              />
+
+              <CheckboxField
+                label={t("screenshots_capture_sound")}
+                checked={form.captureSoundEnabled}
+                disabled={isCaptureDisabled}
+                onChange={() =>
+                  savePreferences(
+                    { captureSoundEnabled: !form.captureSoundEnabled },
+                    { screenshotCaptureSoundEnabled: !form.captureSoundEnabled }
+                  )
+                }
+              />
+
+              <CheckboxField
+                label={t("screenshots_toast")}
+                checked={form.toastEnabled}
+                disabled={isCaptureDisabled}
+                onChange={() =>
+                  savePreferences(
+                    { toastEnabled: !form.toastEnabled },
+                    { screenshotToastEnabled: !form.toastEnabled }
+                  )
+                }
+              />
+            </div>
+          </details>
         </div>
-      </div>
-      </>}
+      )}
+
+      {captureSection === "recordings" && (
+        <div className="settings-context-panel__group">
+          <h3>{pl ? "Nagrywanie osiągnięć" : "Achievement recordings"}</h3>
+          <SettingsAchievementRecordings />
+        </div>
+      )}
+
+      {captureSection === "library" && (
+        <>
+          <div className="settings-context-panel__group">
+            <h3>{t("screenshots_upload_group")}</h3>
+
+            <SelectField
+              className="settings-screenshots__select"
+              label={t("screenshots_default_visibility")}
+              value={form.defaultVisibility}
+              options={visibilityOptions}
+              onChange={(event) => {
+                const { value } = event.target;
+                if (!isScreenshotVisibility(value)) return;
+
+                savePreferences(
+                  { defaultVisibility: value },
+                  { screenshotDefaultVisibility: value }
+                );
+              }}
+            />
+          </div>
+
+          <div className="settings-context-panel__group">
+            <h3>{t("screenshots_community_group")}</h3>
+
+            <CheckboxField
+              id={HIDE_COMMUNITY_SCREENSHOTS_SETTING_ID}
+              label={t("screenshots_hide_community")}
+              checked={form.hideCommunity}
+              onChange={() =>
+                savePreferences(
+                  { hideCommunity: !form.hideCommunity },
+                  { hideCommunityScreenshots: !form.hideCommunity }
+                )
+              }
+            />
+          </div>
+
+          <div className="settings-context-panel__group">
+            <h3>{t("screenshots_folder_group")}</h3>
+
+            <div className="settings-screenshots__folder">
+              <TextField
+                label={t("screenshots_directory")}
+                value={screenshotsPath}
+                readOnly
+                disabled
+                rightContent={
+                  <>
+                    <Button
+                      theme="outline"
+                      onClick={handleChooseScreenshotsPath}
+                    >
+                      <FileDirectoryIcon size={14} />
+                      {t("change_screenshots_directory")}
+                    </Button>
+                    {hasCustomScreenshotsPath && (
+                      <Button
+                        className="settings-screenshots__icon-button"
+                        theme="outline"
+                        tooltip={t("reset_screenshots_directory")}
+                        aria-label={t("reset_screenshots_directory")}
+                        onClick={handleResetScreenshotsPath}
+                      >
+                        <HistoryIcon size={14} />
+                      </Button>
+                    )}
+                  </>
+                }
+              />
+
+              <Button
+                className="settings-screenshots__open-folder"
+                theme="outline"
+                onClick={handleOpenScreenshotsFolder}
+              >
+                <FileDirectoryIcon size={14} />
+                {t("open_screenshots_directory")}
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

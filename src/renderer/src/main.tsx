@@ -145,8 +145,18 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                   <Route path="/library" element={<Library />} />
                   <Route path="/downloads" element={<Downloads />} />
                   <Route path="/multimedia" element={<KrystaMultimedia />} />
-                  <Route path="/recordings" element={<Navigate to="/multimedia?tab=recordings" replace />} />
-                  <Route path="/screenshots" element={<Navigate to="/multimedia?tab=screenshots" replace />} />
+                  <Route
+                    path="/recordings"
+                    element={
+                      <Navigate to="/multimedia?tab=recordings" replace />
+                    }
+                  />
+                  <Route
+                    path="/screenshots"
+                    element={
+                      <Navigate to="/multimedia?tab=screenshots" replace />
+                    }
+                  />
                   <Route
                     path="/game/:shop/:objectId"
                     element={<GameDetails />}

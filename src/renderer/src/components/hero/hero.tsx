@@ -57,36 +57,54 @@ export function Hero() {
 
   if (featuredGameDetails?.length) {
     const game = featuredGameDetails[active % featuredGameDetails.length];
-    return (<section className="krysta-featured">
-      <button
-        type="button"
-        onClick={() => navigate(game.uri)}
-        className="hero"
-        key={game.uri}
-      >
-        <div className="hero__backdrop">
-          <img
-            src={game.libraryHeroImageUrl ?? undefined}
-            alt={game.description ?? ""}
-            className="hero__media"
-          />
-
-          <div className="hero__content">
-            <span className="krysta-featured__badge">{polish ? "Polecana gra" : "Featured game"}</span>
+    return (
+      <section className="krysta-featured">
+        <button
+          type="button"
+          onClick={() => navigate(game.uri)}
+          className="hero"
+          key={game.uri}
+        >
+          <div className="hero__backdrop">
             <img
-              src={game.logoImageUrl ?? undefined}
-              width="250px"
+              src={game.libraryHeroImageUrl ?? undefined}
               alt={game.description ?? ""}
-              loading="eager"
-              className="hero__logo"
+              className="hero__media"
             />
-            <p className="hero__description">{game.description}</p>
-            <span className="krysta-featured__cta">{polish ? "Szczegóły →" : "Details →"}</span>
+
+            <div className="hero__content">
+              <span className="krysta-featured__badge">
+                {polish ? "Polecana gra" : "Featured game"}
+              </span>
+              <img
+                src={game.logoImageUrl ?? undefined}
+                width="250px"
+                alt={game.description ?? ""}
+                loading="eager"
+                className="hero__logo"
+              />
+              <p className="hero__description">{game.description}</p>
+              <span className="krysta-featured__cta">
+                {polish ? "Szczegóły →" : "Details →"}
+              </span>
+            </div>
           </div>
-        </div>
-      </button>
-      {featuredGameDetails.length > 1 && <div className="krysta-featured__dots">{featuredGameDetails.map((item, index) => <button type="button" key={item.uri} aria-label={`Featured game ${index + 1}`} aria-current={index === active % featuredGameDetails.length} onClick={() => setActive(index)} />)}</div>}
-      </section>);
+        </button>
+        {featuredGameDetails.length > 1 && (
+          <div className="krysta-featured__dots">
+            {featuredGameDetails.map((item, index) => (
+              <button
+                type="button"
+                key={item.uri}
+                aria-label={`Featured game ${index + 1}`}
+                aria-current={index === active % featuredGameDetails.length}
+                onClick={() => setActive(index)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    );
   }
 
   return null;

@@ -78,7 +78,20 @@ export function SteamLibraryBadge({
         aria-label={label}
         role="img"
       >
-        {badgeSource === "ubisoft" ? (<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M4 8c9-10 21 3 11 10-6 4-13-4-7-8 4-3 9 2 5 5"/></svg>) : badgeSource === "epic" ? (
+        {badgeSource === "ubisoft" ? (
+          <svg
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <path d="M4 8c9-10 21 3 11 10-6 4-13-4-7-8 4-3 9 2 5 5" />
+          </svg>
+        ) : badgeSource === "epic" ? (
           <EpicLogo
             width={variant === "sidebar" ? 8 : 13}
             height={variant === "sidebar" ? 8 : 13}

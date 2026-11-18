@@ -34,6 +34,10 @@ export const getScreenshotFolderCandidates = async () => [
     getDefaultScreenshotsFolder(),
     path.join(getPicturesDirectory(), KRYSTA_SCREENSHOTS_FOLDER_NAME),
     path.join(SystemPath.getPath("home"), "Pictures", SCREENSHOTS_FOLDER_NAME),
-    path.join(SystemPath.getPath("home"), "Pictures", KRYSTA_SCREENSHOTS_FOLDER_NAME),
+    path.join(
+      SystemPath.getPath("home"),
+      "Pictures",
+      KRYSTA_SCREENSHOTS_FOLDER_NAME
+    ),
   ]),
 ];

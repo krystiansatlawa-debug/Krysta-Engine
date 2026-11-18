@@ -173,10 +173,22 @@ $screenshots-hover-duration: 0.2s;
   }
 }
 
-.settings-screenshots__advanced{border:1px solid rgba(255,255,255,.16);border-radius:8px;padding:12px 14px}
-.settings-screenshots__advanced summary{cursor:pointer;font-weight:600}
-.settings-screenshots__advanced[open]{padding-bottom:18px}
-.settings-screenshots__advanced summary:focus-visible{outline:2px solid #bbb;outline-offset:3px}
+.settings-screenshots__advanced {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.settings-screenshots__advanced summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.settings-screenshots__advanced[open] {
+  padding-bottom: 18px;
+}
+.settings-screenshots__advanced summary:focus-visible {
+  outline: 2px solid #bbb;
+  outline-offset: 3px;
+}
 
 .settings-screenshots__section-tabs {
   display: flex;

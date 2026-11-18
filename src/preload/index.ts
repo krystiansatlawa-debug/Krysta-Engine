@@ -178,74 +178,162 @@ const invokeGameArtifactExport = async (
 
 contextBridge.exposeInMainWorld("electron", {
   krystaRecordingsState: () => ipcRenderer.invoke("krysta:recordings-state"),
-  krystaRecordingsSettings: (value: { enabled:boolean;seconds:number;audio:boolean;preSeconds:number;quality:number;fps:number;limitGb:number;hotkey:string;folder?:string }) => ipcRenderer.invoke("krysta:recordings-settings",value),
-  krystaRecordingTrimSave: (id:string,start:number,end:number,data:Uint8Array,duration:number,audio:boolean) => ipcRenderer.invoke("krysta:recording-trim-save",id,start,end,data,duration,audio),
-  krystaRecordingRead: (id:string) => ipcRenderer.invoke("krysta:recording-read",id),
-  krystaRecordingsChooseFolder: (reset=false) => ipcRenderer.invoke("krysta:recordings-choose-folder",reset),
-  krystaRecordingOpen: (id:string) => ipcRenderer.invoke("krysta:recording-open",id),
-  krystaRecordingDelete: (id:string) => ipcRenderer.invoke("krysta:recording-delete",id),
+  krystaRecordingsSettings: (value: {
+    enabled: boolean;
+    seconds: number;
+    audio: boolean;
+    preSeconds: number;
+    quality: number;
+    fps: number;
+    limitGb: number;
+    hotkey: string;
+    folder?: string;
+  }) => ipcRenderer.invoke("krysta:recordings-settings", value),
+  krystaRecordingTrimSave: (
+    id: string,
+    start: number,
+    end: number,
+    data: Uint8Array,
+    duration: number,
+    audio: boolean
+  ) =>
+    ipcRenderer.invoke(
+      "krysta:recording-trim-save",
+      id,
+      start,
+      end,
+      data,
+      duration,
+      audio
+    ),
+  krystaRecordingRead: (id: string) =>
+    ipcRenderer.invoke("krysta:recording-read", id),
+  krystaRecordingsChooseFolder: (reset = false) =>
+    ipcRenderer.invoke("krysta:recordings-choose-folder", reset),
+  krystaRecordingOpen: (id: string) =>
+    ipcRenderer.invoke("krysta:recording-open", id),
+  krystaRecordingDelete: (id: string) =>
+    ipcRenderer.invoke("krysta:recording-delete", id),
   krystaRecordingsFolder: () => ipcRenderer.invoke("krysta:recordings-folder"),
   krystaRecordingStop: () => ipcRenderer.invoke("krysta:recording-stop"),
   scanRockstar: () => ipcRenderer.invoke("krysta:rockstar-scan"),
   importRockstar: () => ipcRenderer.invoke("krysta:rockstar-import"),
   openRockstarLauncher: () => ipcRenderer.invoke("krysta:rockstar-open"),
-  importUbisoft: (): Promise<number> => ipcRenderer.invoke("krysta:ubisoft-import"),
-  getUbisoftAchievements: (objectId:string,force=false) => ipcRenderer.invoke("krysta:ubi-achievements",objectId,force),
+  importUbisoft: (): Promise<number> =>
+    ipcRenderer.invoke("krysta:ubisoft-import"),
+  getUbisoftAchievements: (objectId: string, force = false) =>
+    ipcRenderer.invoke("krysta:ubi-achievements", objectId, force),
   getUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-state"),
   connectUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-connect"),
   syncUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-sync"),
-  disconnectUbisoftAccount: () => ipcRenderer.invoke("krysta:ubi-account-disconnect"),
+  disconnectUbisoftAccount: () =>
+    ipcRenderer.invoke("krysta:ubi-account-disconnect"),
   krystaFpsHotkey: () => ipcRenderer.invoke("krysta:fps-hotkey"),
-  krystaFpsSetHotkey: (value:string) => ipcRenderer.invoke("krysta:fps-set-hotkey",value),
+  krystaFpsSetHotkey: (value: string) =>
+    ipcRenderer.invoke("krysta:fps-set-hotkey", value),
   krystaFpsPosition: () => ipcRenderer.invoke("krysta:fps-position"),
-  krystaFpsSetPosition: (position:"tl"|"tr"|"bl"|"br") => ipcRenderer.invoke("krysta:fps-set-position",position),
-  krystaCloudAuto: (enabled:boolean) => ipcRenderer.invoke("krysta:cloud-auto",enabled),
-  krystaCloudSyncBeforeLaunch: (enabled:boolean) => ipcRenderer.invoke("krysta:cloud-sync-before-launch",enabled),
-  krystaCloudAutoStatus: (shop:string,id:string) => ipcRenderer.invoke("krysta:cloud-auto-status",shop,id),
-  krystaCloudCompare: (shop:string,id:string) => ipcRenderer.invoke("krysta:cloud-compare",shop,id),
-  krystaCloudAccountStatus: () => ipcRenderer.invoke("krysta:cloud-account-status"),
-  krystaCloudGoogleConnect: () => ipcRenderer.invoke("krysta:cloud-google-connect"),
-  krystaCloudGoogleConnectJson: () => ipcRenderer.invoke("krysta:cloud-google-connect-json"),
+  krystaFpsSetPosition: (position: "tl" | "tr" | "bl" | "br") =>
+    ipcRenderer.invoke("krysta:fps-set-position", position),
+  krystaCloudAuto: (enabled: boolean) =>
+    ipcRenderer.invoke("krysta:cloud-auto", enabled),
+  krystaCloudSyncBeforeLaunch: (enabled: boolean) =>
+    ipcRenderer.invoke("krysta:cloud-sync-before-launch", enabled),
+  krystaCloudAutoStatus: (shop: string, id: string) =>
+    ipcRenderer.invoke("krysta:cloud-auto-status", shop, id),
+  krystaCloudCompare: (shop: string, id: string) =>
+    ipcRenderer.invoke("krysta:cloud-compare", shop, id),
+  krystaCloudAccountStatus: () =>
+    ipcRenderer.invoke("krysta:cloud-account-status"),
+  krystaCloudGoogleConnect: () =>
+    ipcRenderer.invoke("krysta:cloud-google-connect"),
+  krystaCloudGoogleConnectJson: () =>
+    ipcRenderer.invoke("krysta:cloud-google-connect-json"),
   krystaCloudGoogleTest: () => ipcRenderer.invoke("krysta:cloud-google-test"),
-  krystaCloudOpenPreUpdateFolder: () => ipcRenderer.invoke("krysta:cloud-open-pre-update-folder"),
-  krystaCloudSynologyConnect: (url:string,username:string,password:string) => ipcRenderer.invoke("krysta:cloud-synology-connect",url,username,password),
-  krystaCloudAccountDisconnect: (provider:string) => ipcRenderer.invoke("krysta:cloud-account-disconnect",provider),
-  installUbisoftGame: (id:string) => ipcRenderer.invoke("krysta:ubisoft-install",id),
+  krystaCloudOpenPreUpdateFolder: () =>
+    ipcRenderer.invoke("krysta:cloud-open-pre-update-folder"),
+  krystaCloudSynologyConnect: (
+    url: string,
+    username: string,
+    password: string
+  ) =>
+    ipcRenderer.invoke(
+      "krysta:cloud-synology-connect",
+      url,
+      username,
+      password
+    ),
+  krystaCloudAccountDisconnect: (provider: string) =>
+    ipcRenderer.invoke("krysta:cloud-account-disconnect", provider),
+  installUbisoftGame: (id: string) =>
+    ipcRenderer.invoke("krysta:ubisoft-install", id),
   krystaGameWatchBadges: () => ipcRenderer.invoke("krysta:game-watch-badges"),
-  krystaGameWatchDismiss: (shop:string,id:string) => ipcRenderer.invoke("krysta:game-watch-dismiss",shop,id),
-  krystaGameIntegrity: (shop:string,id:string,action:"official"|"local") => ipcRenderer.invoke("krysta:game-integrity",shop,id,action),
-  krystaGameWatchGet: (shop:string,id:string) => ipcRenderer.invoke("krysta:game-watch-get",shop,id),
-  krystaGameWatchSet: (shop:string,id:string,override:"inherit"|"on"|"off") => ipcRenderer.invoke("krysta:game-watch-set",shop,id,override),
-  krystaGameWatchSettings: () => ipcRenderer.invoke("krysta:game-watch-settings"),
-  krystaGameWatchSettingsSet: (value:{enabled:boolean;intervalHours:number;notifications:boolean;startup:boolean;pauseDuringPlay?:boolean;autoOpenSteamQueue?:boolean}) => ipcRenderer.invoke("krysta:game-watch-settings-set",value),
+  krystaGameWatchDismiss: (shop: string, id: string) =>
+    ipcRenderer.invoke("krysta:game-watch-dismiss", shop, id),
+  krystaGameIntegrity: (
+    shop: string,
+    id: string,
+    action: "official" | "local"
+  ) => ipcRenderer.invoke("krysta:game-integrity", shop, id, action),
+  krystaGameWatchGet: (shop: string, id: string) =>
+    ipcRenderer.invoke("krysta:game-watch-get", shop, id),
+  krystaGameWatchSet: (
+    shop: string,
+    id: string,
+    override: "inherit" | "on" | "off"
+  ) => ipcRenderer.invoke("krysta:game-watch-set", shop, id, override),
+  krystaGameWatchSettings: () =>
+    ipcRenderer.invoke("krysta:game-watch-settings"),
+  krystaGameWatchSettingsSet: (value: {
+    enabled: boolean;
+    intervalHours: number;
+    notifications: boolean;
+    startup: boolean;
+    pauseDuringPlay?: boolean;
+    autoOpenSteamQueue?: boolean;
+  }) => ipcRenderer.invoke("krysta:game-watch-settings-set", value),
   krystaGameWatchScan: () => ipcRenderer.invoke("krysta:game-watch-scan"),
-  krystaGameWatchCheck: (shop:string,id:string) => ipcRenderer.invoke("krysta:game-watch-check",shop,id),
-  krystaGameWatchOpenClient: (shop:string,id:string) => ipcRenderer.invoke("krysta:game-watch-open-client",shop,id),
+  krystaGameWatchCheck: (shop: string, id: string) =>
+    ipcRenderer.invoke("krysta:game-watch-check", shop, id),
+  krystaGameWatchOpenClient: (shop: string, id: string) =>
+    ipcRenderer.invoke("krysta:game-watch-open-client", shop, id),
   krystaSettingsRepair: () => ipcRenderer.invoke("krysta:settings-repair"),
-  krystaSettingsRepairStatus: () => ipcRenderer.invoke("krysta:settings-repair-status"),
-  krystaUpdatesSyncStatus: () => ipcRenderer.invoke("krysta:updates-sync-status"),
-  krystaUpdatesSyncRefresh: () => ipcRenderer.invoke("krysta:updates-sync-refresh"),
+  krystaSettingsRepairStatus: () =>
+    ipcRenderer.invoke("krysta:settings-repair-status"),
+  krystaUpdatesSyncStatus: () =>
+    ipcRenderer.invoke("krysta:updates-sync-status"),
+  krystaUpdatesSyncRefresh: () =>
+    ipcRenderer.invoke("krysta:updates-sync-refresh"),
   krystaUpdatesStatus: () => ipcRenderer.invoke("krysta:updates-status"),
   krystaUpdatesInstall: () => ipcRenderer.invoke("krysta:updates-install"),
   krystaUpdatesCheck: () => ipcRenderer.invoke("krysta:updates-check"),
   krystaUpdatesPrefs: () => ipcRenderer.invoke("krysta:updates-prefs"),
-  krystaUpdatesSet: (automatic:boolean,notifications:boolean) => ipcRenderer.invoke("krysta:updates-set",automatic,notifications),
-  krystaUpdatesOpen: (kind:string) => ipcRenderer.invoke("krysta:updates-open",kind),
+  krystaUpdatesSet: (automatic: boolean, notifications: boolean) =>
+    ipcRenderer.invoke("krysta:updates-set", automatic, notifications),
+  krystaUpdatesOpen: (kind: string) =>
+    ipcRenderer.invoke("krysta:updates-open", kind),
   krystaCloudConfig: () => ipcRenderer.invoke("krysta:cloud-config"),
-  krystaCloudProvider: (provider:string) => ipcRenderer.invoke("krysta:cloud-provider",provider),
+  krystaCloudProvider: (provider: string) =>
+    ipcRenderer.invoke("krysta:cloud-provider", provider),
   krystaCloudFolder: () => ipcRenderer.invoke("krysta:cloud-folder"),
-  krystaCloudList: (shop:string,id:string) => ipcRenderer.invoke("krysta:cloud-list",shop,id),
-  krystaCloudRestore: (shop:string,id:string,version:string) => ipcRenderer.invoke("krysta:cloud-restore",shop,id,version),
-  krystaCloudBackup: (shop:string,id:string) => ipcRenderer.invoke("krysta:cloud-backup",shop,id),
+  krystaCloudList: (shop: string, id: string) =>
+    ipcRenderer.invoke("krysta:cloud-list", shop, id),
+  krystaCloudRestore: (shop: string, id: string, version: string) =>
+    ipcRenderer.invoke("krysta:cloud-restore", shop, id, version),
+  krystaCloudBackup: (shop: string, id: string) =>
+    ipcRenderer.invoke("krysta:cloud-backup", shop, id),
   krystaFpsStatus: () => ipcRenderer.invoke("krysta:fps-status"),
   krystaFpsSelectTool: () => ipcRenderer.invoke("krysta:fps-select-tool"),
   krystaFpsPreference: () => ipcRenderer.invoke("krysta:fps-preference"),
-  krystaSetFpsPreference: (enabled:boolean) => ipcRenderer.invoke("krysta:fps-set-preference",enabled),
-  translateKrystaNews: (title:string, content:string) => ipcRenderer.invoke("krysta:news-translate",title,content),
+  krystaSetFpsPreference: (enabled: boolean) =>
+    ipcRenderer.invoke("krysta:fps-set-preference", enabled),
+  translateKrystaNews: (title: string, content: string) =>
+    ipcRenderer.invoke("krysta:news-translate", title, content),
   krystaGameWatchHistory: () => ipcRenderer.invoke("krysta:game-watch-history"),
-  getKrystaGameNews: (id: string, title: string) => ipcRenderer.invoke("krysta:game-news", id, title),
+  getKrystaGameNews: (id: string, title: string) =>
+    ipcRenderer.invoke("krysta:game-news", id, title),
   scanUbisoft: () => ipcRenderer.invoke("krysta:ubisoft-scan"),
-  launchUbisoft: (id: string) => ipcRenderer.invoke("krysta:ubisoft-launch", id),
+  launchUbisoft: (id: string) =>
+    ipcRenderer.invoke("krysta:ubisoft-launch", id),
   onCloudSaveAutomaticSyncModeChanged: (
     callback: (event: CloudSaveAutomaticSyncModeChangedEvent) => void
   ) => {
@@ -1366,8 +1454,11 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("hasDownloadFolder", shop, objectId),
   getExecutablePickerPath: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("getExecutablePickerPath", shop, objectId),
-  krystaDiscoverGameExecutable: (shop: GameShop, objectId: string, folder?: string) =>
-    ipcRenderer.invoke("krysta:discover-game-exe", shop, objectId, folder),
+  krystaDiscoverGameExecutable: (
+    shop: GameShop,
+    objectId: string,
+    folder?: string
+  ) => ipcRenderer.invoke("krysta:discover-game-exe", shop, objectId, folder),
   krystaAutoLinkGameExecutable: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("krysta:auto-link-game-exe", shop, objectId),
   openGameInstallerPath: (shop: GameShop, objectId: string) =>

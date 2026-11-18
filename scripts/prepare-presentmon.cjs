@@ -11,14 +11,20 @@ const artifact = Object.freeze({
 });
 
 function verify(bytes) {
-  return bytes.length === artifact.size &&
-    createHash("sha256").update(bytes).digest("hex") === artifact.sha256;
+  return (
+    bytes.length === artifact.size &&
+    createHash("sha256").update(bytes).digest("hex") === artifact.sha256
+  );
 }
 
 async function cached(file) {
   try {
     const st = await fs.lstat(file);
-    return st.isFile() && st.size === artifact.size && verify(await fs.readFile(file));
+    return (
+      st.isFile() &&
+      st.size === artifact.size &&
+      verify(await fs.readFile(file))
+    );
   } catch (error) {
     if (error.code === "ENOENT") return false;
     throw error;
@@ -47,7 +53,8 @@ async function preparePresentMon({
         const { done, value } = await reader.read();
         if (done) break;
         received += value.byteLength;
-        if (received > artifact.size) throw new Error("PresentMon size mismatch");
+        if (received > artifact.size)
+          throw new Error("PresentMon size mismatch");
         chunks.push(Buffer.from(value));
       }
     } finally {

@@ -17,19 +17,38 @@ export default function KrystaMultimedia() {
 
   return (
     <div className="krysta-multimedia">
-      <nav className="krysta-multimedia__tabs" aria-label={pl ? "Multimedia" : "Media"}>
-        <button type="button" className={tab === "screenshots" ? "active" : ""}
+      <nav
+        className="krysta-multimedia__tabs"
+        aria-label={pl ? "Multimedia" : "Media"}
+      >
+        <button
+          type="button"
+          className={tab === "screenshots" ? "active" : ""}
           aria-current={tab === "screenshots" ? "page" : undefined}
-          onClick={() => changeTab("screenshots")}>
-          <Camera size={18} />{pl ? "Zrzuty ekranu" : "Screenshots"}
+          onClick={() => changeTab("screenshots")}
+        >
+          <Camera size={18} />
+          {pl ? "Zrzuty ekranu" : "Screenshots"}
         </button>
-        <button type="button" className={tab === "recordings" ? "active" : ""}
+        <button
+          type="button"
+          className={tab === "recordings" ? "active" : ""}
           aria-current={tab === "recordings" ? "page" : undefined}
-          onClick={() => changeTab("recordings")}>
-          <Film size={18} />{pl ? "Nagrania" : "Recordings"}
+          onClick={() => changeTab("recordings")}
+        >
+          <Film size={18} />
+          {pl ? "Nagrania" : "Recordings"}
         </button>
-        <Link className="krysta-multimedia__settings" to={tab === "recordings" ? "/settings?tab=screenshots&media=recordings" : "/settings?tab=screenshots&media=screenshots"}>
-          <Settings2 size={17} />{pl ? "Ustawienia" : "Settings"}
+        <Link
+          className="krysta-multimedia__settings"
+          to={
+            tab === "recordings"
+              ? "/settings?tab=screenshots&media=recordings"
+              : "/settings?tab=screenshots&media=screenshots"
+          }
+        >
+          <Settings2 size={17} />
+          {pl ? "Ustawienia" : "Settings"}
         </Link>
       </nav>
       {tab === "screenshots" ? <KrystaScreenshots /> : <KrystaRecordings />}

@@ -33,22 +33,33 @@ import { SettingsContextBigPicture } from "./settings-context-big-picture";
 import { SettingsContextEmulation } from "./emulation/settings-context-emulation";
 
 const BASIC_SETTINGS = new Set([
-  "general", "downloads", "krysta_updates", "screenshots",
-  "notifications", "krysta_cloud", "integrations", "account_privacy",
+  "general",
+  "downloads",
+  "krysta_updates",
+  "screenshots",
+  "notifications",
+  "krysta_cloud",
+  "integrations",
+  "account_privacy",
 ]);
 const ADVANCED_VISIBILITY_KEY = "krysta.settings.show-advanced";
 
 export default function Settings() {
   const { t, i18n } = useTranslation("settings");
   const pl = i18n.language.startsWith("pl");
-  const [showAdvanced,setShowAdvanced] = useState<boolean>(() => {
-    try { return localStorage.getItem(ADVANCED_VISIBILITY_KEY)==="true"; }
-    catch { return false; }
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(ADVANCED_VISIBILITY_KEY) === "true";
+    } catch {
+      return false;
+    }
   });
-  const [categorySearch,setCategorySearch] = useState("");
-  const changeAdvanced=(next:boolean)=>{
+  const [categorySearch, setCategorySearch] = useState("");
+  const changeAdvanced = (next: boolean) => {
     setShowAdvanced(next);
-    try{localStorage.setItem(ADVANCED_VISIBILITY_KEY,String(next));}catch{}
+    try {
+      localStorage.setItem(ADVANCED_VISIBILITY_KEY, String(next));
+    } catch {}
   };
 
   const { userDetails } = useUserDetails();
@@ -80,9 +91,21 @@ export default function Settings() {
         label: t("content_gameplay"),
         icon: <PlayIcon size={16} />,
       },
-      { id: "krysta_updates" as const, label: i18n.language.startsWith("pl") ? "Aktualizacje" : "Updates", icon: <RefreshCw size={16} /> },
-      { id: "krysta_cloud" as const, label: "Krysta Cloud", icon: <CloudIcon size={16} /> },
-      { id: "game" as const, label: t("krysta_game_category", { defaultValue: "Game" }), icon: <Gamepad2 size={16} /> },
+      {
+        id: "krysta_updates" as const,
+        label: i18n.language.startsWith("pl") ? "Aktualizacje" : "Updates",
+        icon: <RefreshCw size={16} />,
+      },
+      {
+        id: "krysta_cloud" as const,
+        label: "Krysta Cloud",
+        icon: <CloudIcon size={16} />,
+      },
+      {
+        id: "game" as const,
+        label: t("krysta_game_category", { defaultValue: "Game" }),
+        icon: <Gamepad2 size={16} />,
+      },
       {
         id: "screenshots" as const,
         label: pl ? "Multimedia" : "Media",
@@ -130,14 +153,20 @@ export default function Settings() {
             categories.find((category) => category.id === currentCategoryId) ??
             categories[0];
           const selectedCategoryId = currentCategory.id;
-          const searchedCategories = categories.filter(category =>
-            category.label.toLocaleLowerCase(i18n.language).includes(categorySearch.toLocaleLowerCase(i18n.language))
+          const searchedCategories = categories.filter((category) =>
+            category.label
+              .toLocaleLowerCase(i18n.language)
+              .includes(categorySearch.toLocaleLowerCase(i18n.language))
           );
-          const displayedCategories = searchedCategories.filter(category =>
-            categorySearch.trim().length > 0 || showAdvanced ||
-            BASIC_SETTINGS.has(category.id) || category.id === selectedCategoryId
+          const displayedCategories = searchedCategories.filter(
+            (category) =>
+              categorySearch.trim().length > 0 ||
+              showAdvanced ||
+              BASIC_SETTINGS.has(category.id) ||
+              category.id === selectedCategoryId
           );
-          const hiddenCategories = categories.length - displayedCategories.length;
+          const hiddenCategories =
+            categories.length - displayedCategories.length;
 
           const renderCategory = () => {
             if (selectedCategoryId === "general") {
@@ -160,8 +189,10 @@ export default function Settings() {
               return <SettingsContextContentGameplay />;
             }
 
-            if (selectedCategoryId === "krysta_updates") return <SettingsContextKrystaUpdates />;
-            if (selectedCategoryId === "krysta_cloud") return <SettingsContextKrystaCloud />;
+            if (selectedCategoryId === "krysta_updates")
+              return <SettingsContextKrystaUpdates />;
+            if (selectedCategoryId === "krysta_cloud")
+              return <SettingsContextKrystaCloud />;
             if (selectedCategoryId === "game") return <SettingsContextGame />;
 
             if (selectedCategoryId === "screenshots") {
@@ -191,17 +222,49 @@ export default function Settings() {
             <section className="settings__container">
               <div className="settings__content">
                 <aside className="settings__sidebar">
-                  <label className="settings__sidebar-search-label" htmlFor="krysta-settings-search">{pl?"Znajdź ustawienie":"Find a setting"}</label>
-                  <input id="krysta-settings-search" type="search" className="settings__sidebar-search" value={categorySearch} onChange={e=>setCategorySearch(e.target.value)} placeholder={pl?"Szukaj kategorii…":"Search categories…"} />
-                  <button type="button" className="settings__sidebar-expand" aria-expanded={showAdvanced} onClick={()=>changeAdvanced(!showAdvanced)}>
-                    {showAdvanced?(pl?"Pokaż mniej opcji":"Show fewer options"):(pl?"Pokaż zaawansowane":"Show advanced settings")}
-                    {!showAdvanced&&hiddenCategories>0&&<span aria-hidden="true"> ({hiddenCategories})</span>}
+                  <label
+                    className="settings__sidebar-search-label"
+                    htmlFor="krysta-settings-search"
+                  >
+                    {pl ? "Znajdź ustawienie" : "Find a setting"}
+                  </label>
+                  <input
+                    id="krysta-settings-search"
+                    type="search"
+                    className="settings__sidebar-search"
+                    value={categorySearch}
+                    onChange={(e) => setCategorySearch(e.target.value)}
+                    placeholder={
+                      pl ? "Szukaj kategorii…" : "Search categories…"
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="settings__sidebar-expand"
+                    aria-expanded={showAdvanced}
+                    onClick={() => changeAdvanced(!showAdvanced)}
+                  >
+                    {showAdvanced
+                      ? pl
+                        ? "Pokaż mniej opcji"
+                        : "Show fewer options"
+                      : pl
+                        ? "Pokaż zaawansowane"
+                        : "Show advanced settings"}
+                    {!showAdvanced && hiddenCategories > 0 && (
+                      <span aria-hidden="true"> ({hiddenCategories})</span>
+                    )}
                   </button>
-                  {!displayedCategories.length&&<p className="settings__sidebar-empty">{pl?"Brak wyników":"No matching settings"}</p>}
+                  {!displayedCategories.length && (
+                    <p className="settings__sidebar-empty">
+                      {pl ? "Brak wyników" : "No matching settings"}
+                    </p>
+                  )}
                   {displayedCategories.map((category, index) => {
                     const prevGroup =
                       index > 0
-                        ? (displayedCategories[index - 1] as { group?: string }).group
+                        ? (displayedCategories[index - 1] as { group?: string })
+                            .group
                         : undefined;
                     const currentGroup = (category as { group?: string }).group;
                     const showGroupHeader =

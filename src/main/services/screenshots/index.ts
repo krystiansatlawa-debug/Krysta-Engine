@@ -74,7 +74,10 @@ const refreshLegacyScreenshots = async () => {
   if (Date.now() - lastLegacyImportAt < LEGACY_IMPORT_INTERVAL_MS) return 0;
   legacyImportPromise = importLegacyScreenshots()
     .catch((error: unknown) => {
-      logger.error("Failed to import existing screenshots into Krysta gallery", error);
+      logger.error(
+        "Failed to import existing screenshots into Krysta gallery",
+        error
+      );
       return 0;
     })
     .finally(() => {

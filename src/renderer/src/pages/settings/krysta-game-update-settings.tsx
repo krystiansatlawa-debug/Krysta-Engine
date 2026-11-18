@@ -1,38 +1,318 @@
-import {useEffect,useState} from "react";
-import {useTranslation} from "react-i18next";
-import {Button,CheckboxField} from "@renderer/components";
-type Settings=Awaited<ReturnType<typeof window.electron.krystaGameWatchSettings>>;
-export function KrystaGameUpdateSettings(){
- const {i18n}=useTranslation();const pl=i18n.language.startsWith("pl");
- const [cfg,setCfg]=useState<Settings|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
- useEffect(()=>{let active=true;const refresh=()=>{if(document.hidden)return;void window.electron.krystaGameWatchSettings().then(v=>{if(active)setCfg(v);}).catch(e=>{if(active)setError(String(e));});};refresh();const timer=setInterval(refresh,6000);document.addEventListener("visibilitychange",refresh);return()=>{active=false;clearInterval(timer);document.removeEventListener("visibilitychange",refresh);};},[]);
- const change=async(patch:Partial<Settings>)=>{if(!cfg)return;setBusy(true);setError("");try{setCfg(await window.electron.krystaGameWatchSettingsSet({...cfg,...patch}));window.dispatchEvent(new Event("krysta:patch-badges"));}catch(e){setError(String(e));}finally{setBusy(false);}};
- const [history,setHistory]=useState<Awaited<ReturnType<typeof window.electron.krystaGameWatchHistory>>>([]),[historyOpen,setHistoryOpen]=useState(false),[search,setSearch]=useState("");
- useEffect(()=>{if(!historyOpen)return;let active=true;const refresh=()=>{if(document.hidden)return;void window.electron.krystaGameWatchHistory().then(v=>{if(active)setHistory(v);}).catch(e=>{if(active)setError(String(e));});};refresh();const timer=setInterval(refresh,15000);document.addEventListener("visibilitychange",refresh);return()=>{active=false;clearInterval(timer);document.removeEventListener("visibilitychange",refresh);};},[historyOpen]);
- const scan=async()=>{setBusy(true);setError("");try{setCfg(await window.electron.krystaGameWatchScan());}catch(e){setError(String(e));}finally{setBusy(false);}};
- return <div className="settings-context-panel__group">
- <h3>{pl?"Aktualizacje gier":"Game updates"}</h3>
- <CheckboxField label={pl?"Monitoruj wszystkie gry w bibliotece":"Monitor all library games"} checked={cfg?.enabled??false} disabled={!cfg||busy} onChange={()=>void change({enabled:!cfg?.enabled})}/>
- <CheckboxField label={pl?"Powiadomienia systemowe o nowych patchach":"Desktop notifications for new patches"} checked={cfg?.notifications??true} disabled={!cfg||busy} onChange={()=>void change({notifications:!cfg?.notifications})}/>
- <CheckboxField label={pl?"Sprawdzaj po uruchomieniu launchera":"Check at launcher startup"} checked={cfg?.startup??true} disabled={!cfg||busy} onChange={()=>void change({startup:!cfg?.startup})}/>
- <CheckboxField label={pl?"Wstrzymuj skanowanie i otwieranie aktualizacji podczas grania":"Defer update scans and opening updates while playing"} checked={cfg?.pauseDuringPlay??true} disabled={!cfg||busy} onChange={()=>void change({pauseDuringPlay:!cfg?.pauseDuringPlay})}/>
- {cfg?.pauseDuringPlay&&cfg.pausedDuringPlay&&<p role="status">{pl?"Wykryto uruchomioną grę. Krysta odracza skanowanie.":"A running game was detected. Krysta is deferring scans."}</p>}
- <small>{pl?"To ustawienie nie wstrzymuje pobierania przez Steam ani inne klienty.":"This setting does not pause downloads in Steam or other clients."}</small>
- <CheckboxField label={pl?"Otwieraj kolejkę Steam po wykryciu wymaganej aktualizacji":"Open Steam downloads when a required update is detected"} checked={cfg?.autoOpenSteamQueue??false} disabled={!cfg||busy} onChange={()=>void change({autoOpenSteamQueue:!cfg?.autoOpenSteamQueue})}/>
- <small>{pl?"Opcja działa tylko dla monitorowanych gier Steam i gdy nie grasz. Instalacją i harmonogramem zarządza Steam. Kopia zależy od ustawienia ochrony zapisów poniżej.":"Only monitored Steam games, while not playing. Steam controls installation and scheduling. Backup depends on the save protection setting below."}</small>
- <CheckboxField label={pl?"Automatycznie pobieraj aktualizacje Epic Games":"Automatically download Epic Games updates"} checked={cfg?.autoDownloadEpic??false} disabled={!cfg||busy} onChange={()=>void change({autoDownloadEpic:!cfg?.autoDownloadEpic})}/>
- <small>{pl?"Tylko gry Epic zarządzane przez Krystę, po potwierdzeniu nowszej wersji. Krysta nie rozpoczyna aktualizacji podczas wykrytej rozgrywki. Aktualizacja może zużyć transfer i miejsce na dysku; kopia zależy od ustawienia ochrony zapisów poniżej.":"Only Krysta-managed Epic games with a verified newer version. Krysta does not start updates during detected gameplay. Updates may use bandwidth and disk space; backup depends on the save protection setting below."}</small>
- <CheckboxField label={pl?"Twórz kopię zapisów przed automatyczną aktualizacją":"Back up saves before automatic updates"} checked={cfg?.backupBeforeUpdate??true} disabled={!cfg||busy} onChange={()=>void change({backupBeforeUpdate:!cfg?.backupBeforeUpdate})}/>
- <small>{pl?"Wymaga skonfigurowanej Krysta Cloud (Google Drive, Synology lub folder lokalny). Jeśli nie wykryto zapisów lub kopia się nie powiedzie, Krysta nie zainicjuje aktualizacji. Nie blokuje aktualizacji uruchamianych niezależnie przez inne programy.":"Requires configured Krysta Cloud (Google Drive, Synology or a local folder). Missing saves or failed backup prevents Krysta from initiating updates. Does not block updates initiated independently by other software."}</small>
- <label htmlFor="krysta-update-interval">{pl?"Sprawdzaj co":"Check every"}</label>
- <select id="krysta-update-interval" value={cfg?.intervalHours??6} disabled={!cfg||busy} onChange={e=>void change({intervalHours:Number(e.target.value)})} style={{background:"#202020",color:"inherit",padding:8,border:"1px solid #555",borderRadius:4,maxWidth:300}}>{[1,3,6,12,24].map(n=><option key={n} value={n}>{n} h</option>)}</select>
- <Button theme="outline" disabled={!cfg||busy||cfg.scanning||(cfg.pauseDuringPlay&&cfg.pausedDuringPlay)} onClick={()=>void scan()}>{cfg?.scanning?(pl?"Sprawdzanie…":"Checking…"):(pl?"Sprawdź teraz":"Check now")}</Button>
- {cfg&&(cfg.scanning||cfg.scanTotal>0)&&<p role="status">{pl?"Postęp sprawdzania":"Scan progress"}: {cfg.scanChecked} / {cfg.scanTotal} · {pl?"Wymagają aktualizacji":"Updates required"}: {cfg.scanRequired} · {pl?"Niepotwierdzone":"Unknown"}: {cfg.scanUnknown}</p>}
- {cfg?.scanInterrupted&&<small>{pl?"Skan przerwany podczas rozgrywki.":"Scan interrupted while playing."}</small>}
- {cfg?.lastFinished&&<p>{pl?"Ostatni skan":"Last scan"}: {new Date(cfg.lastFinished).toLocaleString(i18n.language)}</p>}
- <small>{pl?"Ręczne Sprawdź teraz obejmuje gry, dla których nie wyłączono monitorowania osobno. Wyniki z nieobsługiwanych platform pozostają niepotwierdzone. Dotyczy gier PC. Indywidualne ustawienia gry mają pierwszeństwo. Pierwsze sprawdzenie zapisuje punkt odniesienia; powiadomienia dotyczą kolejnych patchy. Launcher musi działać.":"PC games only. Individual game settings take precedence. First check establishes a baseline; subsequent patches trigger notifications. Launcher must be running."}</small>
- <Button theme="outline" onClick={()=>setHistoryOpen(v=>!v)}>{pl?"Historia zainstalowanych wersji":"Installed version history"}</Button>
- {historyOpen&&<section><input aria-label={pl?"Szukaj gry":"Search game"} placeholder={pl?"Szukaj gry…":"Search game…"} value={search} onChange={e=>setSearch(e.target.value)}/><small>{pl?"Daty wykrycia zmian, nie daty instalacji. Możliwe cofnięcie wersji.":"Detection dates, not installation dates. Rollbacks are possible."}</small>{history.length===0?<p>{pl?"Brak wykrytych zmian wersji.":"No detected version changes."}</p>:<div style={{maxHeight:420,overflowY:"auto"}}>{history.filter(v=>v.title.toLowerCase().includes(search.toLowerCase())).map((v,i)=><div key={v.shop+v.id+v.source+v.detectedAt+i} style={{padding:"8px 0",borderBottom:"1px solid #555"}}><strong>{v.title}</strong><p>{v.from} → {v.to}</p><small>{v.source==="local"?(pl?"Metadane lokalne":"Local metadata"):v.source.toUpperCase()} · {new Date(v.detectedAt).toLocaleString(i18n.language)}</small></div>)}</div>}</section>}
- {(error||cfg?.lastError)&&<p role="alert">{error||cfg?.lastError}</p>}
- </div>;
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { Button, CheckboxField } from "@renderer/components";
+type Settings = Awaited<
+  ReturnType<typeof window.electron.krystaGameWatchSettings>
+>;
+export function KrystaGameUpdateSettings() {
+  const { i18n } = useTranslation();
+  const pl = i18n.language.startsWith("pl");
+  const [cfg, setCfg] = useState<Settings | null>(null),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      if (document.hidden) return;
+      void window.electron
+        .krystaGameWatchSettings()
+        .then((v) => {
+          if (active) setCfg(v);
+        })
+        .catch((e) => {
+          if (active) setError(String(e));
+        });
+    };
+    refresh();
+    const timer = setInterval(refresh, 6000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
+  const change = async (patch: Partial<Settings>) => {
+    if (!cfg) return;
+    setBusy(true);
+    setError("");
+    try {
+      setCfg(
+        await window.electron.krystaGameWatchSettingsSet({ ...cfg, ...patch })
+      );
+      window.dispatchEvent(new Event("krysta:patch-badges"));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const [history, setHistory] = useState<
+      Awaited<ReturnType<typeof window.electron.krystaGameWatchHistory>>
+    >([]),
+    [historyOpen, setHistoryOpen] = useState(false),
+    [search, setSearch] = useState("");
+  useEffect(() => {
+    if (!historyOpen) return;
+    let active = true;
+    const refresh = () => {
+      if (document.hidden) return;
+      void window.electron
+        .krystaGameWatchHistory()
+        .then((v) => {
+          if (active) setHistory(v);
+        })
+        .catch((e) => {
+          if (active) setError(String(e));
+        });
+    };
+    refresh();
+    const timer = setInterval(refresh, 15000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [historyOpen]);
+  const scan = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      setCfg(await window.electron.krystaGameWatchScan());
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="settings-context-panel__group">
+      <h3>{pl ? "Aktualizacje gier" : "Game updates"}</h3>
+      <CheckboxField
+        label={
+          pl
+            ? "Monitoruj wszystkie gry w bibliotece"
+            : "Monitor all library games"
+        }
+        checked={cfg?.enabled ?? false}
+        disabled={!cfg || busy}
+        onChange={() => void change({ enabled: !cfg?.enabled })}
+      />
+      <CheckboxField
+        label={
+          pl
+            ? "Powiadomienia systemowe o nowych patchach"
+            : "Desktop notifications for new patches"
+        }
+        checked={cfg?.notifications ?? true}
+        disabled={!cfg || busy}
+        onChange={() => void change({ notifications: !cfg?.notifications })}
+      />
+      <CheckboxField
+        label={
+          pl
+            ? "Sprawdzaj po uruchomieniu launchera"
+            : "Check at launcher startup"
+        }
+        checked={cfg?.startup ?? true}
+        disabled={!cfg || busy}
+        onChange={() => void change({ startup: !cfg?.startup })}
+      />
+      <CheckboxField
+        label={
+          pl
+            ? "Wstrzymuj skanowanie i otwieranie aktualizacji podczas grania"
+            : "Defer update scans and opening updates while playing"
+        }
+        checked={cfg?.pauseDuringPlay ?? true}
+        disabled={!cfg || busy}
+        onChange={() => void change({ pauseDuringPlay: !cfg?.pauseDuringPlay })}
+      />
+      {cfg?.pauseDuringPlay && cfg.pausedDuringPlay && (
+        <p role="status">
+          {pl
+            ? "Wykryto uruchomioną grę. Krysta odracza skanowanie."
+            : "A running game was detected. Krysta is deferring scans."}
+        </p>
+      )}
+      <small>
+        {pl
+          ? "To ustawienie nie wstrzymuje pobierania przez Steam ani inne klienty."
+          : "This setting does not pause downloads in Steam or other clients."}
+      </small>
+      <CheckboxField
+        label={
+          pl
+            ? "Otwieraj kolejkę Steam po wykryciu wymaganej aktualizacji"
+            : "Open Steam downloads when a required update is detected"
+        }
+        checked={cfg?.autoOpenSteamQueue ?? false}
+        disabled={!cfg || busy}
+        onChange={() =>
+          void change({ autoOpenSteamQueue: !cfg?.autoOpenSteamQueue })
+        }
+      />
+      <small>
+        {pl
+          ? "Opcja działa tylko dla monitorowanych gier Steam i gdy nie grasz. Instalacją i harmonogramem zarządza Steam. Kopia zależy od ustawienia ochrony zapisów poniżej."
+          : "Only monitored Steam games, while not playing. Steam controls installation and scheduling. Backup depends on the save protection setting below."}
+      </small>
+      <CheckboxField
+        label={
+          pl
+            ? "Automatycznie pobieraj aktualizacje Epic Games"
+            : "Automatically download Epic Games updates"
+        }
+        checked={cfg?.autoDownloadEpic ?? false}
+        disabled={!cfg || busy}
+        onChange={() =>
+          void change({ autoDownloadEpic: !cfg?.autoDownloadEpic })
+        }
+      />
+      <small>
+        {pl
+          ? "Tylko gry Epic zarządzane przez Krystę, po potwierdzeniu nowszej wersji. Krysta nie rozpoczyna aktualizacji podczas wykrytej rozgrywki. Aktualizacja może zużyć transfer i miejsce na dysku; kopia zależy od ustawienia ochrony zapisów poniżej."
+          : "Only Krysta-managed Epic games with a verified newer version. Krysta does not start updates during detected gameplay. Updates may use bandwidth and disk space; backup depends on the save protection setting below."}
+      </small>
+      <CheckboxField
+        label={
+          pl
+            ? "Twórz kopię zapisów przed automatyczną aktualizacją"
+            : "Back up saves before automatic updates"
+        }
+        checked={cfg?.backupBeforeUpdate ?? true}
+        disabled={!cfg || busy}
+        onChange={() =>
+          void change({ backupBeforeUpdate: !cfg?.backupBeforeUpdate })
+        }
+      />
+      <small>
+        {pl
+          ? "Wymaga skonfigurowanej Krysta Cloud (Google Drive, Synology lub folder lokalny). Jeśli nie wykryto zapisów lub kopia się nie powiedzie, Krysta nie zainicjuje aktualizacji. Nie blokuje aktualizacji uruchamianych niezależnie przez inne programy."
+          : "Requires configured Krysta Cloud (Google Drive, Synology or a local folder). Missing saves or failed backup prevents Krysta from initiating updates. Does not block updates initiated independently by other software."}
+      </small>
+      <label htmlFor="krysta-update-interval">
+        {pl ? "Sprawdzaj co" : "Check every"}
+      </label>
+      <select
+        id="krysta-update-interval"
+        value={cfg?.intervalHours ?? 6}
+        disabled={!cfg || busy}
+        onChange={(e) => void change({ intervalHours: Number(e.target.value) })}
+        style={{
+          background: "#202020",
+          color: "inherit",
+          padding: 8,
+          border: "1px solid #555",
+          borderRadius: 4,
+          maxWidth: 300,
+        }}
+      >
+        {[1, 3, 6, 12, 24].map((n) => (
+          <option key={n} value={n}>
+            {n} h
+          </option>
+        ))}
+      </select>
+      <Button
+        theme="outline"
+        disabled={
+          !cfg ||
+          busy ||
+          cfg.scanning ||
+          (cfg.pauseDuringPlay && cfg.pausedDuringPlay)
+        }
+        onClick={() => void scan()}
+      >
+        {cfg?.scanning
+          ? pl
+            ? "Sprawdzanie…"
+            : "Checking…"
+          : pl
+            ? "Sprawdź teraz"
+            : "Check now"}
+      </Button>
+      {cfg && (cfg.scanning || cfg.scanTotal > 0) && (
+        <p role="status">
+          {pl ? "Postęp sprawdzania" : "Scan progress"}: {cfg.scanChecked} /{" "}
+          {cfg.scanTotal} · {pl ? "Wymagają aktualizacji" : "Updates required"}:{" "}
+          {cfg.scanRequired} · {pl ? "Niepotwierdzone" : "Unknown"}:{" "}
+          {cfg.scanUnknown}
+        </p>
+      )}
+      {cfg?.scanInterrupted && (
+        <small>
+          {pl
+            ? "Skan przerwany podczas rozgrywki."
+            : "Scan interrupted while playing."}
+        </small>
+      )}
+      {cfg?.lastFinished && (
+        <p>
+          {pl ? "Ostatni skan" : "Last scan"}:{" "}
+          {new Date(cfg.lastFinished).toLocaleString(i18n.language)}
+        </p>
+      )}
+      <small>
+        {pl
+          ? "Ręczne Sprawdź teraz obejmuje gry, dla których nie wyłączono monitorowania osobno. Wyniki z nieobsługiwanych platform pozostają niepotwierdzone. Dotyczy gier PC. Indywidualne ustawienia gry mają pierwszeństwo. Pierwsze sprawdzenie zapisuje punkt odniesienia; powiadomienia dotyczą kolejnych patchy. Launcher musi działać."
+          : "PC games only. Individual game settings take precedence. First check establishes a baseline; subsequent patches trigger notifications. Launcher must be running."}
+      </small>
+      <Button theme="outline" onClick={() => setHistoryOpen((v) => !v)}>
+        {pl ? "Historia zainstalowanych wersji" : "Installed version history"}
+      </Button>
+      {historyOpen && (
+        <section>
+          <input
+            aria-label={pl ? "Szukaj gry" : "Search game"}
+            placeholder={pl ? "Szukaj gry…" : "Search game…"}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <small>
+            {pl
+              ? "Daty wykrycia zmian, nie daty instalacji. Możliwe cofnięcie wersji."
+              : "Detection dates, not installation dates. Rollbacks are possible."}
+          </small>
+          {history.length === 0 ? (
+            <p>
+              {pl
+                ? "Brak wykrytych zmian wersji."
+                : "No detected version changes."}
+            </p>
+          ) : (
+            <div style={{ maxHeight: 420, overflowY: "auto" }}>
+              {history
+                .filter((v) =>
+                  v.title.toLowerCase().includes(search.toLowerCase())
+                )
+                .map((v, i) => (
+                  <div
+                    key={v.shop + v.id + v.source + v.detectedAt + i}
+                    style={{ padding: "8px 0", borderBottom: "1px solid #555" }}
+                  >
+                    <strong>{v.title}</strong>
+                    <p>
+                      {v.from} → {v.to}
+                    </p>
+                    <small>
+                      {v.source === "local"
+                        ? pl
+                          ? "Metadane lokalne"
+                          : "Local metadata"
+                        : v.source.toUpperCase()}{" "}
+                      · {new Date(v.detectedAt).toLocaleString(i18n.language)}
+                    </small>
+                  </div>
+                ))}
+            </div>
+          )}
+        </section>
+      )}
+      {(error || cfg?.lastError) && (
+        <p role="alert">{error || cfg?.lastError}</p>
+      )}
+    </div>
+  );
 }

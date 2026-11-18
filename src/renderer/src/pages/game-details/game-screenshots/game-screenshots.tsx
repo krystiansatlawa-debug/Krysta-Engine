@@ -35,45 +35,111 @@ import "./game-screenshots.scss";
 
 const SIDEBAR_SCREENSHOT_COUNT = 4;
 
-type AchievementCapture = Awaited<ReturnType<typeof window.electron.getKrystaSouvenirGallery>>[number];
-function AchievementScreenshots({shop,objectId}:{shop:string;objectId:string}){
- const {i18n}=useTranslation();
- const pl=i18n.language.startsWith("pl");
- const [items,setItems]=useState<AchievementCapture[]>([]);
- const [selected,setSelected]=useState<string|null>(null);
- const [all,setAll]=useState(false);
- useEffect(()=>{
-  let alive=true;
-  const gameKey=shop+":"+objectId;
-  const update=()=>{
-   void window.electron.getKrystaSouvenirGallery()
-    .then(rows=>{if(alive)setItems(rows.filter(row=>row.gameKey===gameKey));})
-    .catch(()=>{if(alive)setItems([]);});
-  };
-  update();
-  const unsub=window.electron.onLocalScreenshotsChange(update);
-  const focus=()=>{if(!document.hidden)update();};
-  window.addEventListener("focus",focus);
-  return()=>{alive=false;unsub();window.removeEventListener("focus",focus);};
- },[shop,objectId]);
- const media:GalleryMediaItem[]=items.map(item=>({
-  id:item.id,type:"image",src:toLocalScreenshotUrl(item.path),
-  alt:item.gameTitle+" · "+new Date(item.capturedAt).toLocaleString(i18n.language)
- }));
- const activeIndex=selected?media.findIndex(item=>item.id===selected):-1;
- if(!items.length)return null;
- return <section className="game-screenshots-box__achievements">
-  <h4>{pl?"Zdjęcia z osiągnięć":"Achievement screenshots"} ({items.length})</h4>
-  <div className="game-screenshots-box__grid">
-   {(all?items:items.slice(0,4)).map(item=><button className="game-screenshots-box__thumbnail" key={item.id} type="button" onClick={()=>setSelected(item.id)}>
-    <img className="game-screenshots-box__thumbnail-image" src={toLocalScreenshotUrl(item.path)} alt={item.achievementNames.join(", ")||item.gameTitle} loading="lazy"/>
-   </button>)}
-  </div>
-  {items.length>4&&<button type="button" className="game-screenshots-box__view-all" onClick={()=>setAll(v=>!v)}>{all?(pl?"Pokaż mniej":"Show fewer"):(pl?"Pokaż wszystkie":"Show all")}</button>}
-  {activeIndex>=0&&<GalleryLightbox visible items={media} index={activeIndex} showFilmstrip={false} trapFocus onClose={()=>setSelected(null)} onNavigate={i=>setSelected(media[i]?.id??null)}/>}
- </section>;
+type AchievementCapture = Awaited<
+  ReturnType<typeof window.electron.getKrystaSouvenirGallery>
+>[number];
+function AchievementScreenshots({
+  shop,
+  objectId,
+}: {
+  shop: string;
+  objectId: string;
+}) {
+  const { i18n } = useTranslation();
+  const pl = i18n.language.startsWith("pl");
+  const [items, setItems] = useState<AchievementCapture[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [all, setAll] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const gameKey = shop + ":" + objectId;
+    const update = () => {
+      void window.electron
+        .getKrystaSouvenirGallery()
+        .then((rows) => {
+          if (alive) setItems(rows.filter((row) => row.gameKey === gameKey));
+        })
+        .catch(() => {
+          if (alive) setItems([]);
+        });
+    };
+    update();
+    const unsub = window.electron.onLocalScreenshotsChange(update);
+    const focus = () => {
+      if (!document.hidden) update();
+    };
+    window.addEventListener("focus", focus);
+    return () => {
+      alive = false;
+      unsub();
+      window.removeEventListener("focus", focus);
+    };
+  }, [shop, objectId]);
+  const media: GalleryMediaItem[] = items.map((item) => ({
+    id: item.id,
+    type: "image",
+    src: toLocalScreenshotUrl(item.path),
+    alt:
+      item.gameTitle +
+      " · " +
+      new Date(item.capturedAt).toLocaleString(i18n.language),
+  }));
+  const activeIndex = selected
+    ? media.findIndex((item) => item.id === selected)
+    : -1;
+  if (!items.length) return null;
+  return (
+    <section className="game-screenshots-box__achievements">
+      <h4>
+        {pl ? "Zdjęcia z osiągnięć" : "Achievement screenshots"} ({items.length}
+        )
+      </h4>
+      <div className="game-screenshots-box__grid">
+        {(all ? items : items.slice(0, 4)).map((item) => (
+          <button
+            className="game-screenshots-box__thumbnail"
+            key={item.id}
+            type="button"
+            onClick={() => setSelected(item.id)}
+          >
+            <img
+              className="game-screenshots-box__thumbnail-image"
+              src={toLocalScreenshotUrl(item.path)}
+              alt={item.achievementNames.join(", ") || item.gameTitle}
+              loading="lazy"
+            />
+          </button>
+        ))}
+      </div>
+      {items.length > 4 && (
+        <button
+          type="button"
+          className="game-screenshots-box__view-all"
+          onClick={() => setAll((v) => !v)}
+        >
+          {all
+            ? pl
+              ? "Pokaż mniej"
+              : "Show fewer"
+            : pl
+              ? "Pokaż wszystkie"
+              : "Show all"}
+        </button>
+      )}
+      {activeIndex >= 0 && (
+        <GalleryLightbox
+          visible
+          items={media}
+          index={activeIndex}
+          showFilmstrip={false}
+          trapFocus
+          onClose={() => setSelected(null)}
+          onNavigate={(i) => setSelected(media[i]?.id ?? null)}
+        />
+      )}
+    </section>
+  );
 }
-
 
 interface GameScreenshotsProps {
   libraryGame: ScreenshotsGame;
@@ -312,7 +378,13 @@ function GameScreenshotsBox({
           : t("my_screenshots")
       }
     >
-      <div className="game-screenshots-box">{renderContent()}<AchievementScreenshots shop={libraryGame.shop} objectId={libraryGame.objectId}/></div>
+      <div className="game-screenshots-box">
+        {renderContent()}
+        <AchievementScreenshots
+          shop={libraryGame.shop}
+          objectId={libraryGame.objectId}
+        />
+      </div>
 
       <MyScreenshotsLightbox
         collection={collection}

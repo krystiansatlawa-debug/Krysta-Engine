@@ -71,13 +71,66 @@
   }
 }
 
-.krysta-featured { margin: 22px 24px 0; min-width: 0; }
-.krysta-featured .hero { height: clamp(260px, 36vh, 390px); min-height: 260px; border-radius: 14px; box-shadow: none; }
-.krysta-featured .hero__backdrop { background: linear-gradient(90deg,#121212f5 0%,#121212b5 36%,transparent 78%); }
-.krysta-featured .hero__content { align-items: flex-start; justify-content: center; padding: 24px 36px; gap: 12px; }
-.krysta-featured .hero__description { max-width: 48%; margin: 0; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.krysta-featured__badge { color:#121212; background:#e5e5e5; padding:6px 12px; border-radius:8px; font-weight:700; }
-.krysta-featured__cta { background:#333333; color:#fff; border-radius:8px; padding:12px 24px; font-weight:700; }
-.krysta-featured__dots { display:flex; justify-content:center; gap:8px; padding-top:12px; }
-.krysta-featured__dots button { width:10px; height:10px; border-radius:50%; background:#424242; cursor:pointer; }
-.krysta-featured__dots button[aria-current="true"] { background:#ffffff; }
+.krysta-featured {
+  margin: 22px 24px 0;
+  min-width: 0;
+}
+.krysta-featured .hero {
+  height: clamp(260px, 36vh, 390px);
+  min-height: 260px;
+  border-radius: 14px;
+  box-shadow: none;
+}
+.krysta-featured .hero__backdrop {
+  background: linear-gradient(
+    90deg,
+    #121212f5 0%,
+    #121212b5 36%,
+    transparent 78%
+  );
+}
+.krysta-featured .hero__content {
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px 36px;
+  gap: 12px;
+}
+.krysta-featured .hero__description {
+  max-width: 48%;
+  margin: 0;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.krysta-featured__badge {
+  color: #121212;
+  background: #e5e5e5;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-weight: 700;
+}
+.krysta-featured__cta {
+  background: #333333;
+  color: #fff;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 700;
+}
+.krysta-featured__dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 12px;
+}
+.krysta-featured__dots button {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #424242;
+  cursor: pointer;
+}
+.krysta-featured__dots button[aria-current="true"] {
+  background: #ffffff;
+}

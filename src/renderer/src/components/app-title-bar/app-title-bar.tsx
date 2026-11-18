@@ -15,7 +15,10 @@ import { MAIN_WINDOW_TITLE_BAR_HEIGHT } from "@shared";
 
 import { NavigationArrows } from "../navigation-arrows/navigation-arrows";
 import { TitleBarSearch } from "./title-bar-search";
-import { useKrystaPendingPatches, findKrystaPendingPatch } from "../../pages/library/krysta-patch-badge";
+import {
+  useKrystaPendingPatches,
+  findKrystaPendingPatch,
+} from "../../pages/library/krysta-patch-badge";
 import { useAppSelector } from "@renderer/hooks";
 import { selectGroupedLibrary } from "@renderer/features";
 import "./app-title-bar.scss";
@@ -43,10 +46,15 @@ export function AppTitleBar({
 }: Readonly<AppTitleBarProps>) {
   const { t, i18n } = useTranslation(["header", "sidebar"]);
   const location = useLocation();
-  const updatesSelected = location.pathname === "/library" && new URLSearchParams(location.search).get("collection") === "__krysta_updates__";
+  const updatesSelected =
+    location.pathname === "/library" &&
+    new URLSearchParams(location.search).get("collection") ===
+      "__krysta_updates__";
   const patches = useKrystaPendingPatches();
   const games = useAppSelector(selectGroupedLibrary);
-  const patchCount = games.filter(game=>Boolean(findKrystaPendingPatch(game,patches))).length;
+  const patchCount = games.filter((game) =>
+    Boolean(findKrystaPendingPatch(game, patches))
+  ).length;
   const pl = i18n.language.startsWith("pl");
   const updatesLabel = pl ? "Gry z nowymi patchami" : "Games with new patches";
 
@@ -71,7 +79,10 @@ export function AppTitleBar({
       <div className="title-bar__brand">
         {hasCustomFrame && (
           <h4>
-            <span className="krysta-mark" aria-hidden="true">K</span> Krysta
+            <span className="krysta-mark" aria-hidden="true">
+              K
+            </span>{" "}
+            Krysta
             {hasActiveSubscription && (
               <span className="title-bar__cloud-text"> Cloud</span>
             )}
@@ -91,9 +102,34 @@ export function AppTitleBar({
 
       <NavigationArrows className="title-bar__navigation" />
       <nav className="krysta-top-nav">
-        <NavLink to="/recordings" className={({isActive})=>isActive?"active":""} title={pl?"Nagrania":"Recordings"}><Film size={17}/><span>{pl?"Nagrania":"Recordings"}</span></NavLink>
-        <NavLink to="/screenshots" className={({isActive})=>isActive?"active":""} title={pl?"Zrzuty ekranu":"Screenshots"}><ImageIcon size={17}/><span>{pl?"Zrzuty ekranu":"Screenshots"}</span></NavLink>
-        <Link to="/library?collection=__krysta_updates__" className={updatesSelected?"active":""} aria-current={updatesSelected?"page":undefined} title={updatesLabel} aria-label={updatesLabel+" ("+patchCount+")"}><RefreshCw size={17}/><span>{updatesLabel} ({patchCount})</span></Link>
+        <NavLink
+          to="/recordings"
+          className={({ isActive }) => (isActive ? "active" : "")}
+          title={pl ? "Nagrania" : "Recordings"}
+        >
+          <Film size={17} />
+          <span>{pl ? "Nagrania" : "Recordings"}</span>
+        </NavLink>
+        <NavLink
+          to="/screenshots"
+          className={({ isActive }) => (isActive ? "active" : "")}
+          title={pl ? "Zrzuty ekranu" : "Screenshots"}
+        >
+          <ImageIcon size={17} />
+          <span>{pl ? "Zrzuty ekranu" : "Screenshots"}</span>
+        </NavLink>
+        <Link
+          to="/library?collection=__krysta_updates__"
+          className={updatesSelected ? "active" : ""}
+          aria-current={updatesSelected ? "page" : undefined}
+          title={updatesLabel}
+          aria-label={updatesLabel + " (" + patchCount + ")"}
+        >
+          <RefreshCw size={17} />
+          <span>
+            {updatesLabel} ({patchCount})
+          </span>
+        </Link>
       </nav>
 
       <div className="title-bar__search">
