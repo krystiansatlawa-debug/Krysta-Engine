@@ -43,6 +43,7 @@ function renderCard(
   const filename = path.join(rendererPath, `${layout.file}.tsx`);
   const source = fs.readFileSync(filename, "utf8");
   const stubs: Record<string, unknown> = {
+    "./krysta-patch-badge": { KrystaPatchBadge: () => null },
     "@renderer/hooks": {
       useGameCard: () => ({
         formatPlayTime: () => "0 minutes",

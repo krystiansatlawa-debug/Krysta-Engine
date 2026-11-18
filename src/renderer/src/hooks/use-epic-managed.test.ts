@@ -2420,6 +2420,9 @@ describe("Epic managed UI lifecycle", () => {
                   })
                 : null,
           },
+          "../../library/krysta-patch-badge": {
+            useKrystaPendingPatches: () => [],
+          },
           "./hero-panel-actions.scss": {},
         }
       ).HeroPanelActions as React.FunctionComponent;

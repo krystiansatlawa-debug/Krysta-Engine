@@ -132,6 +132,10 @@ async function renderLibrary(
   const gameCard = ({ game }: { game: TestGame }) =>
     React.createElement("span", { "data-hidden-game": game.id }, game.title);
   const stubs: Record<string, unknown> = {
+    "./krysta-patch-badge": {
+      useKrystaPendingPatches: () => [],
+      findKrystaPendingPatch: () => undefined,
+    },
     "@atlaskit/pragmatic-drag-and-drop/combine": {
       combine:
         (...cleanups: (() => void)[]) =>
