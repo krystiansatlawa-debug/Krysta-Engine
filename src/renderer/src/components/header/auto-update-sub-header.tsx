@@ -60,6 +60,12 @@ export function AutoUpdateSubHeader() {
           {pl ? "Pobieranie Krysty" : "Downloading Krysta"} {state.version} —{" "}
           {percent}%
         </span>
+      ) : state.phase === "paused" ? (
+        <span role="status">
+          {pl
+            ? "Aktualizacja Krysty po zakończeniu gry"
+            : "Krysta update after the game closes"}
+        </span>
       ) : (
         <button
           type="button"

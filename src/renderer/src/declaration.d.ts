@@ -545,7 +545,14 @@ declare global {
       checkedAt: string;
     }>;
     krystaUpdatesStatus: () => Promise<{
-      phase: "idle" | "checking" | "downloading" | "ready" | "manual" | "error";
+      phase:
+        | "idle"
+        | "checking"
+        | "downloading"
+        | "paused"
+        | "ready"
+        | "manual"
+        | "error";
       version: string;
       received: number;
       total: number;

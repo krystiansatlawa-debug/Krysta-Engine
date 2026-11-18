@@ -12,6 +12,7 @@ import {
   getGamePlaytimeDeltas,
   getTrackedGamesRunning,
   isGameRunning,
+  isGamePlaytimeCheckpointDue,
   setGamePlaytime,
   setEmulatorGameRunning,
   resetHydraPlaytimeTicks,
@@ -67,6 +68,26 @@ describe("game running state", () => {
 
     assert.equal(gamesPlaytime.size, 0);
     assert.equal(isGameRunning("20", "custom"), false);
+  });
+
+  it("batches playtime checkpoints while preserving elapsed time on exit", () => {
+    const session = {
+      firstTick: 0,
+      lastTick: 0,
+      lastSyncTick: 0,
+      countHydraPlaytime: true,
+    };
+    assert.equal(isGamePlaytimeCheckpointDue(session, 2_000), false);
+    assert.equal(isGamePlaytimeCheckpointDue(session, 9_999), false);
+    assert.equal(isGamePlaytimeCheckpointDue(session, 10_000), true);
+
+    assert.equal(getGamePlaytimeDeltas(session, 10_000).localDelta, 10_000);
+    session.lastTick = 10_000;
+    assert.equal(isGamePlaytimeCheckpointDue(session, 12_000), false);
+    assert.deepEqual(getGamePlaytimeDeltas(session, 12_500), {
+      localDelta: 2_500,
+      syncDelta: 12_500,
+    });
   });
 
   it("keeps a Steam session running without counting local or periodic/closing deltas", () => {

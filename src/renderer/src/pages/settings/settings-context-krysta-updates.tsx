@@ -173,6 +173,13 @@ export function SettingsContextKrystaUpdates() {
             <progress max={download.total || 1} value={download.received} />
           </div>
         )}
+        {download?.phase === "paused" && (
+          <p role="status">
+            {pl
+              ? "Pobieranie aktualizacji rozpocznie się po zamknięciu gry."
+              : "The update will download after the game closes."}
+          </p>
+        )}
         {download?.phase === "ready" && (
           <Button
             theme="outline"
