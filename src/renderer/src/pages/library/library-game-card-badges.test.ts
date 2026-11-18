@@ -38,12 +38,18 @@ const layouts = [
 function renderCard(
   layout: (typeof layouts)[number],
   gameOverrides: Record<string, unknown> = {},
-  preferences: Record<string, boolean> = {}
+  preferences: Record<string, boolean> = {},
+  pendingPatch?: { title: string }
 ) {
   const filename = path.join(rendererPath, `${layout.file}.tsx`);
   const source = fs.readFileSync(filename, "utf8");
   const stubs: Record<string, unknown> = {
-    "./krysta-patch-badge": { KrystaPatchBadge: () => null },
+    "./krysta-patch-badge": {
+      findKrystaPendingPatch: () => pendingPatch,
+      useKrystaPendingPatches: () => [],
+      KrystaPatchBadge: ({ patch }: { patch: { title: string } }) =>
+        React.createElement("span", null, patch.title),
+    },
     "@renderer/hooks": {
       useGameCard: () => ({
         formatPlayTime: () => "0 minutes",
@@ -478,6 +484,21 @@ describe("visibility and playtime badge layout", () => {
     assert.match(right.textContent!, /Steam/);
     assert.match(right.textContent!, /SNES/);
     assert.match(right.textContent!, /installed/);
+    dom.window.close();
+  });
+
+  it("shows a pending patch on its own when other badges are disabled", () => {
+    const dom = renderCard(
+      layouts[0],
+      {},
+      { hideLibraryGameBadges: true, hideLibraryReadySizeBadges: true },
+      { title: "Patch 1.2" }
+    );
+    assert.equal(
+      dom.window.document.querySelector(".library-game-card__top-right")
+        ?.textContent,
+      "Patch 1.2"
+    );
     dom.window.close();
   });
 

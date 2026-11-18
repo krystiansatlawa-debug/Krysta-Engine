@@ -15,12 +15,36 @@ export function findKrystaPendingPatch(game:LibraryGame,patches:Patch[]){
  const members="members" in game&&Array.isArray(game.members)?game.members as LibraryGame[]:[game];
  const matching=patches.filter(p=>members.some(m=>m.shop===p.shop&&m.objectId===p.id));return matching.find(p=>p.kind==="required")??matching[0];
 }
-export function KrystaPatchBadge({game}:{game:LibraryGame}){
- const {i18n}=useTranslation();const pl=i18n.language.startsWith("pl");
- const patches=useKrystaPendingPatches();
- const patch=findKrystaPendingPatch(game,patches);
- if(!patch)return null;
- return <span title={patch.title} aria-label={(pl?"Nowy patch: ":"New patch: ")+patch.title} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#245b47",color:"#fff",padding:"3px 6px",borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}><ArrowDownIcon size={12}/>{patch.kind==="required"?(pl?"Aktualizacja wymagana":"Update required"):(pl?"Nowy patch":"New patch")}</span>;
+export function KrystaPatchBadge({ patch }: { patch: Patch }) {
+  const { i18n } = useTranslation();
+  const pl = i18n.language.startsWith("pl");
+  return (
+    <span
+      title={patch.title}
+      aria-label={(pl ? "Nowy patch: " : "New patch: ") + patch.title}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        background: "#245b47",
+        color: "#fff",
+        padding: "3px 6px",
+        borderRadius: 4,
+        fontSize: 11,
+        fontWeight: 600,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <ArrowDownIcon size={12} />
+      {patch.kind === "required"
+        ? pl
+          ? "Aktualizacja wymagana"
+          : "Update required"
+        : pl
+          ? "Nowy patch"
+          : "New patch"}
+    </span>
+  );
 }
 
 export function KrystaUpdateCenterActions({patches}:{patches:Patch[]}) {

@@ -1,4 +1,8 @@
-import { KrystaPatchBadge } from "./krysta-patch-badge";
+import {
+  findKrystaPendingPatch,
+  KrystaPatchBadge,
+  useKrystaPendingPatches,
+} from "./krysta-patch-badge";
 import cn from "classnames";
 import { getLibraryPresentationImportSources } from "./library-category";
 
@@ -94,6 +98,7 @@ export const LibraryGameCardLarge = memo(function LibraryGameCardLarge({
   onContextMenu,
 }: Readonly<LibraryGameCardLargeProps>) {
   const { t } = useTranslation("library");
+  const pendingPatch = findKrystaPendingPatch(game, useKrystaPendingPatches());
   const { formatPlayTime, handleCardClick, handleContextMenuClick } =
     useGameCard(game, onContextMenu);
 
@@ -106,7 +111,14 @@ export const LibraryGameCardLarge = memo(function LibraryGameCardLarge({
   const hideClassicsBadges =
     userPreferences?.hideLibraryClassicsBadges ?? false;
   const importSources = getLibraryPresentationImportSources(game);
-  const showUbisoftBadge = ("members" in game && Array.isArray(game.members) ? game.members as LibraryGame[] : [game]).some(member=>member.shop==="custom" && /^(ubi-owned-|ubisoft-)/.test(member.objectId));
+  const showUbisoftBadge = (
+    "members" in game && Array.isArray(game.members)
+      ? (game.members as LibraryGame[])
+      : [game]
+  ).some(
+    (member) =>
+      member.shop === "custom" && /^(ubi-owned-|ubisoft-)/.test(member.objectId)
+  );
   const showEpicLibraryBadge =
     importSources.epic && !userPreferences?.hideEpicLibraryBadges;
   const showSteamLibraryBadge =
@@ -462,7 +474,7 @@ export const LibraryGameCardLarge = memo(function LibraryGameCardLarge({
           )}
 
           <div className="library-game-card-large__top-right">
-            <KrystaPatchBadge game={game}/>
+            {pendingPatch && <KrystaPatchBadge patch={pendingPatch} />}
             <GameVisibilityBadge
               variant="large"
               isHiddenFromOthers={game.isHiddenFromOthers}
@@ -483,9 +495,13 @@ export const LibraryGameCardLarge = memo(function LibraryGameCardLarge({
                 </span>
               </div>
             )}
-            {(showUbisoftBadge || showSteamLibraryBadge || showEpicLibraryBadge) && (
+            {(showUbisoftBadge ||
+              showSteamLibraryBadge ||
+              showEpicLibraryBadge) && (
               <div className="library-game-card-large__import-badges">
-                {showUbisoftBadge && <SteamLibraryBadge source="ubisoft" variant="large" />}
+                {showUbisoftBadge && (
+                  <SteamLibraryBadge source="ubisoft" variant="large" />
+                )}
                 {showSteamLibraryBadge && (
                   <SteamLibraryBadge
                     variant="large"

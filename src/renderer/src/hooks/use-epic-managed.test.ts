@@ -2384,7 +2384,10 @@ describe("Epic managed UI lifecycle", () => {
           },
           "@renderer/context": { gameDetailsContext: context },
           "react-i18next": {
-            useTranslation: () => ({ t: (key: string) => key }),
+            useTranslation: () => ({
+              t: (key: string) => key,
+              i18n: { language: "en" },
+            }),
           },
           "react-router-dom": {
             useNavigate: () => () => {},

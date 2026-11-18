@@ -1,4 +1,8 @@
-import { KrystaPatchBadge } from "./krysta-patch-badge";
+import {
+  findKrystaPendingPatch,
+  KrystaPatchBadge,
+  useKrystaPendingPatches,
+} from "./krysta-patch-badge";
 import { LibraryGame } from "@types";
 import { getDisplayedPlayTimeInMilliseconds } from "@shared";
 import cn from "classnames";
@@ -54,6 +58,7 @@ export const LibraryGameCard = memo(function LibraryGameCard({
   onContextMenu,
 }: Readonly<LibraryGameCardProps>) {
   const { t } = useTranslation("library");
+  const pendingPatch = findKrystaPendingPatch(game, useKrystaPendingPatches());
   const { formatPlayTime, handleCardClick, handleContextMenuClick } =
     useGameCard(game, onContextMenu);
 
@@ -66,7 +71,14 @@ export const LibraryGameCard = memo(function LibraryGameCard({
   const hideClassicsBadges =
     userPreferences?.hideLibraryClassicsBadges ?? false;
   const importSources = getLibraryPresentationImportSources(game);
-  const showUbisoftBadge = ("members" in game && Array.isArray(game.members) ? game.members as LibraryGame[] : [game]).some(member=>member.shop==="custom" && /^(ubi-owned-|ubisoft-)/.test(member.objectId));
+  const showUbisoftBadge = (
+    "members" in game && Array.isArray(game.members)
+      ? (game.members as LibraryGame[])
+      : [game]
+  ).some(
+    (member) =>
+      member.shop === "custom" && /^(ubi-owned-|ubisoft-)/.test(member.objectId)
+  );
   const showEpicLibraryBadge =
     importSources.epic && !userPreferences?.hideEpicLibraryBadges;
   const showSteamLibraryBadge =
@@ -293,10 +305,17 @@ export const LibraryGameCard = memo(function LibraryGameCard({
             )}
           </div>
 
-          {(
+          {(pendingPatch ||
+            showUbisoftBadge ||
+            showSteamLibraryBadge ||
+            showEpicLibraryBadge ||
+            showPlatformBadge ||
+            showReadyBadge) && (
             <div className="library-game-card__top-right">
-              <KrystaPatchBadge game={game}/>
-              {(showUbisoftBadge || showSteamLibraryBadge || showEpicLibraryBadge) && (
+              {pendingPatch && <KrystaPatchBadge patch={pendingPatch} />}
+              {(showUbisoftBadge ||
+                showSteamLibraryBadge ||
+                showEpicLibraryBadge) && (
                 <div className="library-game-card__import-badges">
                   {showUbisoftBadge && <SteamLibraryBadge source="ubisoft" />}
                   {showSteamLibraryBadge && (
