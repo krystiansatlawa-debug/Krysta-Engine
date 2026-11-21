@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -8,6 +8,7 @@ import {
   parseCyberpunkStoryMetadata,
   parseRockstarStoryHeader,
   readLatestStorySave,
+  readDiscoveredStorySave,
 } from "./story-progress-save.js";
 
 const rockstarSave = (version: number, title: string) => {
@@ -219,4 +220,61 @@ test("reads the exact Rockstar save reported by Hydra, leaving unreported siblin
   );
   assert.equal(result.status, "ready");
   assert.equal(result.automatic?.percent, 53);
+});
+
+test("reads a recognized save reported by Hydra without a recognized library ID", async (t) => {
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "krysta-story-identify-")
+  );
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const save = path.join(directory, "SRDR30000");
+  await writeFile(save, rockstarSave(4, "A saved chapter (53%)"));
+  const scan = (files: string[]) =>
+    readDiscoveredStorySave(files, undefined, () => true);
+
+  assert.equal((await scan([save])).automatic?.percent, 53);
+  assert.equal(
+    (await scan([path.join(directory, "missing.sav")])).status,
+    "not-found"
+  );
+  const unsupported = path.join(directory, "other.sav");
+  await writeFile(unsupported, "unknown save");
+  assert.deepEqual(await scan([unsupported]), {
+    automatic: null,
+    status: "save-found",
+    lastSaveAt: (await stat(unsupported)).mtimeMs,
+  });
+  const otherGame = path.join(directory, "SGTA50000");
+  await writeFile(otherGame, rockstarSave(1, "A different game (91%)"));
+  assert.deepEqual(await scan([save, otherGame]), {
+    automatic: null,
+    status: "save-found",
+    lastSaveAt: Math.max(
+      (await stat(save)).mtimeMs,
+      (await stat(otherGame)).mtimeMs
+    ),
+  });
+});
+
+test("keeps the newest save date for a format without a parser", async (t) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "krysta-save-date-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const older = path.join(directory, "first-slot.bin");
+  const newer = path.join(directory, "second-slot.bin");
+  await writeFile(older, "first slot");
+  await writeFile(newer, "second slot");
+  const olderDate = new Date("2026-01-01T10:00:00Z");
+  const newerDate = new Date("2026-01-02T10:00:00Z");
+  await utimes(older, olderDate, olderDate);
+  await utimes(newer, newerDate, newerDate);
+
+  const files = [older, newer, directory, path.join(directory, "missing")];
+  assert.deepEqual(
+    await readDiscoveredStorySave(files, undefined, () => true),
+    {
+      automatic: null,
+      status: "save-found",
+      lastSaveAt: newerDate.getTime(),
+    }
+  );
 });

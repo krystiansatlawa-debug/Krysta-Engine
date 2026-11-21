@@ -23,6 +23,7 @@ import {
 } from "@main/services/game-running-state";
 import { HydraApi } from "@main/services/hydra-api";
 import { recordGameJournalSession } from "@main/services/game-journal";
+import { queueAutomaticStoryProgress } from "@main/services/automatic-story-progress";
 import { NativeAddon } from "@main/services/native-addon";
 import { createGame, trackGamePlaytime } from "@main/services/library-sync";
 import { getHydraPlaytimeRevision } from "@main/services/library-sync/library-write-queue";
@@ -231,6 +232,8 @@ const finishSession = async (session: RecompilationSession) => {
   // backs up trophies.dat).
   await session.baseGameReady;
   await session.trophyWatcher?.finish();
+  const game = await gamesSublevel.get(baseKeyOf(session.ref));
+  if (game) queueAutomaticStoryProgress(game, objectId);
 
   const backup = hasCloudSaveLaunchGuard(objectId, SHOP)
     ? runAutomaticCloudSavePostExit(objectId, SHOP).catch((error) => {

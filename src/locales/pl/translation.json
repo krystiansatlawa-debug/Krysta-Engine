@@ -236,14 +236,15 @@
     "platforms": "Platformy"
   },
   "game_details": {
-    "story_progress_tab": "Postęp fabuły",
+    "story_progress_heading": "Postęp fabuły",
     "story_progress_set": "Ustaw postęp",
     "story_progress_edit": "Edytuj postęp",
     "story_progress_from_save": "Odczyt z zapisu",
-    "story_progress_status_not-found": "Nie znaleziono lokalnego zapisu. Jeśli zapisujesz w innym miejscu, wskaż folder zapisów.",
+    "story_progress_status_not-found": "Nie znaleziono lokalnego zapisu gry.",
     "story_progress_status_unreadable": "Znaleziono pliki, ale nie da się z nich odczytać postępu. Spróbuj wskazać właściwy folder zapisów.",
-    "story_progress_status_unsupported": "Automatyczny odczyt zapisu jest niedostępny dla tej gry.",
+    "story_progress_status_save-found": "Znaleziono lokalny zapis. Odczyt postępu z tego formatu jest niedostępny.",
     "story_progress_status_waiting": "Krysta odczyta zapis po zamknięciu uruchomionych gier.",
+    "story_progress_save_options": "Opcje zapisu",
     "story_progress_rescan": "Sprawdź ponownie",
     "story_progress_select_folder": "Wskaż folder zapisów",
     "story_progress_default_folders": "Użyj domyślnych folderów",

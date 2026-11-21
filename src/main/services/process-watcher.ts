@@ -24,10 +24,7 @@ import { emulatorSessions } from "./emulators/emulator-session-tracker";
 import { launchedGamePids } from "./launched-game-pids";
 import { markGameLauncherGameDetected } from "./game-launcher-status";
 import { recordGameJournalSession } from "./game-journal";
-import {
-  queueAutomaticStoryProgress,
-  refreshQueuedStoryProgress,
-} from "./automatic-story-progress";
+import { queueAutomaticStoryProgress } from "./automatic-story-progress";
 import {
   isValidProcessWatcherScan,
   startOptionalExecutableCatalogueLoad,
@@ -449,7 +446,6 @@ export const watchProcesses = async () => {
 
   currentTick++;
 
-  refreshQueuedStoryProgress();
   WindowManager.sendToAppWindows("on-games-running", getGamesRunning());
 };
 

@@ -17,11 +17,13 @@ export type StorySaveStatus =
   | "waiting"
   | "not-found"
   | "unreadable"
-  | "unsupported";
+  | "save-found";
 
 export interface GameStoryProgressView {
   manual: GameStoryProgress | null;
   automatic: AutomaticGameStoryProgress | null;
   automaticStatus: StorySaveStatus;
+  lastSaveAt: number | null;
   hasCustomSaveFolder: boolean;
+  canSelectSaveFolder: boolean;
 }

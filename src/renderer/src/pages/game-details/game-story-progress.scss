@@ -2,11 +2,14 @@
 
 .game-story-progress {
   display: grid;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
   min-width: 0;
-  max-width: 880px;
-  padding: globals.$page-gutter;
+  margin-bottom: globals.$spacing-unit;
+  padding: 12px 16px;
+  background: globals.$dark-background-color;
+  border: 1px solid globals.$border-color;
+  border-radius: 8px;
 
   &__header,
   &__actions,
@@ -25,28 +28,29 @@
   &__header h2 {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     color: globals.$muted-color;
-    font-size: 20px;
+    font-size: 16px;
   }
 
   &__icon {
-    display: grid;
-    place-items: center;
-    width: 36px;
-    height: 36px;
+    display: flex;
     color: globals.$platinum-cyan;
-    background: rgba(globals.$brand-teal, 0.14);
-    border-radius: 8px;
   }
 
   &__body {
     display: grid;
-    gap: 20px;
-    padding: clamp(16px, 4vw, 24px);
-    background: globals.$dark-background-color;
-    border: 1px solid globals.$border-color;
-    border-radius: 12px;
+    gap: 12px;
+  }
+
+  &__options summary {
+    width: fit-content;
+    color: globals.$body-color;
+    cursor: pointer;
+  }
+
+  &__options[open] summary {
+    margin-bottom: 8px;
   }
 
   &__empty,
@@ -59,12 +63,12 @@
   &__description,
   &__snapshot {
     display: grid;
-    gap: 12px;
+    gap: 8px;
   }
 
   &__snapshot + &__snapshot,
   &__snapshot + &__form {
-    padding-top: 20px;
+    padding-top: 12px;
     border-top: 1px solid globals.$border-color;
   }
 
@@ -75,12 +79,12 @@
 
   &__meter-heading strong {
     color: globals.$platinum-cyan;
-    font-size: 24px;
+    font-size: 18px;
     font-variant-numeric: tabular-nums;
   }
 
   &__track {
-    height: 8px;
+    height: 6px;
     overflow: hidden;
     background: rgba(255, 255, 255, 0.12);
     border-radius: 999px;
@@ -94,7 +98,7 @@
 
   &__mission {
     display: grid;
-    gap: 6px;
+    gap: 4px;
     overflow-wrap: anywhere;
 
     h3 {
@@ -105,7 +109,7 @@
 
     strong {
       color: globals.$muted-color;
-      font-size: 17px;
+      font-size: 15px;
     }
 
     p {
