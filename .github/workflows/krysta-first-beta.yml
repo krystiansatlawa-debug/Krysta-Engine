@@ -1,5 +1,5 @@
 name: Krysta Release
-# Validate and publish Krysta 1.0.7 from the latest flat-gallery source after Windows regressions.
+# Run Krysta 1.0.7 Windows regressions against the corrected in-flight scan reuse test before publishing.
 on:
   workflow_dispatch:
   push:
