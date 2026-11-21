@@ -19,11 +19,17 @@ export function presentUbisoftAchievements(
 ): UserAchievement[] {
   return items
     .map((achievement): UserAchievement => {
+      // Ubisoft sometimes returns completionDate without a time zone.
+      // Interpret these UTC-style timestamps consistently on every machine.
+      const isoDate = achievement.completionDate?.trim() ?? "";
+      const normalizedDate =
+        /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?$/i.test(isoDate)
+          ? isoDate + "Z"
+          : isoDate;
       const unlockTime =
-        achievement.unlocked &&
-        achievement.completionDate &&
-        Number.isFinite(Date.parse(achievement.completionDate))
-          ? Date.parse(achievement.completionDate)
+        achievement.unlocked && normalizedDate &&
+        Number.isFinite(Date.parse(normalizedDate))
+          ? Date.parse(normalizedDate)
           : null;
       return {
         name: `ubisoft:${achievement.id}`,
