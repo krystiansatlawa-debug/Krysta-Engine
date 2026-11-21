@@ -12,7 +12,7 @@ import {
   onTrackedGamesRunningChange,
 } from "./game-running-state";
 import { readHydraStorySave } from "./hydra-story-save-discovery";
-import { discoverSelectedStorySaveFiles } from "./story-progress-metadata";
+import { discoverSelectedStorySaveFiles } from "./story-progress-metadata.js";
 import { logger } from "./logger";
 import { getSteamLibraryFolders } from "./steam";
 import { getWinePrefixUserProfiles } from "./wine-prefix";
