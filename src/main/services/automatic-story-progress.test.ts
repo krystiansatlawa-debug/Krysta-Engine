@@ -155,8 +155,23 @@ test("captures unknown saves after a session and serializes scans across the lib
     123456
   );
 
+  // The queue may process another game's pending scan between calls.
+  // Verify a fresh scan of each requested game, not the last global item.
+  const countScans = (id: string) =>
+    scans.filter(({ objectId }) => objectId === id).length;
+  const expectNewScan = async (id: string, previousCount: number) => {
+    for (let attempt = 0; attempt < 12 && countScans(id) <= previousCount; attempt++) {
+      exported.refreshQueuedStoryProgress();
+      await setImmediate();
+    }
+    assert.ok(countScans(id) > previousCount, `Expected a new scan for ${id}`);
+  };
+
+  const priorLinked = countScans(linked.objectId);
   await exported.getAutomaticStoryProgress(catalogue, true);
-  assert.equal(scans.at(-1)?.objectId, linked.objectId);
+  await expectNewScan(linked.objectId, priorLinked);
+
+  const priorEmulator = countScans(portId);
   await exported.getAutomaticStoryProgress(emulator, true);
-  assert.equal(scans.at(-1)?.objectId, portId);
+  await expectNewScan(portId, priorEmulator);
 });
