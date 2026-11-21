@@ -35,6 +35,10 @@ import {
   stopWaylandFocusWatch,
 } from "./services/screenshots";
 import { isWaylandSession } from "./services/linux-game-capture-session";
+import {
+  flushGameJournalWrites,
+  recordGameJournalSession,
+} from "./services/game-journal";
 import { recompilationGameSessions } from "./services/game-running-state";
 import { refreshPortableShortcutLauncher } from "./helpers/shortcut-launch";
 import { lookupCachedPlatform } from "./events/library/get-library";
@@ -489,6 +493,9 @@ app.on("before-quit", async (e) => {
     } catch (error) {
       logger.error("Could not save active download before quitting", error);
     }
+    for (const [gameKey, session] of emulators.emulatorSessions) {
+      void recordGameJournalSession(gameKey, session.startedAt);
+    }
     const results = await Promise.allSettled([
       Lock.releaseLock(),
       TorrentService.shutdown(),
@@ -497,6 +504,7 @@ app.on("before-quit", async (e) => {
       emulators.stopAllEmulatorSouvenirCaptureSessions(),
       flushScreenshotTelemetry(SCREENSHOT_TELEMETRY_QUIT_FLUSH_TIMEOUT_MS),
     ]);
+    await flushGameJournalWrites();
     for (const result of results) {
       if (result.status === "rejected") {
         logger.error("Application shutdown cleanup failed", result.reason);

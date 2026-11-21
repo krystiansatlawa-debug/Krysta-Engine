@@ -5,6 +5,7 @@ import { EMULATOR_SYSTEMS } from "@shared";
 import type { EmulatorSystem, Game, GameShop, RetroArchPlatform } from "@types";
 
 import { trackGamePlaytime } from "../library-sync";
+import { recordGameJournalSession } from "../game-journal";
 import {
   deleteEmulatorGameRunning,
   setEmulatorGameRunning,
@@ -419,6 +420,7 @@ const finalizeEmulatorSession = async (gameKey: string): Promise<void> => {
   if (!session) return;
   emulatorSessions.delete(gameKey);
   deleteEmulatorGameRunning(gameKey);
+  void recordGameJournalSession(gameKey, session.startedAt);
   stopLinuxGameCaptureSession(gameKey);
   onScreenshotGameClosed(gameKey);
   if (session.heartbeat) clearInterval(session.heartbeat);

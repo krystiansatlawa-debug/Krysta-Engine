@@ -57,7 +57,7 @@ const getRequestedWinePrefixPath = async (
   return Wine.getEffectivePrefixPath(game?.winePrefixPath, objectId);
 };
 
-export const getCloudSaveGameContext = async (
+export const getCloudSavePathContext = async (
   objectId: string,
   shop: GameShop,
   overrides?: CloudSaveGameContextOverrides
@@ -113,6 +113,19 @@ export const getCloudSaveGameContext = async (
     storeUserContext,
   };
 
+  return { game, pathContext, emulatorProvider };
+};
+
+export const getCloudSaveGameContext = async (
+  objectId: string,
+  shop: GameShop,
+  overrides?: CloudSaveGameContextOverrides
+) => {
+  const { game, pathContext, emulatorProvider } = await getCloudSavePathContext(
+    objectId,
+    shop,
+    overrides
+  );
   let winePrefixIsValid = false;
   if (pathContext.winePrefixPath) {
     try {

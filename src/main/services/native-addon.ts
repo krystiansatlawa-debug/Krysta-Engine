@@ -23,6 +23,8 @@ import type {
   VerifyDownloadedRestoreFileResult,
   CheckCloudSaveCustomPathOverlapInput,
   CheckCloudSaveCustomPathOverlapResult,
+  CloudSavePathContext,
+  CloudSaveRule,
 } from "@types";
 
 import { logger } from "./logger";
@@ -134,6 +136,16 @@ export type NativeProcessPayload = ProcessPayload &
     | "inspectionComplete"
   >;
 
+type ResolvedNativeSaveRule = CloudSaveRule & {
+  resolvedPaths: {
+    path: string;
+    caseSensitive: boolean;
+    dynamic: boolean;
+    scanRoot?: string;
+  }[];
+  unresolvedTokens: string[];
+};
+
 type HydraNativeModule = {
   torrentInitialize: (port: number) => Promise<void>;
   torrentRequest: (method: string, paramsJson: string) => Promise<string>;
@@ -192,6 +204,12 @@ type HydraNativeModule = {
   getSaveRulesForGame: (
     input: GetSaveRulesForGameInput
   ) => Promise<GameSaveRules>;
+  resolveSaveRules?: (
+    input: CloudSavePathContext & { rules: CloudSaveRule[] }
+  ) => ResolvedNativeSaveRule[];
+  scanResolvedSaveRules?: (
+    rules: ResolvedNativeSaveRule[]
+  ) => Promise<{ scannedPaths: { files: { absolutePath: string }[] }[] }[]>;
   buildSnapshotAggregateHash: (
     input: BuildSnapshotAggregateHashInput
   ) => string;
@@ -701,6 +719,22 @@ export class NativeAddon {
 
   public static getSaveRulesForGame(input: GetSaveRulesForGameInput) {
     return this.load().getSaveRulesForGame(input);
+  }
+
+  public static async scanLocalSaveRuleFiles(
+    context: CloudSavePathContext,
+    rules: CloudSaveRule[]
+  ): Promise<string[]> {
+    const addon = this.load();
+    if (!rules.length || !addon.resolveSaveRules || !addon.scanResolvedSaveRules)
+      return [];
+    const paths = addon.resolveSaveRules({ ...context, rules });
+    const scanned = await addon.scanResolvedSaveRules(paths);
+    return scanned.flatMap((rule) =>
+      rule.scannedPaths.flatMap(({ files }) =>
+        files.map(({ absolutePath }) => absolutePath)
+      )
+    );
   }
 
   public static checkCloudSaveCustomPathOverlap(

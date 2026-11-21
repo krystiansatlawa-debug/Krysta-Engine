@@ -32,6 +32,9 @@ import type {
   ComparedAchievements,
   LibraryGame,
   GameRunning,
+  GameJournalPage,
+  GameStoryProgress,
+  GameStoryProgressView,
   TorBoxUser,
   Theme,
   Auth,
@@ -1110,6 +1113,29 @@ declare global {
           "id" | "sessionDurationInMillis" | "recompilationSlug"
         >[]
       ) => void
+    ) => () => Electron.IpcRenderer;
+    getGameJournal: (
+      gameKeys: string[],
+      limit: number
+    ) => Promise<GameJournalPage>;
+    getGameStoryProgress: (
+      shop: GameShop,
+      objectId: string,
+      readSave?: boolean
+    ) => Promise<GameStoryProgressView>;
+    selectStorySaveFolder: (
+      shop: GameShop,
+      objectId: string,
+      reset?: boolean
+    ) => Promise<Omit<GameStoryProgressView, "manual"> | null>;
+    onGameStoryProgressChanged: (cb: () => void) => () => Electron.IpcRenderer;
+    setGameStoryProgress: (
+      shop: GameShop,
+      objectId: string,
+      progress: GameStoryProgress
+    ) => Promise<GameStoryProgress | null>;
+    onGameJournalChanged: (
+      cb: (gameKey: string) => void
     ) => () => Electron.IpcRenderer;
     onGameSessionSynced: (cb: () => void) => () => Electron.IpcRenderer;
     onGamePlaytimeSynced: (cb: () => void) => () => Electron.IpcRenderer;

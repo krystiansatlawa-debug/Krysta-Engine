@@ -1,0 +1,89 @@
+@use "../../scss/globals.scss";
+
+.game-journal {
+  display: grid;
+  gap: 16px;
+  padding: globals.$page-gutter;
+  width: 100%;
+  max-width: 960px;
+  min-width: 0;
+
+  &__heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: globals.$muted-color;
+    font-size: 20px;
+  }
+
+  &__icon {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: rgba(globals.$brand-teal, 0.14);
+    color: globals.$platinum-cyan;
+  }
+
+  &__content {
+    min-width: 0;
+    border: 1px solid globals.$border-color;
+    border-radius: 12px;
+    background: globals.$dark-background-color;
+    overflow: hidden;
+  }
+
+  &__table-wrapper {
+    overflow-x: auto;
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+
+    th,
+    td {
+      padding: 14px 16px;
+      text-align: left;
+    }
+
+    th {
+      color: globals.$subtle-color;
+      background: globals.$background-color;
+      font-size: globals.$hint-font-size;
+      font-weight: 600;
+    }
+
+    td {
+      border-top: 1px solid globals.$border-color;
+    }
+
+    th:last-child,
+    td:last-child {
+      text-align: right;
+    }
+
+    td:last-child {
+      color: globals.$muted-color;
+      font-weight: 600;
+    }
+  }
+
+  &__message,
+  &__error {
+    padding: 20px;
+  }
+
+  &__error {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  &__more {
+    justify-self: start;
+  }
+}
