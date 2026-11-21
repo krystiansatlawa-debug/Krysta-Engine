@@ -266,14 +266,15 @@
     "recompilation_badge": "Recomp"
   },
   "game_details": {
-    "story_progress_tab": "Story progress",
+    "story_progress_heading": "Story progress",
     "story_progress_set": "Set progress",
     "story_progress_edit": "Edit progress",
     "story_progress_from_save": "Read from save",
-    "story_progress_status_not-found": "No local save found. If you save elsewhere, select the save folder.",
+    "story_progress_status_not-found": "No local game save found.",
     "story_progress_status_unreadable": "Save files were found, but progress could not be read. Try selecting the correct save folder.",
-    "story_progress_status_unsupported": "Automatic save reading is unavailable for this game.",
+    "story_progress_status_save-found": "Local save found. Automatic progress reading is unavailable for this save format.",
     "story_progress_status_waiting": "Krysta will read the save once the running games close.",
+    "story_progress_save_options": "Save options",
     "story_progress_rescan": "Check again",
     "story_progress_select_folder": "Select save folder",
     "story_progress_default_folders": "Use default folders",

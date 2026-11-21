@@ -1,11 +1,11 @@
 import { app } from "electron";
 import path from "node:path";
-import { db } from "@main/level";
+import { db, gamesSublevel, levelKeys } from "@main/level";
+import { getGameCatalogueIdentity } from "../../shared/library-catalogue";
 import type {
   AutomaticGameStoryProgress,
   Game,
   GameStoryProgressView,
-  StorySaveStatus,
 } from "@types";
 import {
   hasTrackedGamesRunning,
@@ -20,34 +20,49 @@ import {
   identifyStorySaveSource,
   readLatestStorySave,
   storySaveSteamAppIds,
+  type StorySaveScan,
   type StorySaveSource,
 } from "./story-progress-save";
 
-const snapshots = db.sublevel<StorySaveSource, AutomaticGameStoryProgress>(
-  "automatic-story-progress",
-  { valueEncoding: "json" }
-);
+type CompletedScan = StorySaveScan & {
+  installationKey?: string;
+  saveObjectId?: string;
+};
+type PendingScan = {
+  game: Game;
+  source?: StorySaveSource;
+  saveObjectId: string;
+};
+
+const snapshots = db.sublevel<
+  string,
+  AutomaticGameStoryProgress | CompletedScan
+>("automatic-story-progress", { valueEncoding: "json" });
 const customFolders = db.sublevel<StorySaveSource, string>(
   "story-save-folders",
   {
     valueEncoding: "json",
   }
 );
-const queued = new Map<StorySaveSource, Game>();
-const statuses = new Map<StorySaveSource, StorySaveStatus>();
-const inFlight = new Map<
-  StorySaveSource,
-  Promise<AutomaticGameStoryProgress | null>
->();
+const queued = new Map<string, PendingScan>();
+let activeScan: { key: string; result: Promise<CompletedScan> } | undefined;
 const canRead = () => !hasTrackedGamesRunning();
+
+function storyKey(game: Game, source: StorySaveSource | undefined) {
+  const { shop, objectId } = getGameCatalogueIdentity(game);
+  return source ?? levelKeys.game(shop, objectId);
+}
+
 let sessionRevision = 0;
 onTrackedGamesRunningChange(() => {
   sessionRevision++;
 });
 
-function enqueue(source: StorySaveSource, game: Game) {
-  queued.set(source, game);
-  statuses.set(source, "waiting");
+async function readStoredScan(key: string): Promise<CompletedScan> {
+  const stored = await snapshots.get(key);
+  if (stored && "status" in stored) return stored;
+  if (stored) return { automatic: stored, status: "ready" };
+  return { automatic: null, status: "not-found" };
 }
 
 async function defaultSavePaths(
@@ -112,11 +127,11 @@ async function defaultSavePaths(
 
 async function readAutomaticSave(
   game: Game,
-  source: StorySaveSource,
+  source: StorySaveSource | undefined,
   folder: string | undefined,
   canContinue: () => boolean
 ) {
-  if (folder) {
+  if (source && folder) {
     return readLatestStorySave(
       source,
       { profiles: [], directFolders: [folder] },
@@ -133,7 +148,7 @@ async function readAutomaticSave(
       canContinue,
       controller.signal
     );
-    if (detected.status === "ready" || detected.status === "waiting")
+    if (!source || detected.status === "ready" || detected.status === "waiting")
       return detected;
 
     const paths = await defaultSavePaths(source, game, canContinue);
@@ -144,66 +159,69 @@ async function readAutomaticSave(
   }
 }
 
-function refresh(source: StorySaveSource, game: Game) {
-  const existing = inFlight.get(source);
-  if (existing) return existing;
-  queued.delete(source);
+function refresh(key: string, scan: PendingScan) {
+  queued.delete(key);
+  const revision = sessionRevision;
+  const canContinue = () => revision === sessionRevision && canRead();
+  const retry = (previous: CompletedScan) => {
+    if (!queued.has(key)) queued.set(key, scan);
+    return previous;
+  };
+  const { game, source, saveObjectId } = scan;
 
-  const lookup = (async () => {
-    const previous = (await snapshots.get(source)) ?? null;
-    if (!canRead()) {
-      enqueue(source, game);
-      return previous;
-    }
-    const revision = sessionRevision;
-    const canContinue = () => revision === sessionRevision && canRead();
-    const folder = await customFolders.get(source);
-    if (!canContinue()) {
-      enqueue(source, game);
-      return previous;
-    }
-    const result = await readAutomaticSave(
-      game,
+  const result = (async () => {
+    const previous = await readStoredScan(key);
+    const folder = source ? await customFolders.get(source) : undefined;
+    if (!canContinue()) return retry(previous);
+    const current = await readAutomaticSave(
+      saveObjectId === game.objectId
+        ? game
+        : { ...game, objectId: saveObjectId },
       source,
       folder,
       canContinue
-    ).catch((error: unknown) => {
+    ).catch((error: unknown): StorySaveScan => {
       logger.debug("Could not read story save", error);
-      return { automatic: previous, status: "unreadable" } as const;
+      return { ...previous, status: "unreadable" };
     });
-    if (!canContinue()) {
-      enqueue(source, game);
-      return previous;
-    }
-    const next = result.automatic;
-    const changed = JSON.stringify(next) !== JSON.stringify(previous);
-    const statusChanged = statuses.get(source) !== result.status;
-    if (changed) {
-      if (next) await snapshots.put(source, next);
-      else await snapshots.del(source);
-    }
-    statuses.set(source, result.status);
-    if (changed || statusChanged) {
-      WindowManager.sendToAppWindows("on-game-story-progress-changed");
-    }
+    if (!canContinue() || current.status === "waiting") return retry(previous);
+
+    const catalogue = getGameCatalogueIdentity(game);
+    const next: CompletedScan = {
+      automatic: current.automatic,
+      status: current.status,
+      lastSaveAt: current.lastSaveAt,
+      ...((catalogue.shop !== game.shop ||
+        catalogue.objectId !== game.objectId) && {
+        installationKey: levelKeys.game(game.shop, game.objectId),
+      }),
+      ...(saveObjectId !== game.objectId && { saveObjectId }),
+    };
+    if (JSON.stringify(next) !== JSON.stringify(previous))
+      await snapshots.put(key, next);
     return next;
   })().finally(() => {
-    inFlight.delete(source);
+    activeScan = undefined;
+    WindowManager.sendToAppWindows("on-game-story-progress-changed");
   });
-  inFlight.set(source, lookup);
-  return lookup;
+  activeScan = { key, result };
+  return result;
 }
 
-export function queueAutomaticStoryProgress(game: Game) {
+export function queueAutomaticStoryProgress(
+  game: Game,
+  saveObjectId = game.objectId
+) {
   const source = identifyStorySaveSource(game);
-  if (source) enqueue(source, game);
+  const key = storyKey(game, source);
+  queued.set(key, { game, source, saveObjectId });
 }
 
 export function refreshQueuedStoryProgress() {
-  if (!queued.size || !canRead()) return;
-  for (const [source, game] of queued) {
-    if (inFlight.has(source)) continue;
-    void refresh(source, game).catch((error: unknown) => {
+  if (activeScan || !canRead()) return;
+  const next = queued.entries().next().value;
+  if (next) {
+    void refresh(...next).catch((error: unknown) => {
       logger.error("Could not save story progress", error);
     });
   }
@@ -214,24 +232,39 @@ export async function getAutomaticStoryProgress(
   readSave: boolean
 ): Promise<Omit<GameStoryProgressView, "manual">> {
   const source = identifyStorySaveSource(game);
-  if (!source)
-    return {
-      automatic: null,
-      automaticStatus: "unsupported",
-      hasCustomSaveFolder: false,
-    };
+  const key = storyKey(game, source);
+  let stored = await readStoredScan(key);
 
-  if (readSave && !canRead()) enqueue(source, game);
-  const automatic =
-    readSave && canRead()
-      ? await refresh(source, game)
-      : ((await snapshots.get(source)) ?? null);
+  if (readSave) {
+    const installation = stored.installationKey
+      ? await gamesSublevel.get(stored.installationKey)
+      : undefined;
+    const useInstallation =
+      installation &&
+      !installation.isDeleted &&
+      storyKey(installation, identifyStorySaveSource(installation)) === key;
+    const target = useInstallation ? installation : game;
+    const scan = queued.get(key) ?? {
+      game: target,
+      source,
+      saveObjectId:
+        stored.installationKey && !useInstallation
+          ? game.objectId
+          : (stored.saveObjectId ?? target.objectId),
+    };
+    if (!canRead()) queued.set(key, scan);
+    else if (activeScan?.key === key) stored = await activeScan.result;
+    else if (activeScan) queued.set(key, scan);
+    else stored = await refresh(key, scan);
+  }
+
   return {
-    automatic,
-    automaticStatus: queued.has(source)
-      ? "waiting"
-      : (statuses.get(source) ?? (automatic ? "ready" : "not-found")),
-    hasCustomSaveFolder: !!(await customFolders.get(source)),
+    automatic: stored.automatic,
+    automaticStatus:
+      queued.has(key) || activeScan?.key === key ? "waiting" : stored.status,
+    lastSaveAt: stored.automatic?.savedAt ?? stored.lastSaveAt ?? null,
+    hasCustomSaveFolder: source ? !!(await customFolders.get(source)) : false,
+    canSelectSaveFolder: !!source,
   };
 }
 
@@ -240,6 +273,7 @@ export async function setStorySaveFolder(game: Game, folder: string | null) {
   if (!source) throw new Error("Story save format is unsupported");
   if (folder) await customFolders.put(source, folder);
   else await customFolders.del(source);
-  await inFlight.get(source)?.catch(() => null);
+  queueAutomaticStoryProgress(game);
+  if (activeScan?.key === source) await activeScan.result.catch(() => null);
   return getAutomaticStoryProgress(game, true);
 }

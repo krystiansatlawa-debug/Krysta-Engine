@@ -48,6 +48,7 @@ function fixture() {
     legacySavesEnabled: false,
     cloudUploads: 0,
     lifecycleErrors: [] as unknown[],
+    storyScans: [] as string[],
     calls: [] as { method: string; body: unknown }[],
   };
   const modules: Record<string, unknown> = {
@@ -257,6 +258,11 @@ function fixture() {
         "./wine": {},
         "./native-addon": {},
         "./emulators/emulator-session-tracker": {},
+        "./game-journal": { recordGameJournalSession: async () => {} },
+        "./automatic-story-progress": {
+          queueAutomaticStoryProgress: (game: Game) =>
+            state.storyScans.push(`${game.shop}:${game.objectId}`),
+        },
         "./game-launcher-status": { markGameLauncherGameDetected: () => {} },
         "./process-watcher-scan": {},
         "./linux-process-match": {},
@@ -416,6 +422,7 @@ for (const shop of ["steam", "epic"] as const) {
       assert.equal(f.state.game.unsyncedDeltaPlayTimeInMilliseconds, 60_000);
       assert.equal(f.state.acceptedPlayTimeInSeconds, 0);
       assert.equal(running.gamesPlaytime.has(gameKey), false);
+      assert.deepEqual(f.state.storyScans, [gameKey]);
 
       f.state.putFail = false;
       await watcher.onOpenGame({ ...f.state.game }, "game.exe");

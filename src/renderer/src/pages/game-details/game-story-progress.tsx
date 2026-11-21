@@ -62,10 +62,18 @@ export function GameStoryProgress({
     Omit<GameStoryProgressView, "manual">
   >({
     automatic: null,
-    automaticStatus: "unsupported",
+    automaticStatus: "not-found",
+    lastSaveAt: null,
     hasCustomSaveFolder: false,
+    canSelectSaveFolder: false,
   });
-  const { automatic, automaticStatus, hasCustomSaveFolder } = saveView;
+  const {
+    automatic,
+    automaticStatus,
+    hasCustomSaveFolder,
+    canSelectSaveFolder,
+  } = saveView;
+  const lastSaveAt = saveView.lastSaveAt ?? automatic?.savedAt ?? null;
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [reload, setReload] = useState(0);
@@ -77,13 +85,24 @@ export function GameStoryProgress({
 
   useEffect(() => {
     let active = true;
-    let refreshed = false;
+    let initialScan: number | undefined;
     window.electron
-      .getGameStoryProgress(shop, objectId)
+      .getGameStoryProgress(shop, objectId, reload > 0)
       .then((value) => {
         if (!active) return;
         setProgress(value.manual);
-        if (!refreshed) setSaveView(value);
+        setSaveView(value);
+        if (!reload && value.automaticStatus === "not-found") {
+          // Load cached data first and skip the scan when browsing past this card.
+          initialScan = window.setTimeout(() => {
+            void window.electron
+              .getGameStoryProgress(shop, objectId, true)
+              .then((scanned) => {
+                if (active) setSaveView(scanned);
+              })
+              .catch(() => {});
+          }, 800);
+        }
       })
       .catch(() => {
         if (active) setLoadError(true);
@@ -97,13 +116,13 @@ export function GameStoryProgress({
         .getGameStoryProgress(shop, objectId, false)
         .then((value) => {
           if (!active) return;
-          refreshed = true;
           setSaveView(value);
         })
         .catch(() => {});
     });
     return () => {
       active = false;
+      window.clearTimeout(initialScan);
       unsubscribe();
     };
   }, [shop, objectId, reload]);
@@ -163,9 +182,9 @@ export function GameStoryProgress({
       <header className="game-story-progress__header">
         <h2 id={headingId}>
           <span className="game-story-progress__icon" aria-hidden="true">
-            <BookIcon size={20} />
+            <BookIcon size={16} />
           </span>
-          {t("story_progress_tab")}
+          {t("story_progress_heading")}
         </h2>
         {!loading && !loadError && !editing && (
           <Button
@@ -194,14 +213,16 @@ export function GameStoryProgress({
         )}
         {!loading && !loadError && (
           <div className="game-story-progress__snapshot">
-            <div className="game-story-progress__meter-heading">
-              <h3>{t("story_progress_from_save")}</h3>
-              {automatic && (
-                <time dateTime={new Date(automatic.savedAt).toISOString()}>
-                  {formatDateTime(automatic.savedAt)}
-                </time>
-              )}
-            </div>
+            {(automatic || lastSaveAt !== null) && (
+              <div className="game-story-progress__meter-heading">
+                <h3>{t("story_progress_from_save")}</h3>
+                {lastSaveAt !== null && (
+                  <time dateTime={new Date(lastSaveAt).toISOString()}>
+                    {formatDateTime(lastSaveAt)}
+                  </time>
+                )}
+              </div>
+            )}
             {automatic ? (
               <>
                 {automatic.percent === null ? (
@@ -236,7 +257,8 @@ export function GameStoryProgress({
                 {t(`story_progress_status_${automaticStatus}`)}
               </p>
             )}
-            {automaticStatus !== "unsupported" && (
+            <details className="game-story-progress__options">
+              <summary>{t("story_progress_save_options")}</summary>
               <div className="game-story-progress__actions">
                 <Button
                   theme="outline"
@@ -246,14 +268,16 @@ export function GameStoryProgress({
                 >
                   {t("story_progress_rescan")}
                 </Button>
-                <Button
-                  theme="outline"
-                  size="small"
-                  disabled={selectingFolder}
-                  onClick={() => void chooseSaveFolder()}
-                >
-                  {t("story_progress_select_folder")}
-                </Button>
+                {canSelectSaveFolder && (
+                  <Button
+                    theme="outline"
+                    size="small"
+                    disabled={selectingFolder}
+                    onClick={() => void chooseSaveFolder()}
+                  >
+                    {t("story_progress_select_folder")}
+                  </Button>
+                )}
                 {hasCustomSaveFolder && (
                   <Button
                     theme="outline"
@@ -265,7 +289,7 @@ export function GameStoryProgress({
                   </Button>
                 )}
               </div>
-            )}
+            </details>
             {folderError && (
               <p role="alert">{t("story_progress_folder_error")}</p>
             )}

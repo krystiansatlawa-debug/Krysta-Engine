@@ -73,7 +73,7 @@ export function identifyStorySaveSource(
       .filter((source) => source !== undefined)
   );
   if (sources.size > 0) return sources.size === 1 ? [...sources][0] : undefined;
-  if (game.shop === "epic" || game.shop === "custom") {
+  if (game.shop !== "launchbox") {
     const title = game.title
       ?.toLowerCase()
       .replace(/[^a-z0-9]+/g, " ")
@@ -187,10 +187,8 @@ type ContinueReading = () => boolean;
 type SaveCandidate = { file: string; savedAt: number };
 export type StorySaveScan = {
   automatic: AutomaticGameStoryProgress | null;
-  status: Extract<
-    StorySaveStatus,
-    "ready" | "not-found" | "unreadable" | "waiting"
-  >;
+  status: StorySaveStatus;
+  lastSaveAt?: number;
 };
 
 async function listDirectory(directory: string) {
@@ -290,17 +288,20 @@ async function readCyberpunkSlot(directory: string) {
     )
     .sort(
       (a, b) => Number(b.name.split(".")[1]) - Number(a.name.split(".")[1])
-    )[0];
-  if (!metadata) return null;
+    );
   const maxMetadataSize = 64 * 1024;
-  const bytes = await readBounded(
-    path.join(directory, metadata.name),
-    maxMetadataSize + 1
-  );
-  if (bytes.length > maxMetadataSize) return null;
-  return parseCyberpunkStoryMetadata(
-    bytes.toString("utf8").replace(/^\uFEFF/, "")
-  );
+  for (const file of metadata) {
+    const bytes = await readBounded(
+      path.join(directory, file.name),
+      maxMetadataSize + 1
+    ).catch(() => null);
+    if (!bytes || bytes.length > maxMetadataSize) continue;
+    const details = parseCyberpunkStoryMetadata(
+      bytes.toString("utf8").replace(/^\uFEFF/, "")
+    );
+    if (details) return details;
+  }
+  return null;
 }
 
 async function findDetectedSlots(
@@ -382,5 +383,56 @@ export async function readLatestStorySave(
   return {
     automatic: null,
     status: candidates.length ? "unreadable" : "not-found",
+    ...(candidates[0] && { lastSaveAt: candidates[0].savedAt }),
   };
+}
+
+export async function readDiscoveredStorySave(
+  files: readonly string[],
+  source: StorySaveSource | undefined,
+  canRead: ContinueReading
+): Promise<StorySaveScan> {
+  const scan = (format: StorySaveSource) =>
+    readLatestStorySave(
+      format,
+      { profiles: [], detectedFiles: files },
+      canRead
+    );
+  if (source) {
+    const result = await scan(source);
+    if (result.status !== "not-found") return result;
+  }
+
+  const formats = new Set<StorySaveSource>();
+  let lastSaveAt: number | undefined;
+  for (const file of new Set(files)) {
+    if (!canRead()) return { automatic: null, status: "waiting" };
+    if (!path.isAbsolute(file)) continue;
+    const name = path.basename(file);
+    if (rockstarSlotPattern("rdr2").test(name)) formats.add("rdr2");
+    else if (rockstarSlotPattern("gtav").test(name)) formats.add("gtav");
+    else if (
+      name.toLowerCase() === "sav.dat" ||
+      cyberpunkMetadataPattern.test(name)
+    ) {
+      formats.add("cyberpunk");
+    }
+    const savedAt = await fileTime(file);
+    if (savedAt !== null && (lastSaveAt === undefined || savedAt > lastSaveAt))
+      lastSaveAt = savedAt;
+  }
+
+  let progress: AutomaticGameStoryProgress | null = null;
+  for (const format of source ? [] : formats) {
+    const result = await scan(format);
+    if (result.status === "waiting") return result;
+    if (!result.automatic) continue;
+    if (progress) return { automatic: null, status: "save-found", lastSaveAt };
+    progress = result.automatic;
+  }
+  if (!canRead()) return { automatic: null, status: "waiting" };
+  if (progress) return { automatic: progress, status: "ready" };
+  return lastSaveAt === undefined
+    ? { automatic: null, status: "not-found" }
+    : { automatic: null, status: "save-found", lastSaveAt };
 }

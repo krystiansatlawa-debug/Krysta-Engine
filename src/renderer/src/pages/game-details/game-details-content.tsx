@@ -555,27 +555,11 @@ export function GameDetailsContent() {
               {t("journal_tab")}
             </button>
           )}
-          {storyGame && (
-            <button
-              type="button"
-              aria-pressed={detailTab === "story-progress"}
-              onClick={() => setDetailTab("story-progress")}
-            >
-              {t("story_progress_tab")}
-            </button>
-          )}
         </nav>
         {detailTab === "journal" && game && (
           <GameJournal
             key={JSON.stringify(journalGameKeys)}
             gameKeys={journalGameKeys}
-          />
-        )}
-        {detailTab === "story-progress" && storyGame && (
-          <GameStoryProgress
-            key={`${storyGame.shop}:${storyGame.objectId}`}
-            shop={storyGame.shop}
-            objectId={storyGame.objectId}
           />
         )}
         {detailTab === "ubisoft-achievements" && game && (
@@ -616,6 +600,13 @@ export function GameDetailsContent() {
           style={detailTab !== "description" ? { display: "none" } : undefined}
         >
           <div className="game-details__description-content">
+            {detailTab === "description" && storyGame && (
+              <GameStoryProgress
+                key={`${storyGame.shop}:${storyGame.objectId}`}
+                shop={storyGame.shop}
+                objectId={storyGame.objectId}
+              />
+            )}
             <DescriptionHeader />
             {detailTab === "description" && !hasNSFWContentBlocked && (
               <GallerySlider key={`${shop}:${objectId}`} />

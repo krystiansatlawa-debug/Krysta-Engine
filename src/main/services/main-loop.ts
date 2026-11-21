@@ -7,6 +7,7 @@ import { INTERVALS } from "@main/constants";
 import { PowerSaveBlockerManager } from "./power-save-blocker";
 import { logger } from "./logger";
 import { DownloadOrchestrator } from "./download-orchestrator";
+import { refreshQueuedStoryProgress } from "./automatic-story-progress";
 
 const wrapInLoop = (fn: () => unknown, interval: number) => {
   const loop = async () => {
@@ -27,7 +28,10 @@ const wrapInLoop = (fn: () => unknown, interval: number) => {
 };
 
 export const startMainLoop = async () => {
-  wrapInLoop(() => watchProcesses(), INTERVALS.processWatcher);
+  wrapInLoop(async () => {
+    await watchProcesses();
+    refreshQueuedStoryProgress();
+  }, INTERVALS.processWatcher);
   wrapInLoop(() => DownloadManager.watchDownloads(), INTERVALS.downloadWatcher);
   wrapInLoop(
     () => DownloadOrchestrator.pollAwaitingDebridDownloads(),

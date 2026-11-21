@@ -6,6 +6,7 @@ import type { EmulatorSystem, Game, GameShop, RetroArchPlatform } from "@types";
 
 import { trackGamePlaytime } from "../library-sync";
 import { recordGameJournalSession } from "../game-journal";
+import { queueAutomaticStoryProgress } from "../automatic-story-progress";
 import {
   deleteEmulatorGameRunning,
   setEmulatorGameRunning,
@@ -445,6 +446,7 @@ const finalizeEmulatorSession = async (gameKey: string): Promise<void> => {
 
   await gamesSublevel.put(gameKey, updated);
   await trophyWatcherFinished;
+  queueAutomaticStoryProgress(updated);
 
   if (session.system === "ps4") {
     await refreshShadps4DetectedVersion(session.executablePath);

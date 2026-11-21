@@ -516,6 +516,28 @@ export const seedRetroArchBindingsFromLegacyAnchor = async (
   if (changed) await saveRetroArchBindings(game, bindings);
 };
 
+export const listRetroArchSavePaths = async (
+  game: Game,
+  canRead: () => boolean
+) => {
+  const { locations, platform } = await locationsForGame(game);
+  const files: string[] = [];
+  for (const location of locations) {
+    if (!canRead()) break;
+    const { targets } = await discoverRetroArchTargets(location, platform);
+    for (const { directory, filePath, relativePath } of targets) {
+      if (!canRead()) break;
+      if (
+        !relativePath.endsWith(".png") &&
+        (await isSafeRetroArchFileTarget(directory, filePath))
+      ) {
+        files.push(filePath);
+      }
+    }
+  }
+  return files;
+};
+
 export const retroArchSaveProvider: EmulatorProvider = {
   async discover({
     game,
