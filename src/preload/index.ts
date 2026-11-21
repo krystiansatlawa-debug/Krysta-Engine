@@ -218,6 +218,10 @@ contextBridge.exposeInMainWorld("electron", {
   krystaRecordingsFolder: () => ipcRenderer.invoke("krysta:recordings-folder"),
   krystaRecordingStop: () => ipcRenderer.invoke("krysta:recording-stop"),
   scanRockstar: () => ipcRenderer.invoke("krysta:rockstar-scan"),
+  selectRockstarLauncherFolder: () =>
+    ipcRenderer.invoke("krysta:rockstar-select-launcher"),
+  selectRockstarGameFolder: () =>
+    ipcRenderer.invoke("krysta:rockstar-select-game"),
   importRockstar: () => ipcRenderer.invoke("krysta:rockstar-import"),
   openRockstarLauncher: () => ipcRenderer.invoke("krysta:rockstar-open"),
   importUbisoft: (): Promise<number> =>
