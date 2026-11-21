@@ -88,7 +88,10 @@ const refreshLegacyScreenshots = async (force = false) => {
 };
 
 /** Serialize a user-triggered import with the periodic importer to avoid duplicate records. */
-export const importSelectedPrivateScreenshots = () => refreshLegacyScreenshots(true);
+export const importSelectedPrivateScreenshots = async () => {
+  if (legacyImportPromise) await legacyImportPromise;
+  return refreshLegacyScreenshots(true);
+};
 
 const broadcastLocalScreenshots = (screenshots: LocalScreenshot[]) => {
   WindowManager.sendToAppWindows(
