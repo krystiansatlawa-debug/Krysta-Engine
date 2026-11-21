@@ -39,7 +39,7 @@ export function SettingsRockstar() {
       active = false;
     };
   }, [pl]);
-  const run = async (action: "sync" | "open") => {
+  const run = async (action: "sync" | "open" | "chooseLauncher" | "chooseGame") => {
     setBusy(true);
     setNotice("");
     try {
@@ -47,9 +47,22 @@ export function SettingsRockstar() {
         await window.electron.openRockstarLauncher();
         return;
       }
+      if (action === "chooseLauncher" || action === "chooseGame") {
+        const chosen = await (action === "chooseLauncher"
+          ? window.electron.selectRockstarLauncherFolder()
+          : window.electron.selectRockstarGameFolder());
+        if (!chosen) return;
+        setState(chosen);
+        setNotice(
+          pl
+            ? `Wykryto gier: ${chosen.games.length}. Kliknij Synchronizuj, aby dodać je do biblioteki.`
+            : `Detected games: ${chosen.games.length}. Click Sync to add them to the library.`
+        );
+        return;
+      }
       const scan = await window.electron.scanRockstar();
       setState(scan);
-      if (!scan.installed) {
+      if (!scan.installed && scan.games.length === 0) {
         setNotice(
           pl
             ? "Zainstaluj oficjalny Rockstar Games Launcher."
@@ -77,7 +90,7 @@ export function SettingsRockstar() {
       logo={<span style={{ fontWeight: "bold", color: "#ffab00" }}>R★</span>}
       loading={loading}
       status={
-        state?.installed
+        state?.installed || (state?.games.length ?? 0) > 0
           ? pl
             ? "Wykryto"
             : "Detected"
@@ -89,7 +102,7 @@ export function SettingsRockstar() {
               ? "Nie wykryto"
               : "Not detected"
       }
-      statusTone={state?.installed ? "success" : "neutral"}
+      statusTone={state?.installed || (state?.games.length ?? 0) > 0 ? "success" : "neutral"}
       actions={
         <>
           <Button
@@ -99,6 +112,20 @@ export function SettingsRockstar() {
           >
             <SyncIcon size={14} />
             {pl ? "Synchronizuj" : "Sync"}
+          </Button>
+          <Button
+            theme="outline"
+            disabled={busy || state?.supported === false}
+            onClick={() => void run("chooseLauncher")}
+          >
+            {pl ? "Wskaż launcher" : "Locate launcher"}
+          </Button>
+          <Button
+            theme="outline"
+            disabled={busy || state?.supported === false}
+            onClick={() => void run("chooseGame")}
+          >
+            {pl ? "Dodaj folder gry" : "Add game folder"}
           </Button>
           <Button
             theme="outline"
@@ -113,15 +140,15 @@ export function SettingsRockstar() {
     >
       <p>
         {pl
-          ? "Import zainstalowanych gier. Logowanie i aktualizacje pozostają w Rockstar Games Launcher."
-          : "Import installed games. Login and updates remain in Rockstar Games Launcher."}
+          ? "Import lokalnie zainstalowanych gier. Jeśli Krysta nie widzi launchera lub gry, wskaż ich foldery ręcznie. Gry ze Steam i Epic importuj przez odpowiednie integracje."
+          : "Import locally installed games. If Krysta cannot detect the launcher or a game, select its folder manually. Import Steam and Epic games through their own integrations."}
       </p>
-      {state?.installed && (
+      {(state?.installed || (state?.games.length ?? 0) > 0) && (
         <>
           <p>
-            {pl ? "Wykryte gry" : "Detected games"}: {state.games.length}
+            {pl ? "Wykryte gry" : "Detected games"}: {state?.games.length ?? 0}
           </p>
-          <SettingsIntegrationLastSynced lastSyncedAt={state.lastSync} />
+          <SettingsIntegrationLastSynced lastSyncedAt={state?.lastSync ?? null} />
         </>
       )}
       {notice && <p role="status">{notice}</p>}

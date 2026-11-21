@@ -1,13 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { nativeImage } from "electron";
 import { logger } from "../logger";
 import { SCREENSHOT_CUSTOM_GAME_TITLE_MAX_LENGTH } from "@shared";
 import { gamesSublevel } from "@main/level";
 import type { Game, LocalScreenshot } from "@types";
 import { LocalScreenshotStore } from "./local-screenshot-store";
-import { getScreenshotFolderCandidates } from "./screenshots-folder";
+import { getPrivateScreenshotsFolder, getScreenshotFolderCandidates } from "./screenshots-folder";
 import {
   getScreenshotsRoot,
   ensureRootMarkerId,
@@ -17,7 +17,7 @@ import { toScreenshotFolderName } from "./screenshot-file-path";
 
 const IMAGE_EXTENSION = /\.(jpe?g|png|webp)$/i;
 const MAX_IMAGE_BYTES = 80 * 1024 * 1024;
-const MAX_FILES = 10000;
+const MAX_FILES = 50000;
 
 const normalizeScreenshotPath = (filePath: string) => {
   const normalized = path.normalize(filePath);
@@ -56,7 +56,10 @@ export async function importLegacyScreenshots(): Promise<number> {
   const ownerId = getSignedInScreenshotOwnerId();
   let imported = 0;
   let inspected = 0;
+  const selectedPrivateRoot = await getPrivateScreenshotsFolder();
   for (const root of await getScreenshotFolderCandidates()) {
+    const isPrivateAlbum = !!selectedPrivateRoot &&
+      normalizeScreenshotPath(root) === normalizeScreenshotPath(selectedPrivateRoot);
     const folders = await fs
       .readdir(root, { withFileTypes: true })
       .catch((error: unknown) => {
@@ -65,13 +68,33 @@ export async function importLegacyScreenshots(): Promise<number> {
         }
         return [];
       });
+    const albumFolders: { name: string; directory: string; rootAlbum: boolean }[] = [];
+    // Unsorted private screenshots in the folder root remain available under
+    // "Nieprzypisane" instead of being silently ignored.
+    if (isPrivateAlbum) albumFolders.push({
+      name: "Nieprzypisane",
+      directory: root,
+      rootAlbum: true,
+    });
     for (const folder of folders) {
+      if (folder.isDirectory() && !folder.isSymbolicLink()) albumFolders.push({
+        name: folder.name,
+        directory: path.join(root, folder.name),
+        rootAlbum: false,
+      });
+    }
+    for (const folder of albumFolders) {
       if (inspected >= MAX_FILES) return imported;
-      if (!folder.isDirectory() || folder.isSymbolicLink()) continue;
-      const game = matchGame(folder.name, games);
-      if (!game) continue;
-      const directory = path.join(root, folder.name);
-      const files = await fs
+      const game = folder.rootAlbum ? null : matchGame(folder.name, games);
+      if (!game && !isPrivateAlbum) continue;
+      const directory = folder.directory;
+      const target = {
+        shop: game?.shop ?? ("custom" as const),
+        objectId: game?.objectId ?? "private-album-" +
+          createHash("sha256").update(normalizeScreenshotPath(directory)).digest("hex").slice(0, 16),
+        title: game?.title ?? folder.name,
+      };
+      const directoryEntries = await fs
         .readdir(directory, { withFileTypes: true })
         .catch((error: unknown) => {
           logger.warn("Could not scan legacy screenshot game folder", {
@@ -80,15 +103,25 @@ export async function importLegacyScreenshots(): Promise<number> {
           });
           return [];
         });
-      for (const file of files) {
-        if (
-          !file.isFile() ||
-          file.isSymbolicLink() ||
-          !IMAGE_EXTENSION.test(file.name)
-        )
-          continue;
+      // Also include nested albums in a game's private folder. Do not follow
+      // links or scan unrelated folders outside of recognized game directories.
+      const filePaths: string[] = [];
+      for (const entry of directoryEntries) {
+        if (entry.isFile() && !entry.isSymbolicLink())
+          filePaths.push(path.join(directory, entry.name));
+        if (folder.rootAlbum || !entry.isDirectory() || entry.isSymbolicLink()) continue;
+        const nestedDirectory = path.join(directory, entry.name);
+        const nestedEntries = await fs
+          .readdir(nestedDirectory, { withFileTypes: true })
+          .catch(() => []);
+        for (const nested of nestedEntries) {
+          if (nested.isFile() && !nested.isSymbolicLink())
+            filePaths.push(path.join(nestedDirectory, nested.name));
+        }
+      }
+      for (const filePath of filePaths) {
+        if (!IMAGE_EXTENSION.test(filePath)) continue;
         if (++inspected > MAX_FILES) return imported;
-        const filePath = path.join(directory, file.name);
         const key = normalizeScreenshotPath(filePath);
         if (known.has(key)) {
           const current = existingByPath.get(key);
@@ -102,9 +135,9 @@ export async function importLegacyScreenshots(): Promise<number> {
               record.objectId
                 ? {}
                 : {
-                    shop: game.shop,
-                    objectId: game.objectId,
-                    gameTitle: game.title,
+                    shop: target.shop,
+                    objectId: target.objectId,
+                    gameTitle: target.title,
                   }
             );
           }
@@ -141,14 +174,12 @@ export async function importLegacyScreenshots(): Promise<number> {
         const screenshot: LocalScreenshot = {
           clientId: randomUUID(),
           ownerId,
-          shop: game.shop,
-          objectId: game.objectId,
-          gameTitle: game.title,
+          shop: target.shop,
+          objectId: target.objectId,
+          gameTitle: target.title,
           customGameTitle:
-            game.shop === "custom"
-              ? game.title
-                  .trim()
-                  .slice(0, SCREENSHOT_CUSTOM_GAME_TITLE_MAX_LENGTH)
+            target.shop === "custom"
+              ? target.title.trim().slice(0, SCREENSHOT_CUSTOM_GAME_TITLE_MAX_LENGTH)
               : null,
           path: filePath,
           capturedAt: stat.mtimeMs,

@@ -56,8 +56,7 @@ ipcMain.handle("krysta:souvenir-gallery", async (): Promise<GalleryRow[]> => {
   const gameNames = new Map<string, Promise<string>>();
   const rows: GalleryRow[] = [];
   for (const entry of entries) {
-    if (rows.length >= 500) break;
-    if (!path.isAbsolute(entry.path) || !/[.]jpe?g$/i.test(entry.path))
+    if (!path.isAbsolute(entry.path) || !/[.](?:jpe?g|png|webp)$/i.test(entry.path))
       continue;
     const key =
       process.platform === "win32" ? entry.path.toLowerCase() : entry.path;
