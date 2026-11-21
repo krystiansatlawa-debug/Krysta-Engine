@@ -1,6 +1,7 @@
 import { lstat, open, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { AutomaticGameStoryProgress, Game, StorySaveStatus } from "@types";
+import { readGenericStoryMetadataFiles } from "./story-progress-metadata.js";
 
 export type StorySaveSource = "gtav" | "gtav-enhanced" | "rdr2" | "cyberpunk";
 
@@ -434,9 +435,11 @@ export async function readDiscoveredStorySave(
       { profiles: [], detectedFiles: files },
       canRead
     );
+  let knownResult: StorySaveScan | null = null;
   if (source) {
-    const result = await scan(source);
-    if (result.status !== "not-found") return result;
+    knownResult = await scan(source);
+    if (knownResult.status === "ready" || knownResult.status === "waiting")
+      return knownResult;
   }
 
   const formats = new Set<StorySaveSource>();
@@ -468,6 +471,10 @@ export async function readDiscoveredStorySave(
   }
   if (!canRead()) return { automatic: null, status: "waiting" };
   if (progress) return { automatic: progress, status: "ready" };
+  const generic = await readGenericStoryMetadataFiles(files, canRead);
+  if (!canRead()) return { automatic: null, status: "waiting" };
+  if (generic) return { automatic: generic, status: "ready" };
+  if (knownResult?.status === "unreadable") return knownResult;
   return lastSaveAt === undefined
     ? { automatic: null, status: "not-found" }
     : { automatic: null, status: "save-found", lastSaveAt };

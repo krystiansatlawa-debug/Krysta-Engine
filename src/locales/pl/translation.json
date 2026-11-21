@@ -250,6 +250,7 @@
     "story_progress_default_folders": "Użyj domyślnych folderów",
     "story_progress_folder_error": "Nie udało się zmienić folderu zapisów.",
     "story_progress_total_completion": "Ukończenie całej gry",
+    "story_progress_story_completion": "Ukończenie fabuły",
     "story_progress_percent_missing": "Brak procentu ukończenia w zapisie.",
     "story_progress_save_title": "Tytuł ostatniego zapisu",
     "story_progress_tracked_quest": "Śledzone zadanie w ostatnim zapisie",

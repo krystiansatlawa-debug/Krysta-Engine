@@ -9,6 +9,8 @@ export interface AutomaticGameStoryProgress {
   saveTitle: string;
   trackedQuestId?: string;
   summaryKey?: string;
+  missionDescription?: string;
+  progressKind?: "story" | "overall";
   savedAt: number;
 }
 

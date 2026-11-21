@@ -1,4 +1,6 @@
 import { BrowserWindow, dialog } from "electron";
+import { lstat, realpath } from "node:fs/promises";
+import path from "node:path";
 import { db, gamesSublevel, levelKeys } from "@main/level";
 import {
   getAutomaticStoryProgress,
@@ -104,9 +106,13 @@ registerEvent(
       : await dialog.showOpenDialog(options);
     const folder = selection.filePaths[0];
     if (selection.canceled || !folder) return null;
+    if (!path.isAbsolute(folder)) throw new Error("Invalid save folder");
+    const info = await lstat(folder);
+    if (!info.isDirectory() || info.isSymbolicLink())
+      throw new Error("Invalid save folder");
 
     const current = await resolveStoryProgressGame(shop, objectId);
-    return setStorySaveFolder(current.game, folder);
+    return setStorySaveFolder(current.game, await realpath(folder));
   },
   { jsonSafeResult: true }
 );
