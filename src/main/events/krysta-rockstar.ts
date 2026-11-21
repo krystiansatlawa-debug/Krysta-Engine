@@ -194,11 +194,15 @@ function parseRegistry(raw: string) {
   return rows;
 }
 function localFolder(v: unknown) {
-  return typeof v === "string" &&
-    /^[a-z]:[\\/]/i.test(v) &&
-    path.win32.parse(v).root.toLowerCase() !== v.toLowerCase()
-    ? v
-    : null;
+  if (typeof v !== "string") return null;
+  // Registry paths may use %ProgramFiles% and surrounding quotes.
+  const expanded = v.trim().replace(/^"|"$/g, "").replace(/%([^%]+)%/g, (match, name: string) =>
+    Object.entries(process.env).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1] ?? match
+  );
+  if (!/^[a-z]:[\\/]/i.test(expanded)) return null;
+  const normalized = path.win32.normalize(expanded);
+  return path.win32.parse(normalized).root.toLowerCase() === normalized.toLowerCase()
+    ? null : normalized;
 }
 export async function scanRockstar() {
   if (process.platform !== "win32")
@@ -212,26 +216,34 @@ export async function scanRockstar() {
     [
       "HKLM\\SOFTWARE\\WOW6432Node\\Rockstar Games",
       "HKLM\\SOFTWARE\\Rockstar Games",
+      "HKCU\\SOFTWARE\\WOW6432Node\\Rockstar Games",
+      "HKCU\\SOFTWARE\\Rockstar Games",
     ].map(async (key) => parseRegistry(await query(key)))
   );
   let launcher: string | null = null;
-  for (const folder of [
-    ...registry.map((r) => r.get("launcher")?.get("installfolder")),
-    process.env.ProgramFiles
-      ? path.join(process.env.ProgramFiles, "Rockstar Games", "Launcher")
+  const launcherFolders = [
+    ...registry.flatMap((r) => {
+      const fields = r.get("launcher");
+      return [fields?.get("installfolder"), fields?.get("installlocation"), fields?.get("installdir")];
+    }),
+    ...[process.env.ProgramFiles, process.env["ProgramFiles(x86)"], process.env.ProgramW6432]
+      .filter((root): root is string => !!root)
+      .map((root) => path.join(root, "Rockstar Games", "Launcher")),
+    process.env.LOCALAPPDATA
+      ? path.join(process.env.LOCALAPPDATA, "Rockstar Games", "Launcher")
       : null,
-  ]) {
-    const p = localFolder(folder);
-    if (p) {
-      launcher = await existingFile(path.join(p, "Launcher.exe"));
-      if (launcher) break;
-    }
+  ];
+  for (const folder of launcherFolders) {
+    const candidate = localFolder(folder);
+    if (!candidate) continue;
+    launcher = await existingFile(path.join(candidate, "Launcher.exe"));
+    if (launcher) break;
   }
   const games: Detected[] = [];
   for (const t of titles) {
     const matches = new Map<string, Detected>();
     for (const row of registry)
-      for (const name of t.keys) {
+      for (const name of [...t.keys, ...t.aliases]) {
         const data = row.get(name.toLowerCase());
         const p = localFolder(data?.get("installfolder"));
         if (!p) continue;
