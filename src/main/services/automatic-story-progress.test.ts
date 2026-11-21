@@ -48,16 +48,30 @@ test("captures unknown saves after a session and serializes scans across the lib
   const activityKey = "steam:running";
   const scans: Array<{ objectId: string; signal: AbortSignal }> = [];
   const saved = new Map<string, unknown>();
+  // Model LevelDB sublevels as independent namespaces. Sharing the same Map
+  // makes a saved scan look like the configured save directory on refresh.
+  const sublevelData = new Map<string, Map<string, unknown>>([
+    ["automatic-story-progress", saved],
+  ]);
   const exported = {} as typeof import("./automatic-story-progress.js");
   const deps: Record<string, unknown> = {
     electron: {},
     "node:path": {},
     "@main/level": {
       db: {
-        sublevel: () => ({
-          get: async (key: string) => saved.get(key),
-          put: async (key: string, record: unknown) => saved.set(key, record),
-        }),
+        sublevel: (name: string) => {
+          const records = sublevelData.get(name) ?? new Map<string, unknown>();
+          sublevelData.set(name, records);
+          return {
+            get: async (key: string) => records.get(key),
+            put: async (key: string, record: unknown) => {
+              records.set(key, record);
+            },
+            del: async (key: string) => {
+              records.delete(key);
+            },
+          };
+        },
       },
       levelKeys,
       gamesSublevel: {
