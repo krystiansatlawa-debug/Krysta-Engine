@@ -1,7 +1,7 @@
 import { lstat, open, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { AutomaticGameStoryProgress, Game, StorySaveStatus } from "@types";
-import { readGenericStoryMetadataFiles } from "./story-progress-metadata";
+import { readGenericStoryMetadataFiles } from "./story-progress-metadata.js";
 
 export type StorySaveSource = "gtav" | "gtav-enhanced" | "rdr2" | "cyberpunk";
 
