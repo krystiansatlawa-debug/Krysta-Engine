@@ -5,7 +5,7 @@
 - Galeria łączy prywatne zrzuty ekranu z pamiątkami osiągnięć, usuwa duplikaty i obsługuje JPG, PNG oraz WebP.
 - Dodano ręczne wskazanie folderu prywatnych zdjęć oraz odczyt zdjęć z rozpoznanych podfolderów bez przenoszenia ani kopiowania oryginałów.
 - Usunięto limit 500 zdjęć z galerii pamiątek. Lista jest stronicowana w interfejsie.
-- **Nie tworzono osobnych folderów zdjęć dla każdej gry**, zgodnie z ustaleniem.
+- Dodano widok galerii pogrupowany w osobne, klikalne foldery dla każdej gry.
 
 ## Rockstar Games Launcher
 - Usprawniono wyszukiwanie zainstalowanego launchera i lokalnych gier, w tym dodatkowe wpisy rejestru Windows i lokalizacje instalacji.
