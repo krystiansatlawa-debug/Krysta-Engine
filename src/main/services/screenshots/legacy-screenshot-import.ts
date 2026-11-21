@@ -17,7 +17,7 @@ import { toScreenshotFolderName } from "./screenshot-file-path";
 
 const IMAGE_EXTENSION = /\.(jpe?g|png|webp)$/i;
 const MAX_IMAGE_BYTES = 80 * 1024 * 1024;
-const MAX_FILES = 10000;
+const MAX_FILES = 50000;
 
 const normalizeScreenshotPath = (filePath: string) => {
   const normalized = path.normalize(filePath);
@@ -71,7 +71,7 @@ export async function importLegacyScreenshots(): Promise<number> {
       const game = matchGame(folder.name, games);
       if (!game) continue;
       const directory = path.join(root, folder.name);
-      const files = await fs
+      const directoryEntries = await fs
         .readdir(directory, { withFileTypes: true })
         .catch((error: unknown) => {
           logger.warn("Could not scan legacy screenshot game folder", {
@@ -80,15 +80,25 @@ export async function importLegacyScreenshots(): Promise<number> {
           });
           return [];
         });
-      for (const file of files) {
-        if (
-          !file.isFile() ||
-          file.isSymbolicLink() ||
-          !IMAGE_EXTENSION.test(file.name)
-        )
-          continue;
+      // Also include nested albums in a game's private folder. Do not follow
+      // links or scan unrelated folders outside of recognized game directories.
+      const filePaths: string[] = [];
+      for (const entry of directoryEntries) {
+        if (entry.isFile() && !entry.isSymbolicLink())
+          filePaths.push(path.join(directory, entry.name));
+        if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+        const nestedDirectory = path.join(directory, entry.name);
+        const nestedEntries = await fs
+          .readdir(nestedDirectory, { withFileTypes: true })
+          .catch(() => []);
+        for (const nested of nestedEntries) {
+          if (nested.isFile() && !nested.isSymbolicLink())
+            filePaths.push(path.join(nestedDirectory, nested.name));
+        }
+      }
+      for (const filePath of filePaths) {
+        if (!IMAGE_EXTENSION.test(filePath)) continue;
         if (++inspected > MAX_FILES) return imported;
-        const filePath = path.join(directory, file.name);
         const key = normalizeScreenshotPath(filePath);
         if (known.has(key)) {
           const current = existingByPath.get(key);

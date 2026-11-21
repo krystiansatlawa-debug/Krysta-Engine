@@ -207,7 +207,7 @@ export function parseCyberpunkStoryMetadata(json: string): SaveDetails | null {
       percent: null,
       saveTitle: title,
       summaryKey: cyberpunkSummaries.get(
-        title.toLowerCase().replace(/[^\\p{L}\\p{N}\\s]/gu, "").trim()
+        title.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").trim()
       ),
     };
   }
