@@ -167,9 +167,13 @@ test("captures unknown saves after a session and serializes scans across the lib
     assert.ok(countScans(id) > previousCount, `Expected a new scan for ${id}`);
   };
 
-  const priorLinked = countScans(linked.objectId);
-  await exported.getAutomaticStoryProgress(catalogue, true);
-  await expectNewScan(linked.objectId, priorLinked);
+  // A refresh already running for the same catalogue game is reused by
+  // getAutomaticStoryProgress rather than starting a duplicate disk scan.
+  // Check that the in-flight refresh resolves with the saved result.
+  const linkedResult = await exported.getAutomaticStoryProgress(catalogue, true);
+  assert.equal(linkedResult.automaticStatus, "save-found");
+  assert.equal(linkedResult.lastSaveAt, 123456);
+  assert.ok(countScans(linked.objectId) >= 1);
 
   const priorEmulator = countScans(portId);
   await exported.getAutomaticStoryProgress(emulator, true);
