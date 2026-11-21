@@ -1,5 +1,5 @@
 name: Krysta Release
-# Run Krysta 1.0.7 Windows regressions against the corrected in-flight scan reuse test before publishing.
+# Run Krysta 1.0.7 Windows regressions with isolated LevelDB test sublevels before publishing.
 on:
   workflow_dispatch:
   push:
