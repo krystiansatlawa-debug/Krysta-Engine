@@ -141,16 +141,6 @@ export default function KrystaScreenshots() {
       ),
     [entries, kindFilter, gameFilter, search]
   );
-  const folders = useMemo(() => {
-    const grouped = new Map<string, { gameTitle: string; count: number; previewPath: string }>();
-    for (const entry of filtered) {
-      const key = entry.gameTitle || (pl ? "Nieprzypisane" : "Unassigned");
-      const folder = grouped.get(key);
-      if (folder) folder.count++;
-      else grouped.set(key, { gameTitle: key, count: 1, previewPath: entry.previewPath });
-    }
-    return [...grouped.values()].sort((a, b) => a.gameTitle.localeCompare(b.gameTitle, i18n.language));
-  }, [filtered, i18n.language, pl]);
   const shown = filtered.slice(0, limit);
   const media = useMemo<GalleryMediaItem[]>(
     () =>
@@ -275,21 +265,8 @@ export default function KrystaScreenshots() {
             ? "Brak zapisanych zdjęć w tej kategorii. Pamiątki osiągnięć wymagają włączenia tej funkcji i mogą być dostępne tylko przy aktywnej subskrypcji."
             : "No saved images in this category. Achievement souvenirs need to be enabled and may require an active subscription."}
         </p>
-      ) : !gameFilter && !search.trim() ? (
-        <section className="krysta-screenshots__folders" aria-label={pl ? "Foldery gier" : "Game folders"}>
-          {folders.map((folder) => (
-            <button key={folder.gameTitle} type="button" className="krysta-screenshots__folder" onClick={() => { setGameFilter(folder.gameTitle); setLimit(PAGE_SIZE); }}>
-              <img src={toLocalScreenshotUrl(folder.previewPath)} alt="" loading="lazy" />
-              <span className="krysta-screenshots__folder-title"><FolderOpen size={17} /><strong>{folder.gameTitle}</strong></span>
-              <small>{pl ? "Zdjęcia" : "Images"}: {folder.count}</small>
-            </button>
-          ))}
-        </section>
       ) : (
         <>
-          {gameFilter && <button type="button" className="krysta-screenshots__back" onClick={() => { setGameFilter(""); setLimit(PAGE_SIZE); }}>
-            <FolderOpen size={16} />{pl ? "Wszystkie foldery gier" : "All game folders"}
-          </button>}
           <section
             className="krysta-screenshots__grid"
             aria-label={pl ? "Galeria zrzutów ekranu" : "Screenshot gallery"}
