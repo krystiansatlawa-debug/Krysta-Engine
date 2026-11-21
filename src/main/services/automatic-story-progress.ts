@@ -161,6 +161,27 @@ async function readAutomaticSave(
       canContinue,
       controller.signal
     );
+    // Epic can provide a verified save directory even when the game has no
+    // dedicated story parser or Ludusavi manifest entry.
+    const epicSavePath = game.epicInstallation?.savePath;
+    if (
+      !source &&
+      detected.status === "not-found" &&
+      epicSavePath &&
+      path.isAbsolute(epicSavePath) &&
+      canContinue()
+    ) {
+      const files = await discoverSelectedStorySaveFiles(
+        epicSavePath,
+        canContinue
+      );
+      const epicResult = await readDiscoveredStorySave(
+        files,
+        undefined,
+        canContinue
+      );
+      if (epicResult.status !== "not-found") return epicResult;
+    }
     if (!source || detected.status === "ready" || detected.status === "waiting")
       return detected;
 
