@@ -84,6 +84,9 @@ test("captures unknown saves after a session and serializes scans across the lib
         return { automatic: null, status: "save-found", lastSaveAt: 123456 };
       },
     },
+    "./story-progress-metadata.js": {
+      discoverSelectedStorySaveFiles: async () => [],
+    },
     "./logger": {
       logger: { error: assert.fail, debug: assert.fail },
     },
