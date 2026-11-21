@@ -12,12 +12,14 @@ import {
   onTrackedGamesRunningChange,
 } from "./game-running-state";
 import { readHydraStorySave } from "./hydra-story-save-discovery";
+import { discoverSelectedStorySaveFiles } from "./story-progress-metadata";
 import { logger } from "./logger";
 import { getSteamLibraryFolders } from "./steam";
 import { getWinePrefixUserProfiles } from "./wine-prefix";
 import { WindowManager } from "./window-manager";
 import {
   identifyStorySaveSource,
+  readDiscoveredStorySave,
   readLatestStorySave,
   storySaveSteamAppIds,
   type StorySaveScan,
@@ -38,7 +40,7 @@ const snapshots = db.sublevel<
   string,
   AutomaticGameStoryProgress | CompletedScan
 >("automatic-story-progress", { valueEncoding: "json" });
-const customFolders = db.sublevel<StorySaveSource, string>(
+const customFolders = db.sublevel<string, string>(
   "story-save-folders",
   {
     valueEncoding: "json",
@@ -131,12 +133,23 @@ async function readAutomaticSave(
   folder: string | undefined,
   canContinue: () => boolean
 ) {
-  if (source && folder) {
-    return readLatestStorySave(
-      source,
-      { profiles: [], directFolders: [folder] },
-      canContinue
-    );
+  if (folder) {
+    // Users can point any library game at its save directory, not just the
+    // four formats with dedicated parsers.
+    const recognized = source
+      ? await readLatestStorySave(
+          source,
+          { profiles: [], directFolders: [folder] },
+          canContinue
+        )
+      : null;
+    if (recognized?.status === "ready" || recognized?.status === "waiting")
+      return recognized;
+    const files = await discoverSelectedStorySaveFiles(folder, canContinue);
+    const detected = await readDiscoveredStorySave(files, source, canContinue);
+    return detected.status === "not-found"
+      ? (recognized ?? detected)
+      : detected;
   }
 
   const controller = new AbortController();
@@ -148,6 +161,27 @@ async function readAutomaticSave(
       canContinue,
       controller.signal
     );
+    // Epic can provide a verified save directory even when the game has no
+    // dedicated story parser or Ludusavi manifest entry.
+    const epicSavePath = game.epicInstallation?.savePath;
+    if (
+      !source &&
+      detected.status === "not-found" &&
+      epicSavePath &&
+      path.isAbsolute(epicSavePath) &&
+      canContinue()
+    ) {
+      const files = await discoverSelectedStorySaveFiles(
+        epicSavePath,
+        canContinue
+      );
+      const epicResult = await readDiscoveredStorySave(
+        files,
+        undefined,
+        canContinue
+      );
+      if (epicResult.status !== "not-found") return epicResult;
+    }
     if (!source || detected.status === "ready" || detected.status === "waiting")
       return detected;
 
@@ -171,7 +205,9 @@ function refresh(key: string, scan: PendingScan) {
 
   const result = (async () => {
     const previous = await readStoredScan(key);
-    const folder = source ? await customFolders.get(source) : undefined;
+    const folder =
+      (await customFolders.get(key)) ??
+      (source ? await customFolders.get(source) : undefined);
     if (!canContinue()) return retry(previous);
     const current = await readAutomaticSave(
       saveObjectId === game.objectId
@@ -263,17 +299,24 @@ export async function getAutomaticStoryProgress(
     automaticStatus:
       queued.has(key) || activeScan?.key === key ? "waiting" : stored.status,
     lastSaveAt: stored.automatic?.savedAt ?? stored.lastSaveAt ?? null,
-    hasCustomSaveFolder: source ? !!(await customFolders.get(source)) : false,
-    canSelectSaveFolder: !!source,
+    hasCustomSaveFolder: !!(
+      (await customFolders.get(key)) ??
+      (source ? await customFolders.get(source) : undefined)
+    ),
+    canSelectSaveFolder: true,
   };
 }
 
 export async function setStorySaveFolder(game: Game, folder: string | null) {
   const source = identifyStorySaveSource(game);
-  if (!source) throw new Error("Story save format is unsupported");
-  if (folder) await customFolders.put(source, folder);
-  else await customFolders.del(source);
+  const key = storyKey(game, source);
+  if (folder) await customFolders.put(key, folder);
+  else {
+    await customFolders.del(key);
+    // Clear an older shared setting, if one was created before per-game paths.
+    if (source) await customFolders.del(source);
+  }
   queueAutomaticStoryProgress(game);
-  if (activeScan?.key === source) await activeScan.result.catch(() => null);
+  if (activeScan?.key === key) await activeScan.result.catch(() => null);
   return getAutomaticStoryProgress(game, true);
 }

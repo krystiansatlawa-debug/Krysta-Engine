@@ -232,24 +232,41 @@ export function GameStoryProgress({
                 ) : (
                   <StoryMeter
                     percent={automatic.percent}
-                    label={t("story_progress_total_completion")}
+                    label={t(
+                      automatic.progressKind === "story"
+                        ? "story_progress_story_completion"
+                        : "story_progress_total_completion"
+                    )}
                   />
                 )}
-                <div className="game-story-progress__mission">
-                  <h3>
-                    {t(
-                      automatic.trackedQuestId
-                        ? "story_progress_quest_id"
-                        : automatic.percent === null
-                          ? "story_progress_tracked_quest"
-                          : "story_progress_save_title"
+                {(automatic.saveTitle ||
+                  automatic.trackedQuestId ||
+                  automatic.missionDescription) && (
+                  <div className="game-story-progress__mission">
+                    {(automatic.saveTitle || automatic.trackedQuestId) && (
+                      <>
+                        <h3>
+                          {t(
+                            automatic.trackedQuestId
+                              ? "story_progress_quest_id"
+                              : automatic.progressKind === "story"
+                                ? "story_progress_tracked_quest"
+                                : automatic.percent === null
+                                  ? "story_progress_tracked_quest"
+                                  : "story_progress_save_title"
+                          )}
+                        </h3>
+                        <strong>
+                          {automatic.saveTitle || automatic.trackedQuestId}
+                        </strong>
+                      </>
                     )}
-                  </h3>
-                  <strong>
-                    {automatic.saveTitle || automatic.trackedQuestId}
-                  </strong>
-                  {automatic.summaryKey && <p>{t(automatic.summaryKey)}</p>}
-                </div>
+                    {automatic.summaryKey && <p>{t(automatic.summaryKey)}</p>}
+                    {automatic.missionDescription && (
+                      <p>{automatic.missionDescription}</p>
+                    )}
+                  </div>
+                )}
               </>
             ) : null}
             {automaticStatus !== "ready" && (

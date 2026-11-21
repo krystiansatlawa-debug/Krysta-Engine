@@ -280,6 +280,7 @@
     "story_progress_default_folders": "Use default folders",
     "story_progress_folder_error": "Could not change the save folder.",
     "story_progress_total_completion": "Total game completion",
+    "story_progress_story_completion": "Story completion",
     "story_progress_percent_missing": "The save provides no completion percentage.",
     "story_progress_save_title": "Latest save title",
     "story_progress_tracked_quest": "Tracked quest in the latest save",
