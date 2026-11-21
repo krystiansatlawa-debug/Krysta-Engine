@@ -1,4 +1,5 @@
 name: Krysta Release
+# Re-run the complete 1.0.7 regression, type-check and Windows packaging pipeline on workflow updates.
 on:
   workflow_dispatch:
   push:
