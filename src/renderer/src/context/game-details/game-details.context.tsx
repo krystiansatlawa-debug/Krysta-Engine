@@ -138,12 +138,19 @@ export function GameDetailsContextProvider({
     game?.catalogueGame?.objectId ??
     objectId;
   const gameRequestId = useRef(0);
-  const achievementShop = lockAchievementIdentity
-    ? shop
-    : (presentation?.achievementGame?.shop ?? operationalShop);
-  const achievementObjectId = lockAchievementIdentity
-    ? objectId
-    : (presentation?.achievementGame?.objectId ?? operationalObjectId);
+  const isUbisoftRoute =
+    shop === "custom" &&
+    /^(?:ubi-owned-[a-f0-9]{32}|ubisoft-\d+)$/.test(objectId);
+  // A Ubisoft entry can share Steam catalogue artwork without sharing
+  // Steam unlocks. Use the Ubisoft identity for its own achievements.
+  const achievementShop =
+    lockAchievementIdentity || isUbisoftRoute
+      ? shop
+      : (presentation?.achievementGame?.shop ?? operationalShop);
+  const achievementObjectId =
+    lockAchievementIdentity || isUbisoftRoute
+      ? objectId
+      : (presentation?.achievementGame?.objectId ?? operationalObjectId);
   const pageSyncKey = useRef("");
 
   useEffect(() => {
@@ -212,7 +219,7 @@ export function GameDetailsContextProvider({
           setIsLoading(false);
         }
 
-        if (userDetails && shop !== "custom") {
+        if ((userDetails && shop !== "custom") || isUbisoftRoute) {
           const achievementUpdateCount = achievementUpdateCountRef.current;
           const isStaleAchievementResult = () =>
             abortController.signal.aborted ||
@@ -242,7 +249,10 @@ export function GameDetailsContextProvider({
                 if (isStaleAchievementResult()) return;
                 if (achievements) setAchievements(achievements);
               })
-              .catch(() => void 0);
+              .catch(() => {
+                if (isUbisoftRoute && !isStaleAchievementResult())
+                  setAchievements([]);
+              });
           }
         }
       });
@@ -299,6 +309,7 @@ export function GameDetailsContextProvider({
     achievementShop,
     achievementObjectId,
     userDetails,
+    isUbisoftRoute,
     userPreferences?.disableNsfwAlert,
     userPreferences?.retroAchievementsWebApiKey,
   ]);

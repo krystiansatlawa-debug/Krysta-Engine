@@ -128,6 +128,16 @@ export function GameDetailsContent() {
   useEffect(() => {
     setDetailTab("description");
   }, [shop, objectId]);
+  const ubisoftGame =
+    presentation?.members.find(
+      (member) =>
+        member.shop === "custom" &&
+        /^(?:ubi-owned-[a-f0-9]{32}|ubisoft-\d+)$/.test(member.objectId)
+    ) ??
+    (game?.shop === "custom" &&
+    /^(?:ubi-owned-[a-f0-9]{32}|ubisoft-\d+)$/.test(game.objectId)
+      ? game
+      : null);
   const storyGame =
     presentation?.members.find(
       (member) =>
@@ -532,9 +542,8 @@ export function GameDetailsContent() {
             ["description", "Opis", "Description"],
             ["updates", "Aktualizacje", "Updates"],
             ["cloud", "Zapisy w chmurze", "Cloud saves"],
-            ...(game?.shop === "custom" &&
-            /^(ubi-owned-|ubisoft-)/.test(game.objectId)
-              ? [["ubisoft-achievements", "Osiągnięcia", "Achievements"]]
+            ...(ubisoftGame
+              ? [["ubisoft-achievements", "Osiągnięcia Ubisoft", "Ubisoft achievements"]]
               : []),
           ].map(([id, pl, en]) => (
             <button
@@ -562,10 +571,10 @@ export function GameDetailsContent() {
             gameKeys={journalGameKeys}
           />
         )}
-        {detailTab === "ubisoft-achievements" && game && (
+        {detailTab === "ubisoft-achievements" && ubisoftGame && (
           <KrystaUbisoftAchievements
-            key={game.objectId}
-            objectId={game.objectId}
+            key={ubisoftGame.objectId}
+            objectId={ubisoftGame.objectId}
           />
         )}
         {detailTab === "updates" && (
