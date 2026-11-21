@@ -30,6 +30,8 @@ export default function KrystaScreenshots() {
   >("all");
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
+  const [importMessage, setImportMessage] = useState("");
+  const [importing, setImporting] = useState(false);
   const [search, setSearch] = useState("");
   const [gameFilter, setGameFilter] = useState("");
   const [limit, setLimit] = useState(PAGE_SIZE);
@@ -186,6 +188,25 @@ export default function KrystaScreenshots() {
       setError(String(e));
     }
   };
+  const importPrivateFolder = async () => {
+    setImporting(true);
+    setImportMessage("");
+    setError("");
+    try {
+      const result = await window.electron.selectPrivateScreenshotsFolder();
+      if (!result) return;
+      await reload();
+      setImportMessage(
+        pl
+          ? `Zaimportowano ${result.imported} nowych zdjęć. Folder jest zapamiętany.`
+          : `Imported ${result.imported} new photos. The folder is remembered.`
+      );
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setImporting(false);
+    }
+  };
   return (
     <main className="krysta-screenshots">
       <header className="krysta-screenshots__header">
@@ -207,6 +228,10 @@ export default function KrystaScreenshots() {
           <button type="button" onClick={() => void folder()}>
             <FolderOpen size={16} />
             {pl ? "Otwórz folder" : "Open folder"}
+          </button>
+          <button type="button" disabled={importing} onClick={() => void importPrivateFolder()}>
+            <FolderOpen size={16} />
+            {pl ? "Dodaj prywatny folder" : "Add private folder"}
           </button>
         </div>
       </header>
@@ -250,6 +275,7 @@ export default function KrystaScreenshots() {
           ))}
         </select>
       </div>
+      {importMessage && <p role="status">{importMessage}</p>}
       {error && <p role="alert">{error}</p>}
       {!loaded ? (
         <p role="status">

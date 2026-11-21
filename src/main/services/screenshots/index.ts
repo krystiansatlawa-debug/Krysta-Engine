@@ -69,9 +69,9 @@ let legacyImportPromise: Promise<number> | null = null;
 let lastLegacyImportAt = 0;
 const LEGACY_IMPORT_INTERVAL_MS = 60_000;
 
-const refreshLegacyScreenshots = async () => {
+const refreshLegacyScreenshots = async (force = false) => {
   if (legacyImportPromise) return legacyImportPromise;
-  if (Date.now() - lastLegacyImportAt < LEGACY_IMPORT_INTERVAL_MS) return 0;
+  if (!force && Date.now() - lastLegacyImportAt < LEGACY_IMPORT_INTERVAL_MS) return 0;
   legacyImportPromise = importLegacyScreenshots()
     .catch((error: unknown) => {
       logger.error(
@@ -86,6 +86,9 @@ const refreshLegacyScreenshots = async () => {
     });
   return legacyImportPromise;
 };
+
+/** Serialize a user-triggered import with the periodic importer to avoid duplicate records. */
+export const importSelectedPrivateScreenshots = () => refreshLegacyScreenshots(true);
 
 const broadcastLocalScreenshots = (screenshots: LocalScreenshot[]) => {
   WindowManager.sendToAppWindows(

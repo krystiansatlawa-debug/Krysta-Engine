@@ -1843,6 +1843,8 @@ contextBridge.exposeInMainWorld("electron", {
   deleteLocalScreenshot: (clientId: string) =>
     ipcRenderer.invoke("deleteLocalScreenshot", clientId),
   openScreenshotsFolder: () => ipcRenderer.invoke("openScreenshotsFolder"),
+  selectPrivateScreenshotsFolder: () =>
+    ipcRenderer.invoke("krysta:select-private-screenshots-folder"),
   onLocalScreenshotsChange: (cb: (screenshots: LocalScreenshot[]) => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
