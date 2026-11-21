@@ -1,14 +1,17 @@
-import { ipcMain, shell } from "electron";
+import { dialog, ipcMain, shell } from "electron";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { gamesSublevel, gamesShopAssetsSublevel, levelKeys } from "@main/level";
+import { db, gamesSublevel, gamesShopAssetsSublevel, levelKeys } from "@main/level";
 import { libraryWriteQueue } from "@main/services/library-sync/library-write-queue";
 import { getGameAssets } from "./catalogue/get-game-assets";
 import type { Game } from "@types";
 
 const exec = promisify(execFile);
+const configuredFolders = db.sublevel<string, string>("krysta-rockstar-folders", {
+  valueEncoding: "json",
+});
 const titles = [
   {
     id: "gtav-legacy",
@@ -194,11 +197,15 @@ function parseRegistry(raw: string) {
   return rows;
 }
 function localFolder(v: unknown) {
-  return typeof v === "string" &&
-    /^[a-z]:[\\/]/i.test(v) &&
-    path.win32.parse(v).root.toLowerCase() !== v.toLowerCase()
-    ? v
-    : null;
+  if (typeof v !== "string") return null;
+  // Registry paths may use %ProgramFiles% and surrounding quotes.
+  const expanded = v.trim().replace(/^"|"$/g, "").replace(/%([^%]+)%/g, (match, name: string) =>
+    Object.entries(process.env).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1] ?? match
+  );
+  if (!/^[a-z]:[\\/]/i.test(expanded)) return null;
+  const normalized = path.win32.normalize(expanded);
+  return path.win32.parse(normalized).root.toLowerCase() === normalized.toLowerCase()
+    ? null : normalized;
 }
 export async function scanRockstar() {
   if (process.platform !== "win32")
@@ -212,26 +219,43 @@ export async function scanRockstar() {
     [
       "HKLM\\SOFTWARE\\WOW6432Node\\Rockstar Games",
       "HKLM\\SOFTWARE\\Rockstar Games",
+      "HKCU\\SOFTWARE\\WOW6432Node\\Rockstar Games",
+      "HKCU\\SOFTWARE\\Rockstar Games",
     ].map(async (key) => parseRegistry(await query(key)))
   );
   let launcher: string | null = null;
-  for (const folder of [
-    ...registry.map((r) => r.get("launcher")?.get("installfolder")),
-    process.env.ProgramFiles
-      ? path.join(process.env.ProgramFiles, "Rockstar Games", "Launcher")
+  const launcherFolders = [
+    await configuredFolders.get("launcher"),
+    ...registry.flatMap((r) => {
+      const fields = r.get("launcher");
+      return [fields?.get("installfolder"), fields?.get("installlocation"), fields?.get("installdir")];
+    }),
+    ...[process.env.ProgramFiles, process.env["ProgramFiles(x86)"], process.env.ProgramW6432]
+      .filter((root): root is string => !!root)
+      .map((root) => path.join(root, "Rockstar Games", "Launcher")),
+    process.env.LOCALAPPDATA
+      ? path.join(process.env.LOCALAPPDATA, "Rockstar Games", "Launcher")
       : null,
-  ]) {
-    const p = localFolder(folder);
-    if (p) {
-      launcher = await existingFile(path.join(p, "Launcher.exe"));
-      if (launcher) break;
-    }
+  ];
+  for (const folder of launcherFolders) {
+    const candidate = localFolder(folder);
+    if (!candidate) continue;
+    launcher = await existingFile(path.join(candidate, "Launcher.exe"));
+    if (launcher) break;
   }
   const games: Detected[] = [];
   for (const t of titles) {
     const matches = new Map<string, Detected>();
-    for (const row of registry)
-      for (const name of t.keys) {
+    const records = [...registry];
+    const chosenFolder = await configuredFolders.get("game:" + t.id);
+    if (chosenFolder) {
+      const record = new Map<string, Map<string, string>>();
+      for (const name of t.keys)
+        record.set(name.toLowerCase(), new Map([["installfolder", chosenFolder]]));
+      records.push(record);
+    }
+    for (const row of records)
+      for (const name of [...t.keys, ...t.aliases]) {
         const data = row.get(name.toLowerCase());
         const p = localFolder(data?.get("installfolder"));
         if (!p) continue;
@@ -282,6 +306,45 @@ ipcMain.handle("krysta:rockstar-scan", async () => ({
   ...(await scanRockstar()),
   lastSync,
 }));
+ipcMain.handle("krysta:rockstar-select-launcher", async () => {
+  if (process.platform !== "win32") throw Error("Rockstar integration requires Windows");
+  const result = await dialog.showOpenDialog({
+    title: "Wskaż folder Rockstar Games Launcher",
+    properties: ["openDirectory"],
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  const folder = path.win32.normalize(result.filePaths[0]);
+  if (!(await existingFile(path.join(folder, "Launcher.exe"))))
+    throw Error("W wybranym folderze nie znaleziono Launcher.exe");
+  await configuredFolders.put("launcher", folder);
+  return { ...(await scanRockstar()), lastSync };
+});
+ipcMain.handle("krysta:rockstar-select-game", async () => {
+  if (process.platform !== "win32") throw Error("Rockstar integration requires Windows");
+  const result = await dialog.showOpenDialog({
+    title: "Wskaż folder zainstalowanej gry Rockstar",
+    properties: ["openDirectory"],
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  const folder = path.win32.normalize(result.filePaths[0]);
+  if (/\\steamapps\\common\\|\\epic games\\/i.test(folder))
+    throw Error("Gry ze Steam lub Epic importuj przez ich własne integracje.");
+  const matches: string[] = [];
+  for (const t of titles) {
+    const exists = await Promise.all(
+      t.exe.map((name) => existingFile(path.join(folder, name)))
+    );
+    if (!exists.some((candidate) => candidate && inside(candidate, folder))) continue;
+    const enhanced = !!(await existingFile(path.join(folder, "GTA5_Enhanced.exe")));
+    if (t.id === "gtav-enhanced" && !enhanced) continue;
+    if (t.id === "gtav-legacy" && enhanced) continue;
+    matches.push(t.id);
+  }
+  if (matches.length !== 1)
+    throw Error("Nie rozpoznano jednoznacznie gry. Wskaż folder zawierający plik EXE konkretnej gry Rockstar.");
+  await configuredFolders.put("game:" + matches[0], folder);
+  return { ...(await scanRockstar()), lastSync };
+});
 ipcMain.handle("krysta:rockstar-open", async () => {
   const result = await scanRockstar();
   if (!result.launcher) throw Error("Rockstar Games Launcher not detected");
@@ -293,8 +356,8 @@ ipcMain.handle("krysta:rockstar-import", async () => {
   importing = true;
   try {
     const scan = await scanRockstar();
-    if (!scan.supported || !scan.installed)
-      throw Error("Rockstar Games Launcher not detected");
+    if (!scan.supported || (!scan.installed && scan.games.length === 0))
+      throw Error("Rockstar Games Launcher and installed games not detected");
     let added = 0,
       linked = 0,
       existing = 0,

@@ -218,6 +218,10 @@ contextBridge.exposeInMainWorld("electron", {
   krystaRecordingsFolder: () => ipcRenderer.invoke("krysta:recordings-folder"),
   krystaRecordingStop: () => ipcRenderer.invoke("krysta:recording-stop"),
   scanRockstar: () => ipcRenderer.invoke("krysta:rockstar-scan"),
+  selectRockstarLauncherFolder: () =>
+    ipcRenderer.invoke("krysta:rockstar-select-launcher"),
+  selectRockstarGameFolder: () =>
+    ipcRenderer.invoke("krysta:rockstar-select-game"),
   importRockstar: () => ipcRenderer.invoke("krysta:rockstar-import"),
   openRockstarLauncher: () => ipcRenderer.invoke("krysta:rockstar-open"),
   importUbisoft: (): Promise<number> =>
@@ -1839,6 +1843,8 @@ contextBridge.exposeInMainWorld("electron", {
   deleteLocalScreenshot: (clientId: string) =>
     ipcRenderer.invoke("deleteLocalScreenshot", clientId),
   openScreenshotsFolder: () => ipcRenderer.invoke("openScreenshotsFolder"),
+  selectPrivateScreenshotsFolder: () =>
+    ipcRenderer.invoke("krysta:select-private-screenshots-folder"),
   onLocalScreenshotsChange: (cb: (screenshots: LocalScreenshot[]) => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,

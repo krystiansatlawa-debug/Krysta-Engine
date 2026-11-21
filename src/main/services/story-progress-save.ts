@@ -91,11 +91,41 @@ const gtaSummaries: ReadonlyMap<string, string> = new Map([
   ["franklin and lamar", "story_summary_gta_franklin"],
   ["franklin i lamar", "story_summary_gta_franklin"],
   ["repossession", "story_summary_gta_repossession"],
+  ["complications", "story_summary_gta_complications"],
+  ["chop", "story_summary_gta_chop"],
+  ["fatherson", "story_summary_gta_father_son"],
+  ["marriage counseling", "story_summary_gta_marriage"],
+  ["the long stretch", "story_summary_gta_long_stretch"],
+  ["friend request", "story_summary_gta_friend_request"],
+  ["casing the jewel store", "story_summary_gta_casing"],
+  ["the jewel store job", "story_summary_gta_jewel_job"],
+  ["mr philips", "story_summary_gta_mr_philips"],
+  ["nervous ron", "story_summary_gta_nervous_ron"],
+  ["crystal maze", "story_summary_gta_crystal_maze"],
 ]);
 
 const rdrSummaries: ReadonlyMap<string, string> = new Map([
   ["outlaws from the west", "story_summary_rdr_outlaws"],
   ["enter pursued by a memory", "story_summary_rdr_memory"],
+  ["old friends", "story_summary_rdr_old_friends"],
+  ["the aftermath of genesis", "story_summary_rdr_aftermath"],
+  ["who the hell is leviticus cornwall", "story_summary_rdr_cornwall"],
+  ["eastward bound", "story_summary_rdr_eastward"],
+  ["polite society valentine style", "story_summary_rdr_valentine"],
+  ["americans at rest", "story_summary_rdr_americans"],
+  ["exit pursued by a bruised ego", "story_summary_rdr_bruised_ego"],
+]);
+
+const cyberpunkSummaries: ReadonlyMap<string, string> = new Map([
+  ["the ripperdoc", "story_summary_cyber_ripperdoc"],
+  ["the ride", "story_summary_cyber_ride"],
+  ["the heist", "story_summary_cyber_heist"],
+  ["love like fire", "story_summary_cyber_love_like_fire"],
+  ["playing for time", "story_summary_cyber_playing_for_time"],
+  ["automatic love", "story_summary_cyber_automatic_love"],
+  ["ghost town", "story_summary_cyber_ghost_town"],
+  ["down on the street", "story_summary_cyber_down_on_street"],
+  ["search and destroy", "story_summary_cyber_search_destroy"],
 ]);
 
 const rockstarHeaderSize = 260;
@@ -173,7 +203,13 @@ export function parseCyberpunkStoryMetadata(json: string): SaveDetails | null {
     title.length <= 160 &&
     !/[\p{Cc}\uFFFD]/u.test(title)
   ) {
-    return { percent: null, saveTitle: title };
+    return {
+      percent: null,
+      saveTitle: title,
+      summaryKey: cyberpunkSummaries.get(
+        title.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").trim()
+      ),
+    };
   }
   const questId =
     trackedQuestId ??

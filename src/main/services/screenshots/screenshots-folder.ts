@@ -1,5 +1,6 @@
 import path from "node:path";
 import { app } from "electron";
+import { db } from "@main/level";
 
 import { resolveAchievementScreenshotsDirectory } from "../achievement-screenshots-directory-path";
 import { SystemPath } from "../system-path";
@@ -7,6 +8,10 @@ import { readUserPreferences } from "./screenshot-user-preferences";
 
 const SCREENSHOTS_FOLDER_NAME = "Hydra";
 const KRYSTA_SCREENSHOTS_FOLDER_NAME = "Krysta";
+const privateAlbums = db.sublevel<string, string>("krysta-private-screenshot-folders", { valueEncoding: "json" });
+
+export const getPrivateScreenshotsFolder = () => privateAlbums.get("source");
+export const setPrivateScreenshotsFolder = (folder: string) => privateAlbums.put("source", folder);
 
 const getPicturesDirectory = () => {
   try {
@@ -30,6 +35,7 @@ export const getScreenshotsFolder = async () => {
 
 export const getScreenshotFolderCandidates = async () => [
   ...new Set([
+    await getPrivateScreenshotsFolder(),
     await getScreenshotsFolder(),
     getDefaultScreenshotsFolder(),
     path.join(getPicturesDirectory(), KRYSTA_SCREENSHOTS_FOLDER_NAME),
@@ -39,5 +45,5 @@ export const getScreenshotFolderCandidates = async () => [
       "Pictures",
       KRYSTA_SCREENSHOTS_FOLDER_NAME
     ),
-  ]),
+  ].filter((value): value is string => Boolean(value))),
 ];
