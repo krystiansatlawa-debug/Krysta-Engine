@@ -30,6 +30,8 @@ export default function KrystaScreenshots() {
   >("all");
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
+  const [importMessage, setImportMessage] = useState("");
+  const [importing, setImporting] = useState(false);
   const [search, setSearch] = useState("");
   const [gameFilter, setGameFilter] = useState("");
   const [limit, setLimit] = useState(PAGE_SIZE);
@@ -83,13 +85,11 @@ export default function KrystaScreenshots() {
     };
   }, [reload]);
   const entries = useMemo<GalleryEntry[]>(() => {
-    const all: GalleryEntry[] = [];
-    const seen = new Set<string>();
+    const byPath = new Map<string, GalleryEntry>();
     for (const local of items) {
       const identity = local.path.toLocaleLowerCase();
-      if (seen.has(identity)) continue;
-      seen.add(identity);
-      all.push({
+      if (byPath.has(identity)) continue;
+      byPath.set(identity, {
         id: "manual:" + local.clientId,
         gameTitle: local.gameTitle,
         path: local.path,
@@ -101,9 +101,15 @@ export default function KrystaScreenshots() {
     }
     for (const item of souvenirs) {
       const identity = item.path.toLocaleLowerCase();
-      if (seen.has(identity)) continue;
-      seen.add(identity);
-      all.push({
+      const existing = byPath.get(identity);
+      if (existing) {
+        // Keep a single tile when a capture is registered as both a private
+        // image and an achievement souvenir.
+        existing.kind = "achievement";
+        existing.achievementNames = item.achievementNames;
+        continue;
+      }
+      byPath.set(identity, {
         id: "achievement:" + item.id,
         gameTitle: item.gameTitle,
         path: item.path,
@@ -113,7 +119,7 @@ export default function KrystaScreenshots() {
         achievementNames: item.achievementNames,
       });
     }
-    return all.sort((a, b) => b.capturedAt - a.capturedAt);
+    return [...byPath.values()].sort((a, b) => b.capturedAt - a.capturedAt);
   }, [items, souvenirs]);
   const games = useMemo(
     () =>
@@ -160,6 +166,25 @@ export default function KrystaScreenshots() {
       setError(String(e));
     }
   };
+  const importPrivateFolder = async () => {
+    setImporting(true);
+    setImportMessage("");
+    setError("");
+    try {
+      const result = await window.electron.selectPrivateScreenshotsFolder();
+      if (!result) return;
+      await reload();
+      setImportMessage(
+        pl
+          ? `Zaimportowano ${result.imported} nowych zdjęć. Folder jest zapamiętany.`
+          : `Imported ${result.imported} new photos. The folder is remembered.`
+      );
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setImporting(false);
+    }
+  };
   return (
     <main className="krysta-screenshots">
       <header className="krysta-screenshots__header">
@@ -181,6 +206,10 @@ export default function KrystaScreenshots() {
           <button type="button" onClick={() => void folder()}>
             <FolderOpen size={16} />
             {pl ? "Otwórz folder" : "Open folder"}
+          </button>
+          <button type="button" disabled={importing} onClick={() => void importPrivateFolder()}>
+            <FolderOpen size={16} />
+            {pl ? "Dodaj prywatny folder" : "Add private folder"}
           </button>
         </div>
       </header>
@@ -224,6 +253,7 @@ export default function KrystaScreenshots() {
           ))}
         </select>
       </div>
+      {importMessage && <p role="status">{importMessage}</p>}
       {error && <p role="alert">{error}</p>}
       {!loaded ? (
         <p role="status">
@@ -236,41 +266,43 @@ export default function KrystaScreenshots() {
             : "No saved images in this category. Achievement souvenirs need to be enabled and may require an active subscription."}
         </p>
       ) : (
-        <section
-          className="krysta-screenshots__grid"
-          aria-label={pl ? "Galeria zrzutów ekranu" : "Screenshot gallery"}
-        >
-          {shown.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              className="krysta-screenshots__tile"
-              onClick={() => setSelectedId(s.id)}
-            >
-              <img
-                src={toLocalScreenshotUrl(s.previewPath ?? s.path)}
-                alt={s.gameTitle}
-                loading="lazy"
-              />
-              <strong title={s.gameTitle}>{s.gameTitle}</strong>
-              <small className="krysta-screenshots__kind">
-                {s.kind === "achievement"
-                  ? pl
-                    ? "Osiągnięcie"
-                    : "Achievement"
-                  : pl
-                    ? "Zrzut z gry"
-                    : "Game screenshot"}
-                {s.achievementNames.length
-                  ? " · " + s.achievementNames.join(", ")
-                  : ""}
-              </small>
-              <small>
-                {new Date(s.capturedAt).toLocaleString(i18n.language)}
-              </small>
-            </button>
-          ))}
-        </section>
+        <>
+          <section
+            className="krysta-screenshots__grid"
+            aria-label={pl ? "Galeria zrzutów ekranu" : "Screenshot gallery"}
+          >
+            {shown.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className="krysta-screenshots__tile"
+                onClick={() => setSelectedId(s.id)}
+              >
+                <img
+                  src={toLocalScreenshotUrl(s.previewPath ?? s.path)}
+                  alt={s.gameTitle}
+                  loading="lazy"
+                />
+                <strong title={s.gameTitle}>{s.gameTitle}</strong>
+                <small className="krysta-screenshots__kind">
+                  {s.kind === "achievement"
+                    ? pl
+                      ? "Osiągnięcie"
+                      : "Achievement"
+                    : pl
+                      ? "Zrzut z gry"
+                      : "Game screenshot"}
+                  {s.achievementNames.length
+                    ? " · " + s.achievementNames.join(", ")
+                    : ""}
+                </small>
+                <small>
+                  {new Date(s.capturedAt).toLocaleString(i18n.language)}
+                </small>
+              </button>
+            ))}
+          </section>
+        </>
       )}
       {filtered.length > shown.length && (
         <button

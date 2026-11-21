@@ -32,6 +32,7 @@ async function fixture(t: TestContext) {
     "@main/level": `
       import { state } from "test-fixture";
       export const levelKeys = { game: (shop, id) => shop + ":" + id };
+      export const db = { sublevel: () => ({get: async () => null, put: async () => {} }) };
       export const gamesSublevel = {
         get: async () => state.game,
         put: async (_key, game) => { state.game = game; },

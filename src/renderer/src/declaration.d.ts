@@ -210,6 +210,8 @@ declare global {
       }[];
       lastSync: string | null;
     }>;
+    selectRockstarLauncherFolder: () => Promise<Awaited<ReturnType<Electron["scanRockstar"]>> | null>;
+    selectRockstarGameFolder: () => Promise<Awaited<ReturnType<Electron["scanRockstar"]>> | null>;
     importRockstar: () => Promise<{
       added: number;
       linked: number;
@@ -1764,6 +1766,7 @@ declare global {
     ) => Promise<LocalScreenshot | null>;
     deleteLocalScreenshot: (clientId: string) => Promise<void>;
     openScreenshotsFolder: () => Promise<void>;
+    selectPrivateScreenshotsFolder: () => Promise<{ imported: number } | null>;
     onLocalScreenshotsChange: (
       cb: (screenshots: LocalScreenshot[]) => void
     ) => () => Electron.IpcRenderer;

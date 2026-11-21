@@ -373,7 +373,8 @@ async function getUbisoftAchievementsInternal(
   const matches = games.filter((g) =>
     objectId.startsWith("ubi-owned-")
       ? ownedId(g.id) === objectId
-      : cleanTitle(game.title) === cleanTitle(g.title)
+      : g.id === objectId.slice("ubisoft-".length) ||
+        cleanTitle(game.title) === cleanTitle(g.title)
   );
   const spaceIds = [
     ...new Set(matches.map((g) => g.spaceId).filter((v): v is string => !!v)),
@@ -451,8 +452,17 @@ async function getUbisoftAchievementsInternal(
   achievementCache.set(cacheKey, snapshot);
   return snapshot;
 }
+/**
+ * Ubisoft's trophy state is a read-only display projection. Never insert
+ * these unlocks into Steam/Epic's achievement caches or sync records.
+ */
+export const getUbisoftAchievementsForLibrary = (
+  objectId: string,
+  force = false
+) => serialized(() => getUbisoftAchievementsInternal(objectId, force));
+
 ipcMain.handle("krysta:ubi-achievements", (_e, id: unknown, force: unknown) =>
-  serialized(() => getUbisoftAchievementsInternal(id, force === true))
+  getUbisoftAchievementsForLibrary(id as string, force === true)
 );
 ipcMain.handle("krysta:ubi-account-state", () => {
   restore();

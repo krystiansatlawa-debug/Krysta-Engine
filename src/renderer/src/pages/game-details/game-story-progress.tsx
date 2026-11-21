@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { BookIcon, PencilIcon } from "@primer/octicons-react";
 import { useTranslation } from "react-i18next";
@@ -14,6 +14,7 @@ import {
   STORY_MISSION_DESCRIPTION_LIMIT,
   STORY_MISSION_NAME_LIMIT,
 } from "../../../../shared/game-story-progress";
+import { storyProgressCardRegistry } from "./story-progress-card-registry";
 import "./game-story-progress.scss";
 
 interface GameStoryProgressProps {
@@ -57,6 +58,16 @@ export function GameStoryProgress({
   const { formatDateTime } = useDate();
   const headingId = useId();
   const descriptionId = useId();
+  const gameKey = `${shop}:${objectId}`;
+  const [primaryCardKey, setPrimaryCardKey] = useState<string | null>(null);
+  useLayoutEffect(
+    () =>
+      storyProgressCardRegistry.register(gameKey, (primary) =>
+        setPrimaryCardKey(primary ? gameKey : null)
+      ),
+    [gameKey]
+  );
+  const isPrimary = primaryCardKey === gameKey;
   const [progress, setProgress] = useState<StoryProgress | null>(null);
   const [saveView, setSaveView] = useState<
     Omit<GameStoryProgressView, "manual">
@@ -84,6 +95,9 @@ export function GameStoryProgress({
   const [folderError, setFolderError] = useState(false);
 
   useEffect(() => {
+    // Only the visible card subscribes and reads saves. Duplicate mounts do not
+    // trigger extra disk scans or accumulate listeners.
+    if (!isPrimary) return;
     let active = true;
     let initialScan: number | undefined;
     window.electron
@@ -125,7 +139,7 @@ export function GameStoryProgress({
       window.clearTimeout(initialScan);
       unsubscribe();
     };
-  }, [shop, objectId, reload]);
+  }, [shop, objectId, reload, isPrimary]);
 
   const retryLoad = () => {
     setLoadError(false);
@@ -176,6 +190,8 @@ export function GameStoryProgress({
       setSaving(false);
     }
   };
+
+  if (!isPrimary) return null;
 
   return (
     <section className="game-story-progress" aria-labelledby={headingId}>
