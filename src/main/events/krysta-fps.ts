@@ -66,6 +66,7 @@ let overlay: BrowserWindow | null = null,
   child: ChildProcess | null = null,
   timer: ReturnType<typeof setInterval> | null = null,
   activeKey = "",
+  lastOverlayValue = "FPS: --",
   revision = 0,
   status = "idle";
 let hidden = false,
@@ -119,14 +120,22 @@ function stop() {
     if (!old.isDestroyed()) old.destroy();
   }
   activeKey = "";
+  lastOverlayValue = "FPS: --";
 }
 function show(value: string) {
-  if (overlay && !overlay.isDestroyed() && !overlay.webContents.isDestroyed())
-    void overlay.webContents
-      .executeJavaScript(
-        "document.getElementById('fps').textContent=" + JSON.stringify(value)
-      )
-      .catch(() => {});
+  const window = overlay;
+  if (value === lastOverlayValue || !window || window.isDestroyed()) return;
+  const contents = window.webContents;
+  if (contents.isDestroyed()) return;
+  lastOverlayValue = value;
+  void contents
+    .executeJavaScript(
+      "document.getElementById('fps').textContent=" + JSON.stringify(value)
+    )
+    .catch(() => {
+      if (overlay === window && lastOverlayValue === value)
+        lastOverlayValue = "";
+    });
 }
 async function reconcile() {
   const generation = ++revision;
@@ -161,7 +170,8 @@ async function reconcile() {
     status = !p.enabled ? "disabled" : !tool ? "missing-tool" : "waiting-game";
     return;
   }
-  if (activeKey === target.key && child) {
+  const captureKey = JSON.stringify([target.key, target.exe, tool]);
+  if (activeKey === captureKey && child) {
     if (overlay && !overlay.isDestroyed()) {
       const display = screen.getDisplayMatching(overlay.getBounds());
       const point = placement(display.bounds, normalizePosition(p.position));
@@ -171,7 +181,7 @@ async function reconcile() {
     return;
   }
   stop();
-  activeKey = target.key;
+  activeKey = captureKey;
   status = "starting";
   lastError = "";
   const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
@@ -225,6 +235,7 @@ async function reconcile() {
     applicationColumn = -1;
   const samples = new Map<string, { sum: number; count: number }>();
   const reader = createInterface({ input: proc.stdout! });
+  const targetName = target.exe.toLowerCase().replace(/\.exe$/, "");
   reader.on("line", (line) => {
     const row = line
       .trim()
@@ -242,8 +253,7 @@ async function reconcile() {
       applicationColumn < 0 ||
       basename((row[applicationColumn] ?? "").replace(/^"|"$/g, ""))
         .toLowerCase()
-        .replace(/\.exe$/, "") !==
-        target.exe.toLowerCase().replace(/\.exe$/, "")
+        .replace(/\.exe$/, "") !== targetName
     )
       return;
     const ms = Number(row[timeColumn]);
@@ -258,7 +268,10 @@ async function reconcile() {
     lastError = (lastError + String(chunk)).slice(-2000);
   });
   timer = setInterval(() => {
-    const best = [...samples.values()].sort((a, b) => b.count - a.count)[0];
+    let best: { sum: number; count: number } | undefined;
+    for (const sample of samples.values()) {
+      if (!best || sample.count > best.count) best = sample;
+    }
     samples.clear();
     status = best ? "measuring" : "waiting-frames";
     show(
@@ -372,22 +385,31 @@ ipcMain.handle("krysta:fps-set-hotkey", async (_e, value: unknown) => {
   shortcutError = false;
   return value;
 });
+function refreshOverlayPlacement() {
+  if (activeKey) refresh();
+}
+
 if (process.platform === "win32") {
-  onTrackedGamesRunningChange(refresh);
+  const unsubscribe = onTrackedGamesRunningChange(refresh);
   void app.whenReady().then(() => {
+    if (quitting) return;
+    screen.on("display-metrics-changed", refreshOverlayPlacement);
     refresh();
     poll = setInterval(() => {
       if (
-        status !== "capture-error" &&
-        status !== "disabled" &&
-        status !== "hidden"
+        gamesPlaytime.size > 0 &&
+        (status === "missing-tool" || status === "waiting-game")
       )
         refresh();
     }, 3000);
+    poll.unref?.();
   });
   app.on("before-quit", () => {
     quitting = true;
     revision++;
+    unsubscribe();
+    if (app.isReady())
+      screen.removeListener("display-metrics-changed", refreshOverlayPlacement);
     if (poll) clearInterval(poll);
     if (registered) globalShortcut.unregister(registered);
     stop();

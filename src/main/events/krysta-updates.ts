@@ -9,7 +9,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import path from "node:path";
-import { hasTrackedGamesRunning } from "@main/services/game-running-state";
+import {
+  hasTrackedGamesRunning,
+  onTrackedGamesRunningChange,
+} from "@main/services/game-running-state";
 
 const repo = "krystiansatlawa-debug/Krysta-Engine";
 const releasePage = "https://github.com/" + repo + "/releases";
@@ -23,7 +26,14 @@ type Release = {
 };
 type Prefs = { automatic: boolean; notifications: boolean; seen?: string };
 type Status = {
-  phase: "idle" | "checking" | "downloading" | "ready" | "manual" | "error";
+  phase:
+    | "idle"
+    | "checking"
+    | "downloading"
+    | "paused"
+    | "ready"
+    | "manual"
+    | "error";
   version: string;
   received: number;
   total: number;
@@ -32,6 +42,9 @@ type Status = {
 let status: Status = { phase: "idle", version: "", received: 0, total: 0 };
 let ready: { asset: Asset; tag: string; file: string } | null = null;
 let downloading: Promise<void> | null = null;
+let downloadController: AbortController | null = null;
+let deferredRelease: Release | null = null;
+const interruptedByGame = Symbol("game started");
 let current: Promise<unknown> | null = null;
 const cache = () => path.join(app.getPath("userData"), "krysta-update-cache");
 async function prefs(): Promise<Prefs> {
@@ -219,15 +232,17 @@ function canDownload() {
     !process.env.PORTABLE_EXECUTABLE_FILE
   );
 }
-async function verified(file: string, asset: Asset) {
+async function verified(file: string, asset: Asset, signal?: AbortSignal) {
   try {
     const st = await fs.lstat(file);
     if (!st.isFile() || st.isSymbolicLink() || st.size !== asset.size)
       return false;
     const hash = createHash("sha256");
-    for await (const chunk of createReadStream(file)) hash.update(chunk);
+    for await (const chunk of createReadStream(file, { signal }))
+      hash.update(chunk);
     return hash.digest("hex") === asset.sha256;
   } catch {
+    signal?.throwIfAborted();
     return false;
   }
 }
@@ -262,10 +277,11 @@ async function downloadResponse(url: string, signal: AbortSignal) {
   }
   throw Error("Too many redirects");
 }
-async function download(release: Release) {
+async function download(release: Release, signal: AbortSignal) {
   const asset = release.asset;
   if (!asset || !canDownload()) return;
   await fs.mkdir(cache(), { recursive: true, mode: 0o700 });
+  signal.throwIfAborted();
   const file = path.join(cache(), asset.name),
     tmp = file + "." + randomUUID() + ".part";
   status = {
@@ -276,8 +292,8 @@ async function download(release: Release) {
   };
   ready = null;
   try {
-    if (!(await verified(file, asset))) {
-      const signal = AbortSignal.timeout(60 * 60 * 1000);
+    if (!(await verified(file, asset, signal))) {
+      signal.throwIfAborted();
       const response = await downloadResponse(asset.url, signal);
       if (!response.ok || !response.body) {
         await response.body?.cancel();
@@ -326,6 +342,7 @@ async function download(release: Release) {
       await fs.rm(file, { force: true });
       await fs.rename(tmp, file);
     }
+    signal.throwIfAborted();
     ready = { tag: release.tag, file, asset };
     status = {
       phase: "ready",
@@ -337,14 +354,58 @@ async function download(release: Release) {
     await fs.rm(tmp, { force: true }).catch(() => {});
   }
 }
+function deferDownload(release: Release) {
+  deferredRelease = release;
+  status = {
+    phase: "paused",
+    version: release.tag,
+    received: 0,
+    total: release.asset?.size ?? 0,
+  };
+}
+function resumeDeferredDownload() {
+  const release = deferredRelease;
+  if (!release || downloading || hasTrackedGamesRunning()) return;
+  void prefs()
+    .then((settings) => {
+      if (deferredRelease !== release) return;
+      if (settings.automatic) startDownload(release);
+      else {
+        deferredRelease = null;
+        status = {
+          phase: "manual",
+          version: release.tag,
+          received: 0,
+          total: 0,
+        };
+      }
+    })
+    .catch(() => {});
+}
 function startDownload(release: Release) {
   if (downloading || ready?.tag === release.tag) return;
   if (!release.asset || !canDownload()) {
+    deferredRelease = null;
     status = { phase: "manual", version: release.tag, received: 0, total: 0 };
     return;
   }
-  downloading = download(release)
+  if (hasTrackedGamesRunning()) {
+    deferDownload(release);
+    return;
+  }
+  deferredRelease = null;
+  const controller = new AbortController();
+  downloadController = controller;
+  const signal = AbortSignal.any([
+    controller.signal,
+    AbortSignal.timeout(60 * 60 * 1000),
+  ]);
+  downloading = download(release, signal)
     .catch(() => {
+      if (signal.reason === interruptedByGame) {
+        deferDownload(release);
+        return;
+      }
       status = {
         phase: "error",
         version: release.tag,
@@ -355,7 +416,9 @@ function startDownload(release: Release) {
       };
     })
     .finally(() => {
+      downloadController = null;
       downloading = null;
+      resumeDeferredDownload();
     });
 }
 async function install() {
@@ -394,13 +457,15 @@ async function check() {
     const krystaNew = krysta ? newer(krysta.tag, version) : null;
     if (krysta && krystaNew === true) {
       if (p.automatic) startDownload(krysta);
-      else if (!downloading && !ready)
+      else if (!downloading && !ready) {
+        deferredRelease = null;
         status = {
           phase: "manual",
           version: krysta.tag,
           received: 0,
           total: 0,
         };
+      }
       if (
         p.notifications &&
         p.seen !== krysta.tag &&
@@ -417,6 +482,7 @@ async function check() {
       }
     } else if (!downloading) {
       ready = null;
+      deferredRelease = null;
       status = { phase: "idle", version: "", received: 0, total: 0 };
     }
     return {
@@ -451,6 +517,10 @@ ipcMain.handle(
       throw Error("Invalid preferences");
     const p = await changePrefs({ automatic, notifications });
     if (p.automatic) void check().catch(() => {});
+    else if (deferredRelease) {
+      deferredRelease = null;
+      status = { ...status, phase: "manual" };
+    }
     return p;
   }
 );
@@ -465,19 +535,37 @@ ipcMain.handle("krysta:updates-open", (_e, kind: unknown) => {
   throw Error("Invalid destination");
 });
 void app.whenReady().then(() => {
-  const tick = () =>
+  let checkAfterGame = false;
+  const tick = () => {
+    if (hasTrackedGamesRunning()) {
+      checkAfterGame = true;
+      return;
+    }
+    checkAfterGame = false;
     void prefs()
       .then((p) => {
-        if (p.automatic) {
-          void syncStatus().catch(() => {});
-          return check();
+        if (!p.automatic) return null;
+        if (hasTrackedGamesRunning()) {
+          checkAfterGame = true;
+          return null;
         }
-        return null;
+        void syncStatus().catch(() => {});
+        return check();
       })
       .catch(() => {});
+  };
+  const unsubscribe = onTrackedGamesRunningChange(() => {
+    if (hasTrackedGamesRunning()) {
+      downloadController?.abort(interruptedByGame);
+    } else {
+      resumeDeferredDownload();
+      if (checkAfterGame) tick();
+    }
+  });
   const first = setTimeout(tick, 30000),
     timer = setInterval(tick, 60 * 60 * 1000);
   app.once("before-quit", () => {
+    unsubscribe();
     clearTimeout(first);
     clearInterval(timer);
   });

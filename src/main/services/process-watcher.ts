@@ -57,6 +57,7 @@ import {
   gamesPlaytime,
   getGamePlaytimeDeltas,
   getTrackedGamesRunning,
+  isGamePlaytimeCheckpointDue,
   recompilationGameSessions,
   setGamePlaytime,
 } from "./game-running-state";
@@ -621,6 +622,10 @@ function onTickGame(game: Game) {
   );
   if (!gamePlaytime) return;
 
+  const syncDue =
+    currentTick % TICKS_TO_UPDATE_API === 0 && game.shop !== "custom";
+  if (!syncDue && !isGamePlaytimeCheckpointDue(gamePlaytime, now)) return;
+
   const { localDelta: delta, syncDelta: deltaToSync } = getGamePlaytimeDeltas(
     gamePlaytime,
     now,
@@ -644,7 +649,7 @@ function onTickGame(game: Game) {
     lastTick: now,
   });
 
-  if (currentTick % TICKS_TO_UPDATE_API === 0 && game.shop !== "custom") {
+  if (syncDue) {
     logPlaytimeTrace("periodic-sync-request", game, {
       method: game.remoteId ? "track" : "create",
       deltaToSync,

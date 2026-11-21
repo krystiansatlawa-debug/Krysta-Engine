@@ -122,7 +122,12 @@ export function SettingsAchievementRecordings() {
           options={field.values.map((n) => ({
             key: String(n),
             value: String(n),
-            label: n + field.suffix,
+            label:
+              field.key === "preSeconds" && n === 0
+                ? pl
+                  ? "0 s (mniejsze obciążenie)"
+                  : "0 s (lower overhead)"
+                : n + field.suffix,
           }))}
           disabled={disabled || !state?.settings.enabled}
           onChange={(event) =>

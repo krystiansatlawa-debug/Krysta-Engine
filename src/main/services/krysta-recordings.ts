@@ -12,7 +12,10 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Game } from "@types";
 import { levelKeys } from "@main/level";
-import { hasTrackedGamesRunning } from "./game-running-state";
+import {
+  hasTrackedGamesRunning,
+  onTrackedGamesRunningChange,
+} from "./game-running-state";
 import {
   resolveForegroundGame,
   resolveForegroundWindow,
@@ -64,7 +67,7 @@ const defaults: Settings = {
   enabled: false,
   seconds: 15,
   audio: false,
-  preSeconds: 10,
+  preSeconds: 0,
   quality: 1080,
   fps: 30,
   limitGb: 10,
@@ -215,6 +218,7 @@ async function saveSettings(next: Settings) {
     spaceCache = null;
     cancel();
     applyHotkey(next);
+    syncRecordingMonitor();
   });
   settingsQueue = job.catch(() => {});
   await job;
@@ -453,11 +457,6 @@ async function openCapture(
   expected: string | null,
   generation: number
 ): Promise<Active | null> {
-  if (!(await enoughSpace(prefs, 8 * 1024 ** 2, true))) {
-    lastError =
-      "Limit nagrań lub brak miejsca / Recording limit or insufficient disk space";
-    return null;
-  }
   const match = await resolveForegroundGame("deeplink");
   if (
     match.status !== "resolved" ||
@@ -475,6 +474,11 @@ async function openCapture(
     quitting
   )
     return null;
+  if (!(await enoughSpace(prefs, 8 * 1024 ** 2, true))) {
+    lastError =
+      "Limit nagrań lub brak miejsca / Recording limit or insufficient disk space";
+    return null;
+  }
   const sources = await desktopCapturer.getSources({
     types: ["window"],
     thumbnailSize: { width: 0, height: 0 },
@@ -705,6 +709,8 @@ async function reconcile() {
       if (!hasTrackedGamesRunning()) pausedWindow = "";
       return;
     }
+    if (s.preSeconds === 0 && !current && !opening && !pausedWindow) return;
+
     const f = await resolveForegroundWindow(),
       sig =
         f?.windowHandle && f.processId != null
@@ -775,17 +781,41 @@ export async function openRecordingsFolder() {
   if (error) throw Error(error);
 }
 export { stopRecording };
+function syncRecordingMonitor() {
+  if (process.platform !== "win32" || !app.isReady() || quitting) return;
+  const running = hasTrackedGamesRunning();
+  if (preferences?.enabled && running) {
+    if (!timer) {
+      timer = setInterval(() => void reconcile(), 500);
+      timer.unref?.();
+    }
+    void reconcile();
+    return;
+  }
+
+  if (timer) clearInterval(timer);
+  timer = undefined;
+  if (!running) {
+    pausedWindow = "";
+    if (current || opening) cancel();
+  }
+}
+
+const unsubscribe =
+  process.platform === "win32"
+    ? onTrackedGamesRunningChange(syncRecordingMonitor)
+    : undefined;
 void app
   .whenReady()
   .then(async () => {
-    if (process.platform !== "win32") return;
+    if (process.platform !== "win32" || quitting) return;
     applyHotkey(await settings());
-    timer = setInterval(() => void reconcile(), 500);
-    timer.unref?.();
+    syncRecordingMonitor();
   })
   .catch(() => {});
 app.on("before-quit", () => {
   quitting = true;
+  unsubscribe?.();
   epoch++;
   if (timer) clearInterval(timer);
   if (registered) globalShortcut.unregister(registered);

@@ -11,6 +11,13 @@ interface GamePlaytimeState {
   managedEpicSession?: boolean;
 }
 
+const PLAYTIME_CHECKPOINT_MS = 10_000;
+
+export const isGamePlaytimeCheckpointDue = (
+  session: Pick<GamePlaytimeState, "lastTick">,
+  now: number
+) => now - session.lastTick >= PLAYTIME_CHECKPOINT_MS;
+
 export const getGamePlaytimeDeltas = (
   session: GamePlaytimeState,
   now: number,

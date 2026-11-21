@@ -15,12 +15,13 @@
         stream,
         video,
         rotation = null,
+        rotating = null,
+        buffered = null,
         started = false,
         ended = false,
         saving = false,
         selected = null,
         finishTimer = null;
-      const rolling = new Set();
       let chosenMime = "";
       async function chooseMime() {
         const candidates = ["vp8", "vp9"].filter((codec) =>
@@ -107,35 +108,54 @@
       function discard(s) {
         s.discard = true;
         s.chunks = [];
-        rolling.delete(s);
         stopSegment(s);
+        return s.done;
       }
       function stopRotation() {
-        if (rotation) clearInterval(rotation);
+        if (rotation) clearTimeout(rotation);
         rotation = null;
       }
       function rotate() {
+        rotation = null;
+        const previous = buffered;
+        buffered = null;
+        if (!previous) return;
+        // Wait for the recorder to finish releasing its encoder before starting another.
+        rotating = discard(previous).then(() => {
+          rotating = null;
+          startRotation();
+        });
+      }
+      function startRotation() {
         if (ended || saving || config.preSeconds === 0) return;
-        for (const s of rolling)
-          if (
-            s.recorder.state === "inactive" ||
-            performance.now() - s.start >= config.preSeconds * 1000 - 200
-          )
-            discard(s);
         try {
-          while (rolling.size > 1) {
-            const oldest = [...rolling].sort((a, b) => a.start - b.start)[0];
-            discard(oldest);
-          }
-          rolling.add(segment());
+          buffered = segment();
+          rotation = setTimeout(rotate, config.preSeconds * 1000);
         } catch {
           globalThis.krystaStop();
         }
       }
-      function startRotation() {
-        if (ended || config.preSeconds === 0) return;
-        rotate();
-        rotation = setInterval(rotate, config.preSeconds * 500);
+      function stopPreview() {
+        if (!video) return;
+        video.pause();
+        video.srcObject = null;
+        video = null;
+      }
+      function captureThumbnail(onFrame) {
+        const preview = document.createElement("video");
+        video = preview;
+        preview.muted = true;
+        preview.addEventListener(
+          "loadeddata",
+          () => {
+            if (video !== preview) return;
+            onFrame(thumb());
+            stopPreview();
+          },
+          { once: true }
+        );
+        preview.srcObject = stream;
+        void preview.play().catch(() => {});
       }
       function thumb() {
         if (!video || !video.videoWidth) return undefined;
@@ -163,10 +183,13 @@
       globalThis.krystaStop = () => {
         ended = true;
         stopRotation();
-        for (const s of [...rolling]) discard(s);
+        if (buffered) {
+          void discard(buffered);
+          buffered = null;
+        }
         finish();
         stream?.getTracks().forEach((t) => t.stop());
-        if (video) video.srcObject = null;
+        stopPreview();
       };
       globalThis.krystaStart = async (prefs) => {
         if (started) throw Error("Capture already started");
@@ -198,10 +221,6 @@
           .addEventListener("ended", () => globalThis.krystaStop(), {
             once: true,
           });
-        video = document.createElement("video");
-        video.muted = true;
-        video.srcObject = stream;
-        void video.play().catch(() => {});
         chosenMime = await chooseMime();
         if (ended || !chosenMime) {
           globalThis.krystaStop();
@@ -216,24 +235,28 @@
         saving = true;
         stopRotation();
         try {
-          const now = performance.now();
-          const available = [...rolling]
-            .filter(
-              (s) =>
-                s.recorder.state === "recording" &&
-                !s.error &&
-                now - s.start <= config.preSeconds * 1000 + 500
-            )
-            .sort((a, b) => a.start - b.start);
-          selected = available[0] || segment();
-          rolling.delete(selected);
-          for (const s of [...rolling]) discard(s);
+          if (rotating) await rotating;
+          const previous = buffered;
+          buffered = null;
+          if (
+            previous?.recorder.state === "recording" &&
+            !previous.error &&
+            performance.now() - previous.start <= config.preSeconds * 1000 + 500
+          ) {
+            selected = previous;
+          } else {
+            if (previous) await discard(previous);
+            selected = segment();
+          }
           const before = Math.min(
             config.preSeconds,
-            Math.max(0, (now - selected.start) / 1000)
+            Math.max(0, (performance.now() - selected.start) / 1000)
           );
-          const thumbnail = thumb(),
-            audio = stream.getAudioTracks().length > 0;
+          let thumbnail;
+          captureThumbnail((value) => {
+            thumbnail = value;
+          });
+          const audio = stream.getAudioTracks().length > 0;
           finishTimer = setTimeout(finish, config.seconds * 1000);
           const duration = await selected.done;
           if (selected.error) throw selected.error;
@@ -247,6 +270,7 @@
           return { data, duration, audio, thumbnail, before };
         } finally {
           finish();
+          stopPreview();
           selected = null;
           saving = false;
           if (!ended) startRotation();
