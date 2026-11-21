@@ -170,6 +170,7 @@ export function parseGenericStoryMetadata(
   return {
     percent,
     saveTitle,
+    ...(percent !== null && { progressKind: "story" as const }),
     ...(description && { missionDescription: description }),
   };
 }
