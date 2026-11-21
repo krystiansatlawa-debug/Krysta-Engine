@@ -12,6 +12,8 @@ import { useSearchParams } from "react-router-dom";
 
 import { HeroPanel } from "./hero";
 import { KrystaGameUpdates } from "./krysta-game-updates";
+import { GameJournal } from "./game-journal";
+import { GameStoryProgress } from "./game-story-progress";
 import { KrystaUbisoftAchievements } from "./krysta-ubisoft-achievements";
 import { KrystaGameCloud } from "./krysta-game-cloud";
 import { DescriptionHeader } from "./description-header/description-header";
@@ -125,7 +127,22 @@ export function GameDetailsContent() {
   const [detailTab, setDetailTab] = useState("description");
   useEffect(() => {
     setDetailTab("description");
-  }, [objectId]);
+  }, [shop, objectId]);
+  const storyGame =
+    presentation?.members.find(
+      (member) =>
+        member.shop === presentation.catalogueGame.shop &&
+        member.objectId === presentation.catalogueGame.objectId
+    ) ??
+    presentation?.members[0] ??
+    game;
+  const journalGameKeys = useMemo(
+    () =>
+      (presentation?.members ?? (game ? [game] : []))
+        .map((member) => `${member.shop}:${member.objectId}`)
+        .sort(),
+    [presentation?.members, game]
+  );
   useEffect(() => {
     const openUpdates = () => setDetailTab("updates");
     window.addEventListener("krysta:open-game-updates", openUpdates);
@@ -529,7 +546,38 @@ export function GameDetailsContent() {
               {document.documentElement.lang.startsWith("pl") ? pl : en}
             </button>
           ))}
+          {game && (
+            <button
+              type="button"
+              aria-pressed={detailTab === "journal"}
+              onClick={() => setDetailTab("journal")}
+            >
+              {t("journal_tab")}
+            </button>
+          )}
+          {storyGame && (
+            <button
+              type="button"
+              aria-pressed={detailTab === "story-progress"}
+              onClick={() => setDetailTab("story-progress")}
+            >
+              {t("story_progress_tab")}
+            </button>
+          )}
         </nav>
+        {detailTab === "journal" && game && (
+          <GameJournal
+            key={JSON.stringify(journalGameKeys)}
+            gameKeys={journalGameKeys}
+          />
+        )}
+        {detailTab === "story-progress" && storyGame && (
+          <GameStoryProgress
+            key={`${storyGame.shop}:${storyGame.objectId}`}
+            shop={storyGame.shop}
+            objectId={storyGame.objectId}
+          />
+        )}
         {detailTab === "ubisoft-achievements" && game && (
           <KrystaUbisoftAchievements
             key={game.objectId}

@@ -108,6 +108,17 @@ test("managed Epic games resolve the owner/artifact prefix the launch uses", asy
   assert.deepEqual(state.environmentPrefixes, [MANAGED_PREFIX]);
 });
 
+test("local path discovery reuses the managed prefix without creating a Cloud Save environment", async () => {
+  const { context, state } = load(managedGame);
+  const { pathContext } = await context.getCloudSavePathContext(
+    "Namespace:Item",
+    "epic"
+  );
+  assert.equal(pathContext.winePrefixPath, MANAGED_PREFIX);
+  assert.equal(state.managedRequests.length, 1);
+  assert.deepEqual(state.environmentPrefixes, []);
+});
+
 test("explicit prefix overrides still win for managed Epic games", async () => {
   const { context, state } = load(managedGame);
   await context.getCloudSaveGameContext("Namespace:Item", "epic", {

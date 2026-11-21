@@ -22,6 +22,7 @@ import {
   setRecompilationGameRunning,
 } from "@main/services/game-running-state";
 import { HydraApi } from "@main/services/hydra-api";
+import { recordGameJournalSession } from "@main/services/game-journal";
 import { NativeAddon } from "@main/services/native-addon";
 import { createGame, trackGamePlaytime } from "@main/services/library-sync";
 import { getHydraPlaytimeRevision } from "@main/services/library-sync/library-write-queue";
@@ -213,7 +214,13 @@ const endSession = (session: RecompilationSession) => {
   if (session.portProcessWatch) clearInterval(session.portProcessWatch);
   deleteEmulatorGameRunning(portKey);
   deleteRecompilationGameRunning(portKey);
-  return Math.max(0, performance.now() - session.startedAt);
+  const endedTick = performance.now();
+  void recordGameJournalSession(
+    baseKeyOf(session.ref),
+    session.startedAt,
+    endedTick
+  );
+  return Math.max(0, endedTick - session.startedAt);
 };
 
 const finishSession = async (session: RecompilationSession) => {

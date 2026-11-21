@@ -12,6 +12,7 @@ import type {
   AppUpdaterEvent,
   StartGameDownloadPayload,
   GameRunning,
+  GameStoryProgress,
   UpdateProfileRequest,
   SeedingStatus,
   UserAchievement,
@@ -1581,6 +1582,28 @@ contextBridge.exposeInMainWorld("electron", {
       cb(gamesRunning);
     ipcRenderer.on("on-games-running", listener);
     return () => ipcRenderer.removeListener("on-games-running", listener);
+  },
+  getGameJournal: (gameKeys: string[], limit: number) =>
+    ipcRenderer.invoke("getGameJournal", gameKeys, limit),
+  getGameStoryProgress: (shop: GameShop, objectId: string, readSave = true) =>
+    ipcRenderer.invoke("getGameStoryProgress", shop, objectId, readSave),
+  selectStorySaveFolder: (shop: GameShop, objectId: string, reset = false) =>
+    ipcRenderer.invoke("selectStorySaveFolder", shop, objectId, reset),
+  onGameStoryProgressChanged: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("on-game-story-progress-changed", listener);
+    return () => ipcRenderer.removeListener("on-game-story-progress-changed", listener);
+  },
+  setGameStoryProgress: (
+    shop: GameShop,
+    objectId: string,
+    progress: GameStoryProgress
+  ) => ipcRenderer.invoke("setGameStoryProgress", shop, objectId, progress),
+  onGameJournalChanged: (cb: (gameKey: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, gameKey: string) =>
+      cb(gameKey);
+    ipcRenderer.on("on-game-journal-changed", listener);
+    return () => ipcRenderer.removeListener("on-game-journal-changed", listener);
   },
   onGameSessionSynced: (cb: () => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => cb();

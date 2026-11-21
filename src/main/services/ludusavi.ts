@@ -54,7 +54,8 @@ export class Ludusavi {
     objectId: string,
     backupPath?: string | null,
     winePrefix?: string | null,
-    preview?: boolean
+    preview?: boolean,
+    signal?: AbortSignal
   ): Promise<LudusaviBackup> {
     return new Promise((resolve, reject) => {
       const args = [
@@ -73,12 +74,17 @@ export class Ludusavi {
       cp.execFile(
         this.binaryPath,
         args,
+        { signal },
         (err: cp.ExecFileException | null, stdout: string) => {
           if (err) {
             return reject(err);
           }
 
-          return resolve(JSON.parse(stdout) as LudusaviBackup);
+          try {
+            resolve(JSON.parse(stdout) as LudusaviBackup);
+          } catch (error) {
+            reject(error);
+          }
         }
       );
     });
@@ -87,7 +93,8 @@ export class Ludusavi {
   public static async getBackupPreview(
     _shop: GameShop,
     objectId: string,
-    winePrefix?: string | null
+    winePrefix?: string | null,
+    signal?: AbortSignal
   ): Promise<LudusaviBackup | null> {
     const config = await this.getConfig();
 
@@ -96,7 +103,8 @@ export class Ludusavi {
       objectId,
       null,
       winePrefix,
-      true
+      true,
+      signal
     );
 
     const customGame = config.customGames.find(

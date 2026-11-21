@@ -23,6 +23,11 @@ import { NativeAddon } from "./native-addon";
 import { emulatorSessions } from "./emulators/emulator-session-tracker";
 import { launchedGamePids } from "./launched-game-pids";
 import { markGameLauncherGameDetected } from "./game-launcher-status";
+import { recordGameJournalSession } from "./game-journal";
+import {
+  queueAutomaticStoryProgress,
+  refreshQueuedStoryProgress,
+} from "./automatic-story-progress";
 import {
   isValidProcessWatcherScan,
   startOptionalExecutableCatalogueLoad,
@@ -444,6 +449,7 @@ export const watchProcesses = async () => {
 
   currentTick++;
 
+  refreshQueuedStoryProgress();
   WindowManager.sendToAppWindows("on-games-running", getGamesRunning());
 };
 
@@ -725,6 +731,8 @@ const onCloseGame = (game: Game, options: { isShutdown?: boolean } = {}) => {
   const gamePlaytime = gamesPlaytime.get(gameKey);
   if (!gamePlaytime) return;
   deleteGamePlaytime(gameKey);
+  void recordGameJournalSession(gameKey, gamePlaytime.firstTick, now);
+  if (!options.isShutdown) queueAutomaticStoryProgress(game);
   launchedGamePids.delete(gameKey);
   stopLinuxGameCaptureSession(gameKey);
   PowerSaveBlockerManager.markGameClosed(gameKey);

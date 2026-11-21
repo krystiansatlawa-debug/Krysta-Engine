@@ -1156,6 +1156,13 @@ export type UserGameDetails = ShopAssets & {
 };
 
 export * from "./game.types";
+export type { GameJournalPage, GameJournalSession } from "./game-journal.types";
+export type {
+  AutomaticGameStoryProgress,
+  GameStoryProgress,
+  GameStoryProgressView,
+  StorySaveStatus,
+} from "./game-story-progress.types";
 export * from "./steam.types";
 export * from "./steam-integration.types";
 export * from "./epic-integration.types";
