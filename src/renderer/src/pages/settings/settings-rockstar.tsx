@@ -146,9 +146,9 @@ export function SettingsRockstar() {
       {(state?.installed || (state?.games.length ?? 0) > 0) && (
         <>
           <p>
-            {pl ? "Wykryte gry" : "Detected games"}: {state.games.length}
+            {pl ? "Wykryte gry" : "Detected games"}: {state?.games.length ?? 0}
           </p>
-          <SettingsIntegrationLastSynced lastSyncedAt={state.lastSync} />
+          <SettingsIntegrationLastSynced lastSyncedAt={state?.lastSync ?? null} />
         </>
       )}
       {notice && <p role="status">{notice}</p>}
