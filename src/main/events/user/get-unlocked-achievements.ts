@@ -53,6 +53,26 @@ export const getUnlockedAchievements = async (
     if (!valid()) throw new AchievementSyncCancelledError();
   };
 
+  // Ubisoft achievements are read from the connected Ubisoft account and
+  // projected into Krysta's normal achievements view. This must never write
+  // Ubisoft unlocks into Hydra, Steam or Epic achievement state.
+  if (
+    shop === "custom" &&
+    /^(?:ubi-owned-[a-f0-9]{32}|ubisoft-\d+)$/.test(objectId)
+  ) {
+    const [{ getUbisoftAchievementsForLibrary }, { presentUbisoftAchievements }] =
+      await Promise.all([
+        import("../krysta-ubisoft-account"),
+        import("@main/services/achievements/ubisoft-achievement-presentation"),
+      ]);
+    const snapshot = await getUbisoftAchievementsForLibrary(
+      objectId,
+      !useCachedData
+    );
+    assertCurrent();
+    return presentUbisoftAchievements(snapshot.items);
+  }
+
   const userPreferences = await db.get<string, UserPreferences | null>(
     levelKeys.userPreferences,
     {
@@ -239,7 +259,10 @@ export const syncAndGetUnlockedAchievements = (
   objectId: string,
   shop: GameShop
 ): Promise<UserAchievement[]> =>
-  UnlockedAchievementsCache.load(
+  shop === "custom" &&
+  /^(?:ubi-owned-[a-f0-9]{32}|ubisoft-\d+)$/.test(objectId)
+    ? getUnlockedAchievements(objectId, shop, false)
+    : UnlockedAchievementsCache.load(
     shop,
     objectId,
     captureAchievementView(shop, objectId),

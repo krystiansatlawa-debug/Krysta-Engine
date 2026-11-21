@@ -54,8 +54,8 @@ export function SettingsUbisoft() {
       if (action !== "disconnect")
         setNotice(
           pl
-            ? "Gry na koncie: " + result.games.length
-            : "Games on account: " + result.games.length
+            ? "Gry na koncie: " + result.games.length + ". Osiągnięcia pojawią się na kartach gier po ich odczytaniu."
+            : "Games on account: " + result.games.length + ". Achievements load on each game page."
         );
     } catch {
       setNotice(
@@ -148,8 +148,8 @@ export function SettingsUbisoft() {
       )}
       <small>
         {pl
-          ? "Osiągnięcia Ubisoft są odczytywane w szczegółach gry z niepublicznego interfejsu Ubisoft Connect. Funkcja może przestać działać po zmianach usługi; nie modyfikuje osiągnięć."
-          : "Ubisoft achievements are read in game details using a non-public Ubisoft Connect interface. Service changes may break this feature; it never modifies achievements."}
+          ? "Zdobyte osiągnięcia Ubisoft będą widoczne w Kryście przy grach z tego konta, także w zwykłym widoku osiągnięć. Nie są przenoszone na konta Steam ani Epic. Odczyt korzysta z niepublicznego interfejsu Ubisoft, który może ulec zmianie."
+          : "Your Ubisoft achievements will appear in Krysta for games from this account, including in the normal achievements view. They are not unlocked on Steam or Epic. Ubisoft's unofficial interface may change."}
       </small>
       <small>
         {pl

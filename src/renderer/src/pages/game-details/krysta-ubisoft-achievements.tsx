@@ -27,13 +27,25 @@ export function KrystaUbisoftAchievements({ objectId }: { objectId: string }) {
           force
         );
         if (active.current) setData(next);
-      } catch {
-        if (active.current)
+      } catch (error) {
+        if (active.current) {
+          const reason = error instanceof Error ? error.message : "";
+          const disconnected = /not connected|connect ubisoft/i.test(reason);
+          const unmatched = /no unique ubisoft game id|game not found/i.test(reason);
           setError(
-            pl
-              ? "Nie udało się odczytać osiągnięć. Sprawdź połączenie z kontem Ubisoft w ustawieniach integracji."
-              : "Could not read achievements. Check your Ubisoft account connection in integration settings."
+            disconnected
+              ? pl
+                ? "Połącz konto Ubisoft w ustawieniach integracji."
+                : "Connect your Ubisoft account in integration settings."
+              : unmatched
+                ? pl
+                  ? "Nie powiązano tej gry z kontem Ubisoft. Zsynchronizuj bibliotekę w ustawieniach integracji."
+                  : "This game is not linked to the Ubisoft account. Synchronize your Ubisoft library in integration settings."
+                : pl
+                  ? "Ubisoft nie udostępnił pełnych danych osiągnięć. Spróbuj ponownie lub sprawdź połączenie konta."
+                  : "Ubisoft did not return complete achievement data. Retry or check your account connection."
           );
+        }
       } finally {
         request.current = false;
         if (active.current) setBusy(false);
