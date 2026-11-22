@@ -22,6 +22,7 @@ import {
 } from "./screenshots/foreground-game";
 import { isWindowsWindowSource } from "./windows-game-window-match";
 import capturePage from "@resources/krysta-recording.html?asset";
+import { showRecordingNotice } from "./recording-notice";
 
 type Settings = {
   enabled: boolean;
@@ -657,9 +658,11 @@ async function startManualRecording() {
     a.manual = true;
     a.saving = true;
     lastError = "";
+    void showRecordingNotice("started");
   } catch (e) {
     lastError = String(e).slice(0, 500);
     if (current === a) end(a);
+    void showRecordingNotice("failed");
   }
 }
 async function finishManualRecording() {
@@ -675,8 +678,10 @@ async function finishManualRecording() {
     ]);
     await persist(a, result, ["Manual recording"], true);
     lastError = "";
+    void showRecordingNotice("saved");
   } catch (e) {
     lastError = String(e).slice(0, 500);
+    void showRecordingNotice("failed");
   } finally {
     a.saving = false;
     if (current === a) dispose(a);
