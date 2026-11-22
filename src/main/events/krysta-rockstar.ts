@@ -300,10 +300,38 @@ export async function scanRockstar() {
   }
   return { supported: true, installed: !!launcher, launcher, games };
 }
+// Read-only detection of Social Club achievement metadata.  The local
+// achievements.dat unlock state is encrypted/account-bound and is intentionally
+// NOT interpreted as a list of unlocked achievements.
+async function localAchievementMetadata() {
+  const documents = [
+    path.join(process.env.USERPROFILE || "", "Documents"),
+    ...(process.env.OneDrive ? [path.join(process.env.OneDrive, "Documents")] : []),
+  ].filter((p) => path.win32.isAbsolute(p));
+  const roots = documents.map((docs) =>
+    path.join(docs, "Rockstar Games", "Social Club", "Profiles")
+  );
+  let profileCount = 0;
+  let titleDirectories = 0;
+  for (const root of roots) {
+    const profiles = await fs.readdir(root, { withFileTypes: true }).catch(() => []);
+    for (const profile of profiles.slice(0, 64)) {
+      if (!profile.isDirectory()) continue;
+      profileCount++;
+      const titlesRoot = path.join(root, profile.name, "Titles");
+      const titles = await fs.readdir(titlesRoot, { withFileTypes: true }).catch(() => []);
+      titleDirectories += titles.filter((entry) => entry.isDirectory()).length;
+    }
+  }
+  return { profileCount, titleDirectories, unlockSyncAvailable: false };
+}
 let importing = false;
 let lastSync: string | null = null;
 ipcMain.handle("krysta:rockstar-scan", async () => ({
   ...(await scanRockstar()),
+  achievements: process.platform === "win32"
+    ? await localAchievementMetadata()
+    : { profileCount: 0, titleDirectories: 0, unlockSyncAvailable: false },
   lastSync,
 }));
 ipcMain.handle("krysta:rockstar-select-launcher", async () => {
@@ -317,7 +345,7 @@ ipcMain.handle("krysta:rockstar-select-launcher", async () => {
   if (!(await existingFile(path.join(folder, "Launcher.exe"))))
     throw Error("W wybranym folderze nie znaleziono Launcher.exe");
   await configuredFolders.put("launcher", folder);
-  return { ...(await scanRockstar()), lastSync };
+  return { ...(await scanRockstar()), achievements: await localAchievementMetadata(), lastSync };
 });
 ipcMain.handle("krysta:rockstar-select-game", async () => {
   if (process.platform !== "win32") throw Error("Rockstar integration requires Windows");
@@ -343,7 +371,7 @@ ipcMain.handle("krysta:rockstar-select-game", async () => {
   if (matches.length !== 1)
     throw Error("Nie rozpoznano jednoznacznie gry. Wskaż folder zawierający plik EXE konkretnej gry Rockstar.");
   await configuredFolders.put("game:" + matches[0], folder);
-  return { ...(await scanRockstar()), lastSync };
+  return { ...(await scanRockstar()), achievements: await localAchievementMetadata(), lastSync };
 });
 ipcMain.handle("krysta:rockstar-open", async () => {
   const result = await scanRockstar();
