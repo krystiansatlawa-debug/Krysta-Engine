@@ -15,6 +15,7 @@ import { KrystaGameUpdates } from "./krysta-game-updates";
 import { GameJournal } from "./game-journal";
 import { GameStoryProgress } from "./game-story-progress";
 import { KrystaUbisoftAchievements } from "./krysta-ubisoft-achievements";
+import { KrystaRockstarAchievements } from "./krysta-rockstar-achievements";
 import { KrystaGameCloud } from "./krysta-game-cloud";
 import { DescriptionHeader } from "./description-header/description-header";
 import { GallerySlider } from "./gallery-slider/gallery-slider";
@@ -138,6 +139,20 @@ export function GameDetailsContent() {
     /^(?:ubi-owned-[a-f0-9]{32}|ubisoft-\d+)$/.test(game.objectId)
       ? game
       : null);
+  const rockstarGame = (presentation?.members ?? (game ? [game] : []))
+    .map((member) => {
+      if (member.shop === "custom" && member.objectId.startsWith("rockstar-"))
+        return member.objectId.slice("rockstar-".length);
+      const title = member.title.toLowerCase();
+      if (title.includes("grand theft auto v enhanced")) return "gtav-enhanced";
+      if (title === "grand theft auto v" || title === "grand theft auto v legacy") return "gtav-legacy";
+      if (title === "red dead redemption 2") return "rdr2";
+      if (title.startsWith("grand theft auto iv")) return "gtaiv";
+      if (title === "max payne 3") return "maxpayne3";
+      if (title.startsWith("l.a. noire")) return "lanoire";
+      return null;
+    })
+    .find((id) => ["gtav-legacy", "gtav-enhanced", "rdr2", "gtaiv", "maxpayne3", "lanoire"].includes(id ?? "")) ?? null;
   const storyGame =
     presentation?.members.find(
       (member) =>
@@ -545,6 +560,9 @@ export function GameDetailsContent() {
             ...(ubisoftGame
               ? [["ubisoft-achievements", "Osiągnięcia Ubisoft", "Ubisoft achievements"]]
               : []),
+            ...(rockstarGame
+              ? [["rockstar-achievements", "Osiągnięcia Rockstar", "Rockstar achievements"]]
+              : []),
           ].map(([id, pl, en]) => (
             <button
               type="button"
@@ -576,6 +594,9 @@ export function GameDetailsContent() {
             key={ubisoftGame.objectId}
             objectId={ubisoftGame.objectId}
           />
+        )}
+        {detailTab === "rockstar-achievements" && rockstarGame && (
+          <KrystaRockstarAchievements key={rockstarGame} gameId={rockstarGame} />
         )}
         {detailTab === "updates" && (
           <KrystaGameUpdates
