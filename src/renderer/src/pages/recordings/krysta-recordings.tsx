@@ -116,11 +116,11 @@ export default function KrystaRecordings() {
         <p>
           {state?.settings.enabled
             ? pl
-              ? "Automatyczne nagrywanie osiągnięć jest włączone."
-              : "Automatic achievement recording is enabled."
+              ? "Nagrywanie włączone. Naciśnij wybrany skrót, aby rozpocząć, i ponownie, aby zatrzymać nagranie."
+              : "Recording enabled. Press the hotkey to start; press again to stop."
             : pl
-              ? "Automatyczne nagrywanie osiągnięć jest wyłączone. Włącz je w ustawieniach zrzutów ekranu."
-              : "Automatic achievement recording is disabled. Enable it in screenshot settings."}
+              ? "Nagrywanie jest wyłączone. Włącz je w ustawieniach nagrywania."
+              : "Recording is disabled. Enable it in recording settings."}
         </p>
         {state?.buffering && (
           <p role="status">
