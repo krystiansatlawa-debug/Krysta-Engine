@@ -1,318 +1,252 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { levelDBService } from "@renderer/services/leveldb.service";
-import { orderBy } from "lodash-es";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowDownIcon, BookIcon, PlayIcon } from "@primer/octicons-react";
+import Skeleton from "react-loading-skeleton";
 
-import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
-
-import { Button, GameCard, Hero } from "@renderer/components";
-import type {
-  CatalogueSearchResult,
-  DownloadSource,
-  ShopAssets,
-  Steam250Game,
-} from "@types";
-
-import flameIconStatic from "@renderer/assets/icons/flame-static.png";
-import flameIconAnimated from "@renderer/assets/icons/flame-animated.gif";
-import starsIconAnimated from "@renderer/assets/icons/stars-animated.gif";
-
-import { buildGameDetailsPath, ensureArray } from "@renderer/helpers";
-import { catalogueSearchSlice } from "@renderer/features/catalogue-search";
-import { CatalogueCategory } from "@shared";
+import { Button } from "@renderer/components";
+import { VerticalCoverCard } from "@renderer/components/vertical-cover-card/vertical-cover-card";
 import {
-  gameGenres,
-  gameTags,
-  type BrowseSelection,
-} from "./browse-categories";
+  selectGroupedLibrary,
+  selectIsLibraryLoading,
+  setHeaderTitle,
+} from "@renderer/features";
+import { buildGameDetailsPath, resolveImageSource } from "@renderer/helpers";
+import {
+  useAppDispatch,
+  useAppSelector,
+  useGameCollections,
+} from "@renderer/hooks";
+import { getVerticalCoverCardImageSources } from "@renderer/components/vertical-cover-card/vertical-cover-card-image-sources";
+import type { LibraryGame } from "@types";
+
+import {
+  findKrystaPendingPatch,
+  useKrystaPendingPatches,
+} from "../library/krysta-patch-badge";
+import { FAVORITES_COLLECTION_ID } from "../library/library-category";
 import "./home.scss";
 
-type HomeSelection =
-  | { kind: "featured"; category: CatalogueCategory }
-  | BrowseSelection;
-type HomeResults = {
-  selection: HomeSelection;
-  attempt: number;
-  games: (ShopAssets | CatalogueSearchResult)[] | null;
-};
+const shelfSize = 6;
+const timestamp = (value: Date | string | null | undefined) =>
+  value ? new Date(value).getTime() || 0 : 0;
 
-const categories = Object.values(CatalogueCategory);
-const pageSize = 12;
+function LibraryArtwork({ sources }: Readonly<{ sources: string[] }>) {
+  const [index, setIndex] = useState(0);
+  const source = sources[index];
 
-export default function Home() {
-  const { t } = useTranslation("home");
+  return source ? (
+    <img
+      className="library-home__featured-art"
+      src={source}
+      alt=""
+      onError={() => setIndex((current) => current + 1)}
+    />
+  ) : null;
+}
+
+function LibraryShelf({
+  title,
+  games,
+}: Readonly<{ title: string; games: LibraryGame[] }>) {
   const navigate = useNavigate();
-
-  const [animateFlame, setAnimateFlame] = useState(false);
-  const [randomGame, setRandomGame] = useState<Steam250Game | null>(null);
-  const [selection, setSelection] = useState<HomeSelection>({
-    kind: "featured",
-    category: CatalogueCategory.Hot,
-  });
-  const [attempt, setAttempt] = useState(0);
-  const [results, setResults] = useState<HomeResults | null>(null);
-  const currentCatalogueCategory =
-    selection.kind === "featured" ? selection.category : null;
-  const currentResults =
-    results?.selection === selection && results.attempt === attempt
-      ? results
-      : null;
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadGames = async () => {
-      try {
-        const sources = (await levelDBService.values(
-          "downloadSources"
-        )) as DownloadSource[];
-        if (cancelled) return;
-        const downloadSources = orderBy(sources, "createdAt", "desc");
-        const pagination = {
-          take: pageSize,
-          skip: 0,
-          downloadSourceIds: downloadSources.map((source) => source.id),
-        };
-
-        let games: HomeResults["games"];
-        if (selection.kind === "featured") {
-          const path = `/catalogue/${selection.category}`;
-          const response = await window.electron.hydraApi.get<ShopAssets[]>(
-            path,
-            {
-              params: pagination,
-              needsAuth: false,
-            }
-          );
-          games = ensureArray<ShopAssets>(response, path);
-        } else {
-          const path = "/catalogue/search";
-          const response = await window.electron.hydraApi.post<{
-            edges: CatalogueSearchResult[];
-          }>(path, {
-            data: {
-              ...catalogueSearchSlice.getInitialState().filters,
-              ...pagination,
-              genres: selection.kind === "genre" ? [selection.name] : [],
-              tags: selection.kind === "tag" ? [selection.id] : [],
-            },
-            needsAuth: false,
-          });
-          games = ensureArray<CatalogueSearchResult>(response?.edges, path);
-        }
-
-        if (!cancelled) setResults({ selection, attempt, games });
-      } catch {
-        if (!cancelled) setResults({ selection, attempt, games: null });
-      }
-    };
-
-    void loadGames();
-    return () => {
-      cancelled = true;
-    };
-  }, [selection, attempt]);
-
-  const getRandomGame = useCallback(() => {
-    window.electron.getRandomGame().then((game) => {
-      if (game) setRandomGame(game);
-    });
-  }, []);
-
-  const handleRandomizerClick = () => {
-    if (randomGame) {
-      navigate(
-        buildGameDetailsPath(
-          { ...randomGame, shop: "steam" },
-          {
-            fromRandomizer: "1",
-          }
-        )
-      );
-    }
-  };
-
-  const handleCategoryClick = (category: CatalogueCategory) => {
-    if (category !== currentCatalogueCategory) {
-      setSelection({ kind: "featured", category });
-    }
-  };
-
-  useEffect(() => {
-    getRandomGame();
-  }, [getRandomGame]);
-
-  const browseLabel = (name: string) =>
-    t(`browse_labels.${name}`, { defaultValue: name });
-  const renderGenre = (name: (typeof gameGenres)[number]) => {
-    const selected = selection.kind === "genre" && selection.name === name;
-    return (
-      <Button
-        key={name}
-        size="small"
-        theme={selected ? "primary" : "outline"}
-        aria-pressed={selected}
-        onClick={() => {
-          if (!selected) setSelection({ kind: "genre", name });
-        }}
-      >
-        {browseLabel(name)}
-      </Button>
-    );
-  };
-
-  const handleMouseEnterCategory = (category: CatalogueCategory) => {
-    if (category === CatalogueCategory.Hot) {
-      setAnimateFlame(true);
-    }
-  };
-
-  const handleMouseLeaveCategory = (category: CatalogueCategory) => {
-    if (category === CatalogueCategory.Hot) {
-      setAnimateFlame(false);
-    }
-  };
+  if (!games.length) return null;
 
   return (
-    <SkeletonTheme baseColor="#1c1c1c" highlightColor="#444">
-      <section className="home__content">
-        <Hero />
+    <section className="library-home__section">
+      <h2>{title}</h2>
+      <ul className="library-home__shelf">
+        {games.map((game) => (
+          <li key={game.id}>
+            <VerticalCoverCard
+              gameTitle={game.title}
+              coverImageUrls={[
+                game.customCoverImageUrl,
+                game.coverImageUrl,
+                game.libraryImageUrl,
+                game.iconUrl,
+              ].map(resolveImageSource)}
+              catalogueImages={game.images}
+              useClassicsLayout={game.shop === "launchbox"}
+              onClick={() => navigate(buildGameDetailsPath(game))}
+            />
+            <span>{game.title}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
-        <section className="home__header">
-          <ul className="home__buttons-list">
-            {categories.map((category) => (
-              <li key={category}>
+export default function Home() {
+  const { t } = useTranslation(["home", "sidebar", "game_details"]);
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+  const games = useAppSelector(selectGroupedLibrary);
+  const isLoading = useAppSelector(selectIsLibraryLoading);
+  const runningGameId = useAppSelector(
+    (state) => state.gameRunning.gameRunning?.id
+  );
+  const userId = useAppSelector((state) => state.userDetails.userDetails?.id);
+  const { collections, loadCollections } = useGameCollections();
+  const patches = useKrystaPendingPatches();
+
+  useEffect(() => {
+    dispatch(setHeaderTitle(t("home", { ns: "sidebar" })));
+  }, [dispatch, t]);
+
+  useEffect(() => {
+    if (userId) void loadCollections();
+  }, [userId, loadCollections]);
+
+  const recent = useMemo(
+    () =>
+      games
+        .filter((game) => timestamp(game.lastTimePlayed) > 0)
+        .sort(
+          (a, b) => timestamp(b.lastTimePlayed) - timestamp(a.lastTimePlayed)
+        ),
+    [games]
+  );
+  const added = useMemo(
+    () =>
+      [...games].sort(
+        (a, b) => timestamp(b.addedToLibraryAt) - timestamp(a.addedToLibraryAt)
+      ),
+    [games]
+  );
+  const favorites = useMemo(
+    () => games.filter((game) => game.favorite),
+    [games]
+  );
+  const updates = useMemo(
+    () =>
+      games
+        .flatMap((game) => {
+          const patch = findKrystaPendingPatch(game, patches);
+          return patch ? [{ game, patch }] : [];
+        })
+        .slice(0, shelfSize),
+    [games, patches]
+  );
+
+  const featured = recent[0] ?? added[0];
+  const featuredArtwork = featured
+    ? getVerticalCoverCardImageSources([
+        featured.customHeroImageUrl,
+        featured.libraryHeroImageUrl,
+        featured.libraryImageUrl,
+        featured.coverImageUrl,
+      ]).map(resolveImageSource)
+    : [];
+  const canPlayFeatured =
+    featured &&
+    featured.id !== runningGameId &&
+    (Boolean(featured.executablePath) ||
+      (featured.shop === "launchbox" && (featured.discs?.length ?? 0) > 0));
+
+  return (
+    <section className="library-home">
+      <header className="library-home__header">
+        <h1>{t("library_home")}</h1>
+        <Link className="library-home__link" to="/library">
+          <BookIcon /> {t("open_library")}
+        </Link>
+      </header>
+
+      {featured && (
+        <section className="library-home__featured">
+          <LibraryArtwork
+            key={featuredArtwork.join("\u0000")}
+            sources={featuredArtwork}
+          />
+          <div className="library-home__featured-copy">
+            <p>{t(recent.length ? "continue_playing" : "last_added")}</p>
+            <h2>{featured.title}</h2>
+            <div className="library-home__featured-actions">
+              {canPlayFeatured && (
                 <Button
-                  theme={
-                    category === currentCatalogueCategory
-                      ? "primary"
-                      : "outline"
+                  onClick={() =>
+                    navigate(buildGameDetailsPath(featured), {
+                      state: { quickPlayGameId: featured.id },
+                    })
                   }
-                  onClick={() => handleCategoryClick(category)}
-                  aria-pressed={category === currentCatalogueCategory}
-                  onMouseEnter={() => handleMouseEnterCategory(category)}
-                  onMouseLeave={() => handleMouseLeaveCategory(category)}
                 >
-                  {category === CatalogueCategory.Hot && (
-                    <div className="home__icon-wrapper">
-                      <img
-                        src={flameIconStatic}
-                        alt=""
-                        className="home__flame-icon"
-                        style={{ display: animateFlame ? "none" : "block" }}
-                      />
-                      <img
-                        src={flameIconAnimated}
-                        alt=""
-                        className="home__flame-icon"
-                        style={{ display: animateFlame ? "block" : "none" }}
-                      />
-                    </div>
-                  )}
-
-                  {t(category)}
+                  <PlayIcon /> {t("play", { ns: "game_details" })}
                 </Button>
+              )}
+              <Button
+                theme="outline"
+                onClick={() => navigate(buildGameDetailsPath(featured))}
+              >
+                {t("view_game")}
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {!featured &&
+        (isLoading ? (
+          <Skeleton className="library-home__placeholder" height={270} />
+        ) : (
+          <section className="library-home__empty">
+            <BookIcon size={28} />
+            <h2>{t("library_home_empty")}</h2>
+            <Link className="library-home__link" to="/catalogue">
+              {t("browse_games")}
+            </Link>
+          </section>
+        ))}
+
+      <LibraryShelf
+        title={t("recently_played")}
+        games={recent.slice(0, shelfSize)}
+      />
+      {updates.length > 0 && (
+        <section className="library-home__section">
+          <h2>{t("library_updates")}</h2>
+          <ul className="library-home__updates">
+            {updates.map(({ game, patch }) => (
+              <li key={game.id}>
+                <Link to={buildGameDetailsPath(game, { tab: "updates" })}>
+                  <ArrowDownIcon size={18} />
+                  <span>
+                    <strong>{game.title}</strong>
+                    <span>{patch.title}</span>
+                  </span>
+                </Link>
               </li>
             ))}
           </ul>
-
-          <Button
-            onClick={handleRandomizerClick}
-            theme="outline"
-            disabled={!randomGame}
-          >
-            <div className="home__icon-wrapper">
-              <img
-                src={starsIconAnimated}
-                alt=""
-                className="home__stars-icon"
-              />
-            </div>
-            {t("surprise_me")}
-          </Button>
         </section>
+      )}
+      <LibraryShelf
+        title={t("recently_added")}
+        games={added.slice(0, shelfSize)}
+      />
 
-        <section className="home__browse" aria-labelledby="home-browse-title">
-          <h2 id="home-browse-title">{t("browse_games")}</h2>
-          <div
-            className="home__browse-buttons"
-            aria-label={t("browse_genres")}
-            role="group"
-          >
-            {gameGenres.slice(0, 8).map(renderGenre)}
-          </div>
-          <details className="home__browse-details">
-            <summary>{t("browse_more")}</summary>
-            <h3>{t("browse_genres")}</h3>
-            <div className="home__browse-buttons">
-              {gameGenres.slice(8).map(renderGenre)}
-            </div>
-            <h3>{t("browse_tags")}</h3>
-            <div className="home__browse-buttons">
-              {gameTags.map(([id, name]) => {
-                const selected =
-                  selection.kind === "tag" && selection.id === id;
-                return (
-                  <Button
-                    key={id}
-                    size="small"
-                    theme={selected ? "primary" : "outline"}
-                    aria-pressed={selected}
-                    onClick={() => {
-                      if (!selected) setSelection({ kind: "tag", id, name });
-                    }}
-                  >
-                    {browseLabel(name)}
-                  </Button>
-                );
-              })}
-            </div>
-          </details>
-        </section>
-
-        <h2 className="home__title">
-          {currentCatalogueCategory === CatalogueCategory.Hot && (
-            <div className="home__title-icon">
-              <img
-                src={flameIconAnimated}
-                alt=""
-                className="home__title-flame-icon"
-              />
-            </div>
-          )}
-
-          {selection.kind === "featured"
-            ? t(selection.category)
-            : browseLabel(selection.name)}
-        </h2>
-
-        <section className="home__cards" aria-busy={!currentResults}>
-          {!currentResults &&
-            Array.from({ length: pageSize }).map((_, index) => (
-              <Skeleton key={index} className="home__card-skeleton" />
+      {(favorites.length > 0 || collections.length > 0) && (
+        <section className="library-home__section">
+          <h2>{t("library_collections")}</h2>
+          <ul className="library-home__collections">
+            {favorites.length > 0 && (
+              <li>
+                <Link to={`/library?collection=${FAVORITES_COLLECTION_ID}`}>
+                  {t("library_favorites")}
+                </Link>
+              </li>
+            )}
+            {collections.map(({ id, name }) => (
+              <li key={id}>
+                <Link to={`/library?collection=${encodeURIComponent(id)}`}>
+                  {name}
+                </Link>
+              </li>
             ))}
-          {currentResults?.games === null && (
-            <div className="home__no-results" role="status">
-              <p>{t("browse_load_error")}</p>
-              <Button theme="outline" onClick={() => setAttempt(attempt + 1)}>
-                {t("browse_retry")}
-              </Button>
-            </div>
-          )}
-          {currentResults?.games?.length === 0 && (
-            <p className="home__no-results" role="status">
-              {t("no_results")}
-            </p>
-          )}
-          {currentResults?.games?.map((result) => (
-            <GameCard
-              key={`${result.shop}:${result.objectId}`}
-              game={result}
-              onClick={() => navigate(buildGameDetailsPath(result))}
-            />
-          ))}
+          </ul>
         </section>
-      </section>
-    </SkeletonTheme>
+      )}
+    </section>
   );
 }

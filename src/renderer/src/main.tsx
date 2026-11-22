@@ -29,6 +29,8 @@ import * as Sentry from "@sentry/react";
 import { ErrorBoundary } from "./components/error-boundary/error-boundary";
 import { levelDBService } from "./services/leveldb.service";
 import Catalogue from "./pages/catalogue/catalogue";
+import CatalogueDiscover from "./pages/catalogue/catalogue-discover";
+import { CatalogueLayout } from "./pages/catalogue/catalogue-layout";
 import Home from "./pages/home/home";
 import Downloads from "./pages/downloads/downloads";
 import KrystaMultimedia from "./pages/multimedia/krysta-multimedia";
@@ -141,7 +143,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Routes>
                 <Route element={<App />}>
                   <Route path="/" element={<Home />} />
-                  <Route path="/catalogue" element={<Catalogue />} />
+                  <Route path="/catalogue" element={<CatalogueLayout />}>
+                    <Route index element={<CatalogueDiscover />} />
+                    <Route path="search" element={<Catalogue />} />
+                  </Route>
                   <Route path="/library" element={<Library />} />
                   <Route path="/downloads" element={<Downloads />} />
                   <Route path="/multimedia" element={<KrystaMultimedia />} />

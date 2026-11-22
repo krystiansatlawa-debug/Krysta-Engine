@@ -125,7 +125,13 @@ export function GameDetailsContent() {
     return t("no_shop_details");
   }, [shopDetails, t, game?.shop]);
 
-  const [detailTab, setDetailTab] = useState("description");
+  const initialTab =
+    searchParams.get("tab") === "updates" ? "updates" : "description";
+  const [detailTab, setDetailTab] = useState(initialTab);
+
+  useEffect(() => {
+    setDetailTab(initialTab);
+  }, [initialTab]);
   useEffect(() => {
     setDetailTab("description");
   }, [shop, objectId]);

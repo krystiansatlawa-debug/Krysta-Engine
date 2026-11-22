@@ -15,6 +15,7 @@ export const LIBRARY_SOURCES: readonly LibrarySource[] = [
 ];
 
 export const LEGACY_STEAM_LIBRARY_CATEGORY = "steam_library";
+export const FAVORITES_COLLECTION_ID = "__favorites__";
 
 export interface LibraryCategoryGame {
   shop: string;

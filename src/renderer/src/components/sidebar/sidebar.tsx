@@ -511,7 +511,9 @@ export function Sidebar() {
                   <li
                     key={nameKey}
                     className={cn("sidebar__menu-item", {
-                      "sidebar__menu-item--active": location.pathname === path,
+                      "sidebar__menu-item--active":
+                        location.pathname === path ||
+                        location.pathname.startsWith(`${path}/`),
                     })}
                   >
                     <button

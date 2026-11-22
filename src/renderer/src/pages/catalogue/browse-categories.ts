@@ -44,7 +44,3 @@ export const gameTags = [
   [1659, "Zombies"],
   [1654, "Relaxing"],
 ] as const;
-
-export type BrowseSelection =
-  | { kind: "genre"; name: (typeof gameGenres)[number] }
-  | { kind: "tag"; id: (typeof gameTags)[number][0]; name: string };
