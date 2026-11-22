@@ -1,5 +1,5 @@
 name: Krysta Release
-# Run Krysta 1.0.9 Windows regressions with isolated LevelDB test sublevels before publishing.
+# Run Krysta 1.0.9 Windows regressions with latest Rockstar account UI labels and isolated tests.
 on:
   workflow_dispatch:
   push:
