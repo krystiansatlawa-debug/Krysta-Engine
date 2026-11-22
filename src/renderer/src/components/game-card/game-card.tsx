@@ -17,7 +17,10 @@ export interface GameCardProps
     React.ButtonHTMLAttributes<HTMLButtonElement>,
     HTMLButtonElement
   > {
-  game: ShopAssets;
+  game: Pick<
+    ShopAssets,
+    "shop" | "objectId" | "title" | "libraryImageUrl" | "downloadSources"
+  >;
 }
 
 const shopIcon = {
