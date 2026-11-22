@@ -2718,6 +2718,9 @@
     "shop": "Shop"
   },
   "library": {
+    "library_game_views": "Game view",
+    "empty_library_collections": "You have no collections yet.",
+    "retry_library_collections": "Retry loading collections",
     "quick_filters": "Quick filters",
     "installed_filter": "Installed",
     "clear_collection_filter": "Remove collection filter: {{name}}",

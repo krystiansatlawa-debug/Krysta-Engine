@@ -5,10 +5,14 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { GameCollection } from "@types";
-import { useGameCollections, useLibrary, useToast } from "@renderer/hooks";
+import {
+  useGameCollections,
+  useLibrary,
+  useLibraryCollectionSelection,
+  useToast,
+} from "@renderer/hooks";
 import { getGameCollectionIds } from "@renderer/helpers";
 import {
   Button,
@@ -51,7 +55,8 @@ export interface CollectionContextMenuProviderProps {
 export function CollectionContextMenuProvider({
   children,
 }: Readonly<CollectionContextMenuProviderProps>) {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { selectedCollectionId, selectCollection } =
+    useLibraryCollectionSelection();
   const { t } = useTranslation("library");
   const { showSuccessToast, showErrorToast } = useToast();
   const { loadCollections } = useGameCollections();
@@ -72,8 +77,6 @@ export function CollectionContextMenuProvider({
   const [showDeleteCollectionModal, setShowDeleteCollectionModal] =
     useState(false);
   const [isDeletingCollection, setIsDeletingCollection] = useState(false);
-
-  const selectedCollectionId = searchParams.get("collection");
 
   const handleOpenCollectionContextMenu = useCallback(
     (event: React.MouseEvent<HTMLElement>, collection: GameCollection) => {
@@ -193,21 +196,6 @@ export function CollectionContextMenuProvider({
     setActiveCollection(null);
   }, [isDeletingCollection]);
 
-  const handleCollectionSelect = useCallback(
-    (collectionId: string | null) => {
-      const params = new URLSearchParams(searchParams);
-
-      if (collectionId) {
-        params.set("collection", collectionId);
-      } else {
-        params.delete("collection");
-      }
-
-      setSearchParams(params, { replace: true });
-    },
-    [searchParams, setSearchParams]
-  );
-
   const handleDeleteCollection = useCallback(async () => {
     if (!activeCollection) return;
 
@@ -238,7 +226,7 @@ export function CollectionContextMenuProvider({
       );
 
       if (selectedCollectionId === activeCollection.id) {
-        handleCollectionSelect(null);
+        selectCollection(null);
       }
 
       await Promise.all([loadCollections(), updateLibrary()]);
@@ -256,7 +244,7 @@ export function CollectionContextMenuProvider({
     activeCollection,
     library,
     selectedCollectionId,
-    handleCollectionSelect,
+    selectCollection,
     loadCollections,
     updateLibrary,
     showSuccessToast,

@@ -1933,6 +1933,9 @@
     "wrapped_2025": "Podsumowanie 2025"
   },
   "library": {
+    "library_game_views": "Widok gier",
+    "empty_library_collections": "Nie masz jeszcze kolekcji.",
+    "retry_library_collections": "Ponów wczytywanie kolekcji",
     "filters": "Filtry",
     "filters_active": "Aktywne filtry",
     "clear_filters": "Wyczyść filtry",

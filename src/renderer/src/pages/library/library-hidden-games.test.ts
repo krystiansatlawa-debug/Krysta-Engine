@@ -162,6 +162,11 @@ async function renderLibrary(
           library: { searchQuery: "" },
           gameRunning: { gameRunning: null },
         }),
+      LIBRARY_COLLECTION_STORAGE_KEY: "library-collection",
+      useLibraryCollectionSelection: () => ({
+        selectedCollectionId: searchParams.get("collection"),
+        selectCollection: noop,
+      }),
       useGameCollections: () => ({
         collections,
         loadCollections,
@@ -196,7 +201,6 @@ async function renderLibrary(
     "@renderer/components": {
       Button: () => null,
       ConfirmationModal: () => null,
-      CreateCollectionModal: () => null,
       GameContextMenu: () => null,
     },
     "@renderer/context": {
@@ -217,7 +221,6 @@ async function renderLibrary(
     },
     "react-router-dom": {
       useNavigate: () => noop,
-      useSearchParams: () => [searchParams, noop],
     },
     "./library-game-card": { LibraryGameCard: gameCard },
     "./library-game-card-large": { LibraryGameCardLarge: gameCard },

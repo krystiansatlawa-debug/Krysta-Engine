@@ -5,7 +5,6 @@ import {
   FilterIcon,
   HeartIcon,
   LockIcon,
-  PlusIcon,
 } from "@primer/octicons-react";
 import { useTranslation } from "react-i18next";
 import type { GameCollection } from "@types";
@@ -22,18 +21,11 @@ import "./library-toolbar-menu.scss";
 const ALL_GAMES = "";
 
 interface LibraryFiltersMenuProps {
-  collections: GameCollection[];
+  gameViews: GameCollection[];
   selectedCollectionId: string | null;
   favoritesCollectionId: string;
   hiddenCollectionId: string;
-  uncategorizedCollectionId?: string;
-  updatesCollectionId?: string;
   onCollectionSelect: (collectionId: string | null) => void;
-  onCollectionCreate: () => void;
-  onCollectionContextMenu: (
-    event: React.MouseEvent<HTMLElement>,
-    collection: GameCollection
-  ) => void;
   showSources: boolean;
   sources: readonly LibrarySource[];
   selectedSources: LibrarySource[];
@@ -62,19 +54,15 @@ const getCollectionIcon = (isFavorites: boolean, isHidden: boolean) => {
 };
 
 /**
- * Collections, libraries, consoles and "installed only" behind one button.
+ * Game views, libraries, consoles and "installed only" behind one button.
  * Picking keeps the menu open, so several filters can be set in one go.
  */
 export function LibraryFiltersMenu({
-  collections,
+  gameViews,
   selectedCollectionId,
   favoritesCollectionId,
   hiddenCollectionId,
-  uncategorizedCollectionId,
-  updatesCollectionId,
   onCollectionSelect,
-  onCollectionCreate,
-  onCollectionContextMenu,
   showSources,
   sources,
   selectedSources,
@@ -89,8 +77,11 @@ export function LibraryFiltersMenu({
   const { t } = useTranslation(["library", "sidebar"]);
   const [open, setOpen] = useCloseOnLibraryScroll();
 
+  const hasSelectedView = gameViews.some(
+    ({ id }) => id === selectedCollectionId
+  );
   const hasActiveFilters =
-    selectedCollectionId !== null ||
+    hasSelectedView ||
     (showSources && selectedSources.length > 0) ||
     (showPlatforms && selectedPlatforms.length > 0) ||
     showInstalledOnly;
@@ -98,7 +89,7 @@ export function LibraryFiltersMenu({
   const keepOpen = (event: Event) => event.preventDefault();
 
   const clearFilters = () => {
-    onCollectionSelect(null);
+    if (hasSelectedView) onCollectionSelect(null);
     onSourcesChange([]);
     onPlatformsChange([]);
     onShowInstalledOnlyChange(false);
@@ -130,18 +121,9 @@ export function LibraryFiltersMenu({
           sideOffset={LIBRARY_DROPDOWN_SIDE_OFFSET}
           collisionPadding={LIBRARY_DROPDOWN_COLLISION_PADDING}
           className="library-toolbar-menu__content"
-          onInteractOutside={(event) => {
-            // Renaming or deleting a collection from its context menu must
-            // not close the menu underneath.
-            const target = event.detail.originalEvent
-              .target as HTMLElement | null;
-            if (target?.closest(".context-menu, [data-hydra-dialog]")) {
-              event.preventDefault();
-            }
-          }}
         >
           <DropdownMenuPrimitive.Label className="library-toolbar-menu__label">
-            {t("collections")}
+            {t("library_game_views")}
           </DropdownMenuPrimitive.Label>
           <DropdownMenuPrimitive.RadioGroup
             value={selectedCollectionId ?? ALL_GAMES}
@@ -166,7 +148,7 @@ export function LibraryFiltersMenu({
               </DropdownMenuPrimitive.ItemIndicator>
             </DropdownMenuPrimitive.RadioItem>
 
-            {collections.map((collection) => {
+            {gameViews.map((collection) => {
               const isFavorites = collection.id === favoritesCollectionId;
               const isHidden = collection.id === hiddenCollectionId;
               const CollectionIcon = getCollectionIcon(isFavorites, isHidden);
@@ -176,14 +158,6 @@ export function LibraryFiltersMenu({
                   key={collection.id}
                   value={collection.id}
                   onSelect={keepOpen}
-                  onContextMenu={
-                    isFavorites ||
-                    isHidden ||
-                    collection.id === uncategorizedCollectionId ||
-                    collection.id === updatesCollectionId
-                      ? undefined
-                      : (event) => onCollectionContextMenu(event, collection)
-                  }
                   className="library-toolbar-menu__item"
                 >
                   <CollectionIcon size={16} />
@@ -203,19 +177,6 @@ export function LibraryFiltersMenu({
               );
             })}
           </DropdownMenuPrimitive.RadioGroup>
-
-          <DropdownMenuPrimitive.Item
-            onSelect={(event) => {
-              event.preventDefault();
-              onCollectionCreate();
-            }}
-            className="library-toolbar-menu__item library-toolbar-menu__item--muted"
-          >
-            <PlusIcon size={16} />
-            <span className="library-toolbar-menu__item-label">
-              {t("create_collection", { ns: "sidebar" })}
-            </span>
-          </DropdownMenuPrimitive.Item>
 
           {showSources && (
             <>
