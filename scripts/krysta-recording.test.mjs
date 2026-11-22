@@ -83,6 +83,8 @@ function fixture() {
         maxBytes: 1000,
       }),
     save: () => worker.krystaSave(),
+    manualStart: () => worker.krystaManualStart(),
+    manualFinish: () => worker.krystaManualFinish(),
     previewCount: () => previewCount,
     activeEncoders: () => activeEncoders,
     acknowledgeStop() {
@@ -157,4 +159,20 @@ test("keeps existing replay frames when saving between rotations", async () => {
   const result = await save;
   assert.equal(result.before, 4);
   assert.equal(result.duration, 9);
+});
+
+
+test("manual start and stop records until the second hotkey without an achievement", async () => {
+  const f = fixture();
+  await f.start(0);
+  await f.manualStart();
+  assert.equal(f.activeEncoders(), 1);
+  f.advanceClock(8000);
+  const finishing = f.manualFinish();
+  f.acknowledgeStop();
+  const result = await finishing;
+  assert.equal(result.before, 0);
+  assert.equal(result.duration, 8);
+  assert.equal(result.data, "Y2xpcA==");
+  assert.equal(f.activeEncoders(), 0);
 });
