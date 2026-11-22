@@ -1,9 +1,16 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink, Outlet } from "react-router-dom";
-import { SearchIcon, TelescopeIcon } from "@primer/octicons-react";
+import {
+  BookmarkIcon,
+  CalendarIcon,
+  SearchIcon,
+  TelescopeIcon,
+  TrophyIcon,
+} from "@primer/octicons-react";
 import { setHeaderTitle } from "@renderer/features";
 import { useAppDispatch } from "@renderer/hooks";
+import { CatalogueWishlistProvider } from "./catalogue-wishlist";
 import "./catalogue-discover.scss";
 
 export function CatalogueLayout() {
@@ -26,8 +33,19 @@ export function CatalogueLayout() {
         <NavLink to="/catalogue/search">
           <SearchIcon /> {t("catalogue_search")}
         </NavLink>
+        <NavLink to="/catalogue/wishlist">
+          <BookmarkIcon /> {t("catalogue_wishlist")}
+        </NavLink>
+        <NavLink to="/catalogue/top">
+          <TrophyIcon /> {t("catalogue_top")}
+        </NavLink>
+        <NavLink to="/catalogue/releases">
+          <CalendarIcon /> {t("catalogue_calendar")}
+        </NavLink>
       </nav>
-      <Outlet />
+      <CatalogueWishlistProvider>
+        <Outlet />
+      </CatalogueWishlistProvider>
     </div>
   );
 }

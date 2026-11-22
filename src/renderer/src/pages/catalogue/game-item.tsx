@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { CatalogueSearchResult } from "@types";
 import { QuestionIcon, PlusIcon, CheckIcon } from "@primer/octicons-react";
 import cn from "classnames";
+import { CatalogueWishlistButton } from "./catalogue-wishlist";
 
 const ProtonDBBadge = lazy(async () => {
   const mod = await import("./protondb-badge");
@@ -145,6 +146,7 @@ export function GameItem({ game }: GameItemProps) {
           </div>
         </div>
       </Link>
+      <CatalogueWishlistButton game={game} />
       <button
         type="button"
         className={cn("game-item__plus-wrapper", {

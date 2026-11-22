@@ -16,6 +16,7 @@ import { useAppSelector, useLibrary } from "@renderer/hooks";
 import type { CatalogueSearchResult } from "@types";
 
 import "./game-item-classics.scss";
+import { CatalogueWishlistButton } from "./catalogue-wishlist";
 
 const BADGE_GAP = 8;
 const OVERFLOW_BADGE_RESERVE = 44;
@@ -219,6 +220,7 @@ export function GameItemClassics({
           <SourceBadges sources={game.downloadSources} />
         </div>
       </Link>
+      <CatalogueWishlistButton game={game} />
 
       <button
         type="button"
