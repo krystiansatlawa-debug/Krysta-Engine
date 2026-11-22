@@ -1,0 +1,190 @@
+@use "../../scss/globals.scss";
+
+.catalogue-layout {
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+
+  &__tabs {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px globals.$page-gutter;
+    border-bottom: 1px solid globals.$border-color;
+    background: globals.$dark-background-color;
+
+    a {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      color: globals.$body-color;
+      border-radius: 8px;
+      text-decoration: none;
+
+      &:hover {
+        background: #ffffff0d;
+      }
+
+      &[aria-current="page"] {
+        background: #16b1951f;
+        color: globals.$platinum-cyan;
+      }
+
+      &:focus-visible {
+        outline: 2px solid globals.$platinum-cyan;
+        outline-offset: 2px;
+      }
+    }
+  }
+
+  > .catalogue {
+    min-height: 0;
+  }
+}
+
+.catalogue-discover {
+  width: 100%;
+  min-height: 0;
+  display: grid;
+  gap: 24px;
+  overflow-y: auto;
+  padding: globals.$page-gutter;
+
+  > .krysta-featured {
+    margin: 0;
+  }
+
+  &__heading,
+  &__status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  &__browse {
+    display: grid;
+    gap: 12px;
+    border: 1px solid globals.$border-color;
+    border-radius: 12px;
+    padding: 16px;
+    background: linear-gradient(120deg, #16b1950c, globals.$background-color);
+  }
+
+  &__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  &__more {
+    summary {
+      width: fit-content;
+      padding: 4px 0;
+      color: globals.$body-color;
+      cursor: pointer;
+    }
+
+    h3 {
+      margin: 12px 0 8px;
+      font-size: globals.$body-font-size;
+    }
+  }
+
+  &__all-tags {
+    margin-top: 8px;
+    padding: 10px 12px;
+    border: 1px solid globals.$border-color;
+    border-radius: 8px;
+    background: globals.$dark-background-color;
+
+    > summary {
+      font-weight: 600;
+    }
+
+    > p {
+      margin-top: 8px;
+    }
+  }
+
+  &__tag-directory {
+    display: grid;
+    justify-items: start;
+    gap: 12px;
+    margin-top: 8px;
+
+    label {
+      display: grid;
+      gap: 6px;
+      width: min(100%, 360px);
+      color: globals.$body-color;
+      font-size: globals.$small-font-size;
+    }
+
+    input {
+      width: 100%;
+      min-height: 36px;
+      padding: 8px 12px;
+      color: globals.$muted-color;
+      background: globals.$background-color;
+      border: 1px solid globals.$border-color;
+      border-radius: 6px;
+      font: inherit;
+    }
+  }
+
+  &__shelf {
+    display: grid;
+    gap: 12px;
+  }
+
+  &__games {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+
+    @include globals.page-min-width(670px) {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    @include globals.page-min-width(1380px) {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .game-card,
+    .catalogue-discover__placeholder {
+      height: auto;
+      min-height: 140px;
+      aspect-ratio: 16 / 10;
+      border-radius: 10px;
+    }
+
+    .game-card__title {
+      overflow-wrap: anywhere;
+    }
+
+    .game-card:focus-visible .game-card__content {
+      transform: translateY(0);
+    }
+  }
+
+  :is(button, summary, input):focus-visible {
+    outline: 2px solid globals.$platinum-cyan;
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :is(.game-card, .game-card__content, .game-card__cover) {
+      transition: none;
+    }
+
+    .game-card:hover .game-card__cover {
+      transform: none;
+    }
+  }
+}

@@ -1,4 +1,11 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { SearchIcon, XIcon } from "@primer/octicons-react";
@@ -12,7 +19,12 @@ import {
   useSearchSuggestions,
 } from "@renderer/hooks";
 import type { SuggestionShop } from "@renderer/hooks/use-search-suggestions";
-import { setFilters, setLibrarySearchQuery } from "@renderer/features";
+import {
+  clearFilters,
+  setFilters,
+  setLibrarySearchQuery,
+  setMode,
+} from "@renderer/features";
 import { buildGameDetailsPath } from "@renderer/helpers";
 import type { GameShop } from "@types";
 
@@ -35,6 +47,8 @@ export function TitleBarSearch() {
 
   const isOnLibraryPage = location.pathname.startsWith("/library");
   const isOnCataloguePage = location.pathname.startsWith("/catalogue");
+  const isOnCatalogueResults = location.pathname === "/catalogue/search";
+  const isOnCatalogueDiscovery = isOnCataloguePage && !isOnCatalogueResults;
 
   const catalogueSearchValue = useAppSelector(
     (state) => state.catalogueSearch.filters.title
@@ -45,7 +59,9 @@ export function TitleBarSearch() {
 
   const searchValue = isOnLibraryPage
     ? librarySearchValue
-    : catalogueSearchValue;
+    : isOnCatalogueDiscovery
+      ? ""
+      : catalogueSearchValue;
 
   const [localSearchValue, setLocalSearchValue] = useState(searchValue);
   const deferredSearchValue = useDeferredValue(localSearchValue);
@@ -65,12 +81,26 @@ export function TitleBarSearch() {
     [dispatch]
   );
 
+  const applyCatalogueQuery = useCallback(
+    (title: string) => {
+      if (isOnCatalogueDiscovery && title.trim()) {
+        dispatch(setMode("modern"));
+        dispatch(clearFilters());
+      }
+      dispatch(setFilters({ title }));
+    },
+    [dispatch, isOnCatalogueDiscovery]
+  );
+
   const debouncedCatalogueSearch = useMemo(
     () =>
       debounce((value: string) => {
-        dispatch(setFilters({ title: value }));
+        applyCatalogueQuery(value);
+        if (isOnCatalogueDiscovery && value.trim()) {
+          navigate("/catalogue/search");
+        }
       }, 250),
-    [dispatch]
+    [applyCatalogueQuery, isOnCatalogueDiscovery, navigate]
   );
 
   const { addToHistory, removeFromHistory, clearHistory, getRecentHistory } =
@@ -146,7 +176,7 @@ export function TitleBarSearch() {
     if (isOnLibraryPage) {
       dispatch(setLibrarySearchQuery(query));
     } else {
-      dispatch(setFilters({ title: query }));
+      applyCatalogueQuery(query);
     }
     setActiveIndex(-1);
   };
@@ -174,8 +204,8 @@ export function TitleBarSearch() {
     }
     applySearch(query);
 
-    if (!isOnLibraryPage && !isOnCataloguePage) {
-      navigate("/catalogue");
+    if (!isOnLibraryPage && !isOnCatalogueResults) {
+      navigate("/catalogue/search");
     }
 
     setIsDropdownVisible(false);

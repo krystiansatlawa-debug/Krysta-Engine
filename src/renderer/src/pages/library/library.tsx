@@ -103,6 +103,7 @@ import {
 } from "./library-grid-layout";
 import { createLibraryDragAutoscroll } from "./library-drag-autoscroll";
 import {
+  FAVORITES_COLLECTION_ID,
   categoryShowsPlatforms,
   categoryShowsSources,
   filterLibraryGames,
@@ -125,7 +126,6 @@ import {
   findKrystaPendingPatch,
 } from "./krysta-patch-badge";
 
-const FAVORITES_COLLECTION_ID = "__favorites__";
 const HIDDEN_COLLECTION_ID = "__hidden__";
 const UNCATEGORIZED_COLLECTION_ID = "__uncategorized__";
 const UPDATES_COLLECTION_ID = "__krysta_updates__";

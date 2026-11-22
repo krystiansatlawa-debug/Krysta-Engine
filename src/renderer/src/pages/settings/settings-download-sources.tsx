@@ -185,7 +185,7 @@ export function SettingsDownloadSources() {
     dispatch(clearFilters());
     dispatch(setFilters({ downloadSourceFingerprints: [fingerprint] }));
 
-    navigate("/catalogue");
+    navigate("/catalogue/search");
   };
 
   return (
