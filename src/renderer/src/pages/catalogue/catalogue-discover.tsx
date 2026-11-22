@@ -20,6 +20,7 @@ import type {
 } from "@types";
 
 import { CatalogueCategories } from "./catalogue-categories";
+import { CatalogueWishlistButton } from "./catalogue-wishlist";
 
 const newest = { sortBy: "releaseDate", sortOrder: "desc" } as const;
 const shelves = [
@@ -194,11 +195,16 @@ export default function CatalogueDiscover() {
             <div className="catalogue-discover__games">
               {games
                 ? games.map((game) => (
-                    <GameCard
+                    <div
+                      className="catalogue-discover__game"
                       key={`${game.shop}:${game.objectId}`}
-                      game={game}
-                      onClick={() => navigate(buildGameDetailsPath(game))}
-                    />
+                    >
+                      <GameCard
+                        game={game}
+                        onClick={() => navigate(buildGameDetailsPath(game))}
+                      />
+                      <CatalogueWishlistButton game={game} />
+                    </div>
                   ))
                 : Array.from({ length: shelfSize }, (_, index) => (
                     <Skeleton
