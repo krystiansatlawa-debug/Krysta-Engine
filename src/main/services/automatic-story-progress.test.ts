@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 import { setImmediate } from "node:timers/promises";
 import vm from "node:vm";
@@ -7,6 +10,7 @@ import ts from "typescript";
 import type { Game } from "@types";
 import * as runningState from "./game-running-state.js";
 import * as saveParser from "./story-progress-save.js";
+import { discoverSelectedStorySaveFiles } from "./story-progress-metadata.js";
 import { levelKeys } from "../level/sublevels/keys.js";
 import { getGameCatalogueIdentity } from "../../shared/library-catalogue.js";
 
@@ -56,7 +60,7 @@ test("captures unknown saves after a session and serializes scans across the lib
   const exported = {} as typeof import("./automatic-story-progress.js");
   const deps: Record<string, unknown> = {
     electron: {},
-    "node:path": {},
+    "node:path": { default: path },
     "@main/level": {
       db: {
         sublevel: (name: string) => {
@@ -99,7 +103,7 @@ test("captures unknown saves after a session and serializes scans across the lib
       },
     },
     "./story-progress-metadata.js": {
-      discoverSelectedStorySaveFiles: async () => [],
+      discoverSelectedStorySaveFiles,
     },
     "./logger": {
       logger: { error: assert.fail, debug: assert.fail },
@@ -174,7 +178,11 @@ test("captures unknown saves after a session and serializes scans across the lib
   const countScans = (id: string) =>
     scans.filter(({ objectId }) => objectId === id).length;
   const expectNewScan = async (id: string, previousCount: number) => {
-    for (let attempt = 0; attempt < 12 && countScans(id) <= previousCount; attempt++) {
+    for (
+      let attempt = 0;
+      attempt < 12 && countScans(id) <= previousCount;
+      attempt++
+    ) {
       exported.refreshQueuedStoryProgress();
       await setImmediate();
     }
@@ -184,7 +192,10 @@ test("captures unknown saves after a session and serializes scans across the lib
   // A refresh already running for the same catalogue game is reused by
   // getAutomaticStoryProgress rather than starting a duplicate disk scan.
   // Check that the in-flight refresh resolves with the saved result.
-  const linkedResult = await exported.getAutomaticStoryProgress(catalogue, true);
+  const linkedResult = await exported.getAutomaticStoryProgress(
+    catalogue,
+    true
+  );
   assert.equal(linkedResult.automaticStatus, "save-found");
   assert.equal(linkedResult.lastSaveAt, 123456);
   assert.ok(countScans(linked.objectId) >= 1);
@@ -192,4 +203,27 @@ test("captures unknown saves after a session and serializes scans across the lib
   const priorEmulator = countScans(portId);
   await exported.getAutomaticStoryProgress(emulator, true);
   await expectNewScan(portId, priorEmulator);
+
+  // A manifest can find a save without story fields while Epic knows a
+  // separate save directory with usable metadata.
+  const epicFolder = await mkdtemp(path.join(tmpdir(), "krysta-epic-story-"));
+  t.after(() => rm(epicFolder, { recursive: true, force: true }));
+  await writeFile(
+    path.join(epicFolder, "checkpoint.save"),
+    '{"campaign":{"currentChapter":"The Crossing"}}'
+  );
+  const epic: Game = {
+    ...game("epic-story"),
+    shop: "epic",
+    epicInstallation: {
+      owner: { environment: "test", userId: "local", epicAccountId: "local" },
+      artifactId: "test-artifact",
+      platform: "Windows",
+      savePath: epicFolder,
+    },
+  };
+  const epicResult = await exported.getAutomaticStoryProgress(epic, true);
+  assert.equal(epicResult.automaticStatus, "ready");
+  assert.equal(epicResult.automatic?.saveTitle, "The Crossing");
+  assert.equal(epicResult.automatic?.percent, null);
 });

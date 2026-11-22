@@ -376,6 +376,7 @@
     "story_progress_story_completion": "Ukończenie fabuły",
     "story_progress_percent_missing": "Brak procentu ukończenia w zapisie.",
     "story_progress_save_title": "Tytuł ostatniego zapisu",
+    "story_progress_current_chapter": "Rozdział w ostatnim zapisie",
     "story_progress_tracked_quest": "Śledzone zadanie w ostatnim zapisie",
     "story_progress_quest_id": "Identyfikator zadania w ostatnim zapisie",
     "story_progress_manual_entry": "Własny wpis",

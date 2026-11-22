@@ -101,8 +101,7 @@ export async function readHydraStorySave(
     provider ||
     port ||
     nativeResult.status === "ready" ||
-    nativeResult.status === "waiting" ||
-    (!source && nativeResult.status === "save-found")
+    nativeResult.status === "waiting"
   )
     return nativeResult;
 
@@ -121,5 +120,11 @@ export async function readHydraStorySave(
   const match =
     games[game.objectId] ?? (matches.length === 1 ? matches[0] : null);
   const legacyResult = await parseFiles(Object.keys(match?.files ?? {}));
-  return legacyResult.status === "not-found" ? nativeResult : legacyResult;
+  if (
+    legacyResult.status === "ready" ||
+    legacyResult.status === "waiting" ||
+    nativeResult.status === "not-found"
+  )
+    return legacyResult;
+  return nativeResult;
 }

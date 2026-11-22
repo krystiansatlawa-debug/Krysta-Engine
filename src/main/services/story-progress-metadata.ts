@@ -1,15 +1,18 @@
 import { lstat, open, readdir } from "node:fs/promises";
 import path from "node:path";
+import { gunzipSync } from "node:zlib";
+import { SaxesParser } from "saxes";
 import type { AutomaticGameStoryProgress } from "@types";
 
 type MetadataProgress = Omit<AutomaticGameStoryProgress, "savedAt">;
 type Candidate = { file: string; savedAt: number };
 
-const MAX_METADATA_BYTES = 96 * 1024;
+const MAX_METADATA_BYTES = 512 * 1024;
 const MAX_METADATA_FILES = 96;
 const MAX_FOLDER_ENTRIES = 500;
-const METADATA_EXTENSION = /\.(?:json|ini|xml)$/i;
-const SAVE_FILE_EXTENSION = /\.(?:sav|save|json|ini|xml|dat|bin|srm|sra|state|dsv|gci|mcr|ps2)$/i;
+const METADATA_EXTENSION = /\.(?:json|ini|xml|sav|save|dat|bin|gz)$/i;
+const SAVE_FILE_EXTENSION =
+  /\.(?:sav|save|json|ini|xml|dat|bin|srm|sra|state|dsv|gci|mcr|ps2|gz)$/i;
 const ROCKSTAR_SLOT = /^(?:SGTA5|SRDR3)\d{4}$/i;
 
 const normalizeKey = (key: string) =>
@@ -50,6 +53,18 @@ const trackedMissionKeys = new Set([
   "mainquestname",
   "mainmissionname",
 ]);
+const explicitChapterKeys = new Set([
+  "currentstorychapter",
+  "currentcampaignchapter",
+  "storychaptername",
+  "campaignchaptername",
+]);
+const scopedTitleKeys = new Set([
+  "currentchapter",
+  "currentchaptername",
+  "chaptername",
+  "chaptertitle",
+]);
 const missionDescriptionKeys = new Set([
   "missiondescription",
   "missionsummary",
@@ -64,7 +79,8 @@ function percentage(value: unknown): number | null {
   const number =
     typeof value === "number"
       ? value
-      : typeof value === "string" && /^\s*\d{1,3}(?:[.,]\d{1,2})?\s*%?\s*$/.test(value)
+      : typeof value === "string" &&
+          /^\s*\d{1,3}(?:[.,]\d{1,2})?\s*%?\s*$/.test(value)
         ? Number(value.trim().replace("%", "").replace(",", "."))
         : NaN;
   return Number.isFinite(number) && number >= 0 && number <= 100
@@ -76,10 +92,43 @@ function safeText(value: unknown, maxLength: number): string {
   if (
     typeof value !== "string" ||
     value.length > maxLength ||
-    /[\u0000-\u001f\u007f\ufffd]/u.test(value)
+    [...value].some(
+      (ch) => ch.charCodeAt(0) < 32 || ch === "\u007f" || ch === "\ufffd"
+    )
   )
     return "";
   return value.trim();
+}
+
+function parseXml(input: string): Record<string, unknown> {
+  const root: Record<string, unknown> = Object.create(null);
+  const stack = [{ fields: root, text: "" }];
+  const parser = new SaxesParser();
+  parser.on("doctype", () => {
+    throw new Error("Unexpected document type in a save file");
+  });
+  parser.on("opentag", () => {
+    if (stack.length > 20)
+      throw new Error("Save metadata is nested too deeply");
+    stack.push({ fields: Object.create(null), text: "" });
+  });
+  const appendText = (text: string) => {
+    stack[stack.length - 1].text += text;
+  };
+  parser.on("text", appendText);
+  parser.on("cdata", appendText);
+  parser.on("closetag", ({ name }) => {
+    const { fields, text } = stack.pop()!;
+    const parent = stack[stack.length - 1].fields;
+    // Repeated nodes can describe different slots or quests. Do not combine them.
+    parent[name] = Object.hasOwn(parent, name)
+      ? []
+      : Object.keys(fields).length
+        ? fields
+        : text.trim();
+  });
+  parser.write(input).close();
+  return root;
 }
 
 /**
@@ -94,25 +143,20 @@ export function parseGenericStoryMetadata(
   let data: unknown;
   try {
     if (format === "json") data = JSON.parse(input.replace(/^\uFEFF/, ""));
+    else if (format === "xml") data = parseXml(input);
     else {
-      const record: Record<string, unknown> = {};
-      if (format === "ini") {
-        let section: Record<string, unknown> = record;
-        for (const line of input.split(/\r?\n/)) {
-          const heading = /^\s*\[([^\]]{1,64})\]\s*$/.exec(line);
-          if (heading) {
-            section = {};
-            record[heading[1]] = section;
-            continue;
-          }
-          const match = /^\s*([A-Za-z][A-Za-z0-9_ -]{0,63})\s*=\s*(.{0,500})\s*$/.exec(line);
-          if (match) section[match[1]] = match[2].trim();
+      const record: Record<string, unknown> = Object.create(null);
+      let section = record;
+      for (const line of input.split(/\r?\n/)) {
+        const heading = /^\s*\[([^\]]{1,64})\]\s*$/.exec(line);
+        if (heading) {
+          section = Object.create(null);
+          record[heading[1]] = section;
+          continue;
         }
-      } else {
-        const elements = /<([a-z][\w-]{0,63})>([^<>]{1,500})<\/\1>/gi;
-        for (const match of input.matchAll(elements)) {
-          record[match[1]] = match[2].trim();
-        }
+        const match =
+          /^\s*([A-Za-z][A-Za-z0-9_ -]{0,63})\s*=\s*(.{0,500})\s*$/.exec(line);
+        if (match) section[match[1]] = match[2].trim();
       }
       data = record;
     }
@@ -123,6 +167,7 @@ export function parseGenericStoryMetadata(
 
   let percent: number | null = null;
   let saveTitle = "";
+  let chapter = "";
   let description = "";
   let visited = 0;
 
@@ -139,10 +184,14 @@ export function parseGenericStoryMetadata(
     for (const [rawKey, value] of Object.entries(node)) {
       const key = normalizeKey(rawKey);
       const relatedToStory = ancestors.some((part) =>
-        /^(?:story|mainstory|campaign|mainquest|mainmission|storyprogress|storydata|questprogress)$/.test(part)
+        /^(?:story|mainstory|campaign|mainquest|mainmission|storyprogress|storydata|questprogress)$/.test(
+          part
+        )
       );
       const unrelated = ancestors.some((part) =>
-        /^(?:achievements?|skills?|inventory|statistics|settings|config|graphics)$/.test(part)
+        /^(?:achievements?|skills?|inventory|stats|statistics|settings|config|graphics|sidequests?|sidemissions?|multiplayer|lobbies|online)$/.test(
+          part
+        )
       );
       if (unrelated) continue;
 
@@ -156,6 +205,13 @@ export function parseGenericStoryMetadata(
       if (!saveTitle && trackedMissionKeys.has(key)) {
         saveTitle = safeText(value, 160);
       }
+      if (
+        !chapter &&
+        (explicitChapterKeys.has(key) ||
+          (relatedToStory && scopedTitleKeys.has(key)))
+      ) {
+        chapter = safeText(value, 160);
+      }
       if (!description && missionDescriptionKeys.has(key)) {
         description = safeText(value, 500);
       }
@@ -166,10 +222,11 @@ export function parseGenericStoryMetadata(
   };
 
   walk(data, [], 0);
-  if (percent === null && !saveTitle) return null;
+  if (percent === null && !saveTitle && !chapter) return null;
   return {
     percent,
-    saveTitle,
+    saveTitle: saveTitle || chapter,
+    ...(!saveTitle && chapter && { saveTitleKind: "chapter" as const }),
     ...(percent !== null && { progressKind: "story" as const }),
     ...(description && { missionDescription: description }),
   };
@@ -177,16 +234,34 @@ export function parseGenericStoryMetadata(
 
 async function readMetadataFile(file: string, savedAt: number) {
   const ext = path.extname(file).slice(1).toLowerCase();
-  if (ext !== "json" && ext !== "ini" && ext !== "xml") return null;
 
   const handle = await open(file, "r");
   try {
     const buffer = Buffer.alloc(MAX_METADATA_BYTES + 1);
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
     if (bytesRead > MAX_METADATA_BYTES || bytesRead === 0) return null;
-    const text = buffer.subarray(0, bytesRead).toString("utf8");
-    if (text.includes("\ufffd")) return null;
-    const progress = parseGenericStoryMetadata(text, ext);
+    let bytes: Buffer = buffer.subarray(0, bytesRead);
+    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+      bytes = gunzipSync(bytes, { maxOutputLength: MAX_METADATA_BYTES });
+    }
+    const encoding =
+      bytes[0] === 0xff && bytes[1] === 0xfe
+        ? "utf-16le"
+        : bytes[0] === 0xfe && bytes[1] === 0xff
+          ? "utf-16be"
+          : "utf-8";
+    const text = new TextDecoder(encoding, { fatal: true })
+      .decode(bytes)
+      .trimStart();
+    const format = text.startsWith("{")
+      ? "json"
+      : text.startsWith("<")
+        ? "xml"
+        : ext === "ini" || /^\[[A-Za-z][^\]\r\n]{0,63}\]/.test(text)
+          ? "ini"
+          : null;
+    if (!format) return null;
+    const progress = parseGenericStoryMetadata(text, format);
     return progress ? { ...progress, savedAt } : null;
   } finally {
     await handle.close();
@@ -248,8 +323,7 @@ export async function discoverSelectedStorySaveFiles(
         directories.push({ folder: file, depth: next.depth + 1 });
       } else if (
         entry.isFile() &&
-        (SAVE_FILE_EXTENSION.test(entry.name) ||
-          ROCKSTAR_SLOT.test(entry.name))
+        (SAVE_FILE_EXTENSION.test(entry.name) || ROCKSTAR_SLOT.test(entry.name))
       ) {
         files.push(file);
       }

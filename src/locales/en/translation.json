@@ -335,6 +335,7 @@
     "story_progress_story_completion": "Story completion",
     "story_progress_percent_missing": "The save provides no completion percentage.",
     "story_progress_save_title": "Latest save title",
+    "story_progress_current_chapter": "Chapter in the latest save",
     "story_progress_tracked_quest": "Tracked quest in the latest save",
     "story_progress_quest_id": "Quest identifier in the latest save",
     "story_progress_manual_entry": "Your entry",

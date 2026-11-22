@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { gzipSync } from "node:zlib";
 
 import {
   discoverSelectedStorySaveFiles,
@@ -133,4 +134,75 @@ test("finds game saves in selected folders without following symbolic links", as
   const current = await readGenericStoryMetadataFiles(files, () => true);
   assert.equal(current?.percent, 25);
   assert.equal(current?.progressKind, "story");
+});
+
+test("reads scoped XML campaign fields and ignores unrelated nodes", () => {
+  assert.deepEqual(
+    parseGenericStoryMetadata(
+      "<save><settings><currentQuest>Ignore this</currentQuest></settings><campaign><percent>67</percent><currentChapter>Fire &amp; Ice</currentChapter></campaign></save>",
+      "xml"
+    ),
+    {
+      percent: 67,
+      saveTitle: "Fire & Ice",
+      saveTitleKind: "chapter",
+      progressKind: "story",
+    }
+  );
+  assert.equal(
+    parseGenericStoryMetadata(
+      "<save><stats><percent>97</percent></stats></save>",
+      "xml"
+    ),
+    null
+  );
+  assert.equal(
+    parseGenericStoryMetadata(
+      "<!DOCTYPE save><save><storyProgress>67</storyProgress></save>",
+      "xml"
+    ),
+    null
+  );
+  assert.equal(
+    parseGenericStoryMetadata(
+      "<save><campaign><percent>67</percent></save>",
+      "xml"
+    ),
+    null
+  );
+});
+
+test("detects gzip and UTF-16 story metadata in save slots by their contents", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "krysta-story-encoded-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const compressed = path.join(root, "slot.save");
+  const utf16 = path.join(root, "checkpoint.dat");
+  const oversized = path.join(root, "oversized.sav");
+  await writeFile(
+    compressed,
+    gzipSync('{"campaign":{"currentChapter":"Rozdział drugi"}}')
+  );
+  await writeFile(
+    utf16,
+    Buffer.from('\ufeff{"campaignProgressPercent":42}', "utf16le")
+  );
+  await writeFile(oversized, gzipSync(Buffer.alloc(1024 * 1024, 65)));
+  const files = await discoverSelectedStorySaveFiles(root, () => true);
+  assert.deepEqual(files.sort(), [utf16, oversized, compressed]);
+  const chapter = await readDiscoveredStorySave(
+    [compressed],
+    undefined,
+    () => true
+  );
+  assert.equal(chapter.automatic?.saveTitle, "Rozdział drugi");
+  assert.equal(chapter.automatic?.percent, null);
+  assert.equal(chapter.automatic?.saveTitleKind, "chapter");
+  assert.equal(
+    (await readGenericStoryMetadataFiles([utf16], () => true))?.percent,
+    42
+  );
+  assert.equal(
+    await readGenericStoryMetadataFiles([oversized], () => true),
+    null
+  );
 });

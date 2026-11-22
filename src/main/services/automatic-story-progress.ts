@@ -40,12 +40,9 @@ const snapshots = db.sublevel<
   string,
   AutomaticGameStoryProgress | CompletedScan
 >("automatic-story-progress", { valueEncoding: "json" });
-const customFolders = db.sublevel<string, string>(
-  "story-save-folders",
-  {
-    valueEncoding: "json",
-  }
-);
+const customFolders = db.sublevel<string, string>("story-save-folders", {
+  valueEncoding: "json",
+});
 const queued = new Map<string, PendingScan>();
 let activeScan: { key: string; result: Promise<CompletedScan> } | undefined;
 const canRead = () => !hasTrackedGamesRunning();
@@ -161,12 +158,11 @@ async function readAutomaticSave(
       canContinue,
       controller.signal
     );
-    // Epic can provide a verified save directory even when the game has no
-    // dedicated story parser or Ludusavi manifest entry.
+    // Epic can supply extra save files when the manifest found no story metadata.
     const epicSavePath = game.epicInstallation?.savePath;
     if (
-      !source &&
-      detected.status === "not-found" &&
+      detected.status !== "ready" &&
+      detected.status !== "waiting" &&
       epicSavePath &&
       path.isAbsolute(epicSavePath) &&
       canContinue()
@@ -177,10 +173,15 @@ async function readAutomaticSave(
       );
       const epicResult = await readDiscoveredStorySave(
         files,
-        undefined,
+        source,
         canContinue
       );
-      if (epicResult.status !== "not-found") return epicResult;
+      if (
+        epicResult.status === "ready" ||
+        epicResult.status === "waiting" ||
+        (detected.status === "not-found" && epicResult.status !== "not-found")
+      )
+        return epicResult;
     }
     if (!source || detected.status === "ready" || detected.status === "waiting")
       return detected;

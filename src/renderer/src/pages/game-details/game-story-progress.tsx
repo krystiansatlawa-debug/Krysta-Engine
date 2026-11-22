@@ -265,9 +265,10 @@ export function GameStoryProgress({
                           {t(
                             automatic.trackedQuestId
                               ? "story_progress_quest_id"
-                              : automatic.progressKind === "story"
-                                ? "story_progress_tracked_quest"
-                                : automatic.percent === null
+                              : automatic.saveTitleKind === "chapter"
+                                ? "story_progress_current_chapter"
+                                : automatic.progressKind === "story" ||
+                                    automatic.percent === null
                                   ? "story_progress_tracked_quest"
                                   : "story_progress_save_title"
                           )}
