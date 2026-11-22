@@ -86,7 +86,7 @@ export function GameItem({ game }: GameItemProps) {
         <img
           className="game-item__cover"
           src={game.libraryImageUrl}
-          alt={game.title}
+          alt=""
           width={200}
           height={103}
           loading="lazy"
@@ -99,7 +99,7 @@ export function GameItem({ game }: GameItemProps) {
         <QuestionIcon size={28} />
       </div>
     );
-  }, [game.libraryImageUrl, game.title]);
+  }, [game.libraryImageUrl]);
 
   const rawProtonValue =
     game.tier ??
@@ -145,6 +145,14 @@ export function GameItem({ game }: GameItemProps) {
             ))}
           </div>
         </div>
+        {game.releaseYear != null && (
+          <span
+            className="game-item__year"
+            title={t("store_release_year", { ns: "catalogue" })}
+          >
+            {game.releaseYear}
+          </span>
+        )}
       </Link>
       <CatalogueWishlistButton game={game} />
       <button

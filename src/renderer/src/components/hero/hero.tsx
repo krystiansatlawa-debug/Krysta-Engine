@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import type { TrendingGame } from "@types";
 import { useTranslation } from "react-i18next";
+import { ChevronLeftIcon, ChevronRightIcon } from "@primer/octicons-react";
 import Skeleton from "react-loading-skeleton";
 import { ensureArray } from "@renderer/helpers";
 import "./hero.scss";
@@ -13,7 +14,7 @@ const reducedMotionQuery = "(prefers-reduced-motion: reduce)";
 const featuredCache = new Map<string, TrendingGame[]>();
 
 export function Hero() {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation("catalogue");
   const [active, setActive] = useState(0);
   const polish = i18n.language.startsWith("pl");
   const language = i18n.language.split("-")[0];
@@ -147,7 +148,7 @@ export function Hero() {
           <div className="hero__backdrop" key={game.uri}>
             <img
               src={game.libraryHeroImageUrl ?? undefined}
-              alt={game.description ?? ""}
+              alt=""
               className="hero__media"
             />
 
@@ -155,13 +156,17 @@ export function Hero() {
               <span className="krysta-featured__badge">
                 {polish ? "Polecana gra" : "Featured game"}
               </span>
-              <img
-                src={game.logoImageUrl ?? undefined}
-                width="250px"
-                alt={game.description ?? ""}
-                loading="eager"
-                className="hero__logo"
-              />
+              {game.logoImageUrl ? (
+                <img
+                  src={game.logoImageUrl}
+                  width={250}
+                  alt={game.title}
+                  loading="eager"
+                  className="hero__logo"
+                />
+              ) : (
+                <strong className="hero__title">{game.title}</strong>
+              )}
               <p className="hero__description">{game.description}</p>
               <span className="krysta-featured__cta">
                 {polish ? "Szczegóły →" : "Details →"}
@@ -171,6 +176,16 @@ export function Hero() {
         </button>
         {slideCount > 1 && (
           <div className="krysta-featured__controls">
+            <button
+              type="button"
+              className="krysta-featured__playback"
+              aria-label={t("store_previous_featured")}
+              onClick={() =>
+                setActive((currentIndex + slideCount - 1) % slideCount)
+              }
+            >
+              <ChevronLeftIcon />
+            </button>
             <div className="krysta-featured__dots">
               {featuredGames.map((item, index) => (
                 <button
@@ -186,6 +201,14 @@ export function Hero() {
                 />
               ))}
             </div>
+            <button
+              type="button"
+              className="krysta-featured__playback"
+              aria-label={t("store_next_featured")}
+              onClick={() => setActive((currentIndex + 1) % slideCount)}
+            >
+              <ChevronRightIcon />
+            </button>
             <button
               type="button"
               className="krysta-featured__playback"

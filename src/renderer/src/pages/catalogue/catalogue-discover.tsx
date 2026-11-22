@@ -42,6 +42,9 @@ export default function CatalogueDiscover() {
   const mode = useAppSelector((state) => state.catalogueSearch.mode);
   const [results, setResults] = useState<ShelfResults>({});
   const [attempt, setAttempt] = useState(0);
+  const [activeShelf, setActiveShelf] = useState<ShelfId>(
+    CatalogueCategory.Hot
+  );
   const [randomGame, setRandomGame] = useState<Steam250Game | null>(null);
 
   useEffect(() => {
@@ -122,7 +125,7 @@ export default function CatalogueDiscover() {
     navigate("/catalogue/search");
   };
 
-  const hasError = Object.values(results).some((games) => games === null);
+  const games = results[activeShelf];
 
   return (
     <section className="catalogue-discover">
@@ -154,68 +157,77 @@ export default function CatalogueDiscover() {
         />
       </section>
 
-      {hasError && (
-        <div className="catalogue-discover__status" role="status">
-          <p>{t("browse_load_error")}</p>
+      <section
+        className="catalogue-discover__shelf"
+        aria-busy={games === undefined}
+      >
+        <div className="catalogue-discover__shelf-picker">
+          {shelves.map(({ id, label }) => (
+            <button
+              type="button"
+              key={id}
+              aria-pressed={activeShelf === id}
+              onClick={() => setActiveShelf(id)}
+            >
+              {t(label)}
+            </button>
+          ))}
+        </div>
+
+        {games === null ? (
+          <div className="catalogue-discover__status" role="status">
+            <p>{t("browse_load_error")}</p>
+            <Button
+              theme="outline"
+              size="small"
+              onClick={() => {
+                setResults((current) => ({
+                  ...current,
+                  [activeShelf]: undefined,
+                }));
+                setAttempt((current) => current + 1);
+              }}
+            >
+              {t("browse_retry")}
+            </Button>
+          </div>
+        ) : games?.length === 0 ? (
+          <p role="status">{t("no_results")}</p>
+        ) : (
+          <div className="catalogue-discover__games">
+            {games
+              ? games.map((game) => (
+                  <div
+                    className="catalogue-discover__game"
+                    key={`${game.shop}:${game.objectId}`}
+                  >
+                    <GameCard
+                      game={game}
+                      onClick={() => navigate(buildGameDetailsPath(game))}
+                    />
+                    <CatalogueWishlistButton game={game} />
+                  </div>
+                ))
+              : Array.from({ length: shelfSize }, (_, index) => (
+                  <Skeleton
+                    key={index}
+                    className="catalogue-discover__placeholder"
+                  />
+                ))}
+          </div>
+        )}
+
+        {activeShelf === "new" && games && (
           <Button
             theme="outline"
             size="small"
-            onClick={() => {
-              setResults({});
-              setAttempt((current) => current + 1);
-            }}
+            className="catalogue-discover__browse-more"
+            onClick={() => openResults(newest)}
           >
-            {t("browse_retry")}
+            {t("browse_all_new")} <ArrowRightIcon />
           </Button>
-        </div>
-      )}
-
-      {shelves.map(({ id, label }) => {
-        const games = results[id];
-        if (games !== undefined && !games?.length) return null;
-
-        return (
-          <section
-            className="catalogue-discover__shelf"
-            key={id}
-            aria-busy={games === undefined}
-          >
-            <header className="catalogue-discover__heading">
-              <h2>{t(label)}</h2>
-              {id === "new" && (
-                <Button
-                  theme="outline"
-                  size="small"
-                  onClick={() => openResults(newest)}
-                >
-                  {t("browse_all_new")} <ArrowRightIcon />
-                </Button>
-              )}
-            </header>
-            <div className="catalogue-discover__games">
-              {games
-                ? games.map((game) => (
-                    <div
-                      className="catalogue-discover__game"
-                      key={`${game.shop}:${game.objectId}`}
-                    >
-                      <GameCard
-                        game={game}
-                        onClick={() => navigate(buildGameDetailsPath(game))}
-                      />
-                      <CatalogueWishlistButton game={game} />
-                    </div>
-                  ))
-                : Array.from({ length: shelfSize }, (_, index) => (
-                    <Skeleton
-                      key={index}
-                      className="catalogue-discover__placeholder"
-                    />
-                  ))}
-            </div>
-          </section>
-        );
-      })}
+        )}
+      </section>
     </section>
   );
 }

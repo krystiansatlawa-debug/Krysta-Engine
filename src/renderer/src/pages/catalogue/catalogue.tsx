@@ -141,7 +141,6 @@ const areSameValues = (first: string[], second: string[]) =>
   first.every((item) => second.includes(item));
 
 export default function Catalogue() {
-  const requestSequenceRef = useRef(0);
   const hasResultsRef = useRef(false);
   const cataloguePageRef = useRef<HTMLDivElement>(null);
 
@@ -162,6 +161,8 @@ export default function Catalogue() {
   }, [filters, deferredTitleFilter]);
 
   const [isLoading, setIsLoading] = useState(true);
+  const [searchFailed, setSearchFailed] = useState(false);
+  const [searchAttempt, setSearchAttempt] = useState(0);
 
   const [results, setResults] = useState<CatalogueSearchResult[]>([]);
   const [resultsMode, setResultsMode] = useState(mode);
@@ -225,7 +226,7 @@ export default function Catalogue() {
         downloadSources: DownloadSource[],
         pageSize: number,
         offset: number,
-        requestId: number,
+        signal: AbortSignal,
         mode: "modern" | "classics"
       ) => {
         const { platforms, ...restFilters } = filters;
@@ -247,20 +248,30 @@ export default function Catalogue() {
               }
             : baseRequest;
 
-        const response = await window.electron.hydraApi.post<{
-          edges: CatalogueSearchResult[];
-          count: number;
-        }>("/catalogue/search", {
-          data: requestData,
-          needsAuth: false,
-        });
+        try {
+          const response = await window.electron.hydraApi.post<{
+            edges: CatalogueSearchResult[];
+            count: number;
+          }>("/catalogue/search", {
+            data: requestData,
+            needsAuth: false,
+          });
 
-        if (requestId !== requestSequenceRef.current) return;
+          if (signal.aborted) return;
 
-        setResults(response.edges);
-        setResultsMode(mode);
-        setItemsCount(response.count);
-        setIsLoading(false);
+          setResults(response.edges);
+          setResultsMode(mode);
+          setItemsCount(response.count);
+        } catch {
+          if (signal.aborted) return;
+
+          setSearchFailed(true);
+          setResults([]);
+          setResultsMode(mode);
+          setItemsCount(0);
+        } finally {
+          if (!signal.aborted) setIsLoading(false);
+        }
       },
       500
     )
@@ -277,8 +288,9 @@ export default function Catalogue() {
   const showSkeleton = isLoading || isModeTransitioning;
 
   useEffect(() => {
-    const requestId = ++requestSequenceRef.current;
+    const request = new AbortController();
 
+    setSearchFailed(false);
     if (!hasResultsRef.current) {
       setIsLoading(true);
     }
@@ -288,14 +300,22 @@ export default function Catalogue() {
       downloadSources,
       PAGE_SIZE,
       (page - 1) * PAGE_SIZE,
-      requestId,
+      request.signal,
       mode
     );
 
     return () => {
+      request.abort();
       debouncedSearch.cancel();
     };
-  }, [effectiveFilters, downloadSources, page, debouncedSearch, mode]);
+  }, [
+    effectiveFilters,
+    downloadSources,
+    page,
+    debouncedSearch,
+    mode,
+    searchAttempt,
+  ]);
 
   const language = i18n.language.split("-")[0];
 
@@ -714,14 +734,10 @@ export default function Catalogue() {
       <div className="catalogue__header">
         <div className="catalogue__header-row">
           <div className="catalogue__header-summary">
-            <span className="catalogue__result-count">
-              {t("result_count", {
-                resultCount: formatNumber(itemsCount),
-              })}
-            </span>
-            {selectedFiltersCount === 0 && (
-              <span className="catalogue__filters-hint">
-                {t("filters_sidebar_hint")}
+            <h1>{filters.title || t("store_all_games")}</h1>
+            {!showSkeleton && !searchFailed && (
+              <span className="catalogue__result-count" role="status">
+                {t("result_count", { resultCount: formatNumber(itemsCount) })}
               </span>
             )}
           </div>
@@ -818,7 +834,17 @@ export default function Catalogue() {
             "catalogue__games-container--classics": mode === "classics",
           })}
         >
-          {showSkeleton ? (
+          {searchFailed ? (
+            <div className="catalogue__notice">
+              <p role="status">{t("browse_load_error", { ns: "home" })}</p>
+              <Button
+                theme="outline"
+                onClick={() => setSearchAttempt((attempt) => attempt + 1)}
+              >
+                {t("browse_retry", { ns: "home" })}
+              </Button>
+            </div>
+          ) : showSkeleton ? (
             <SkeletonTheme baseColor="#1c1c1c" highlightColor="#444">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => (
                 <Skeleton
@@ -829,6 +855,10 @@ export default function Catalogue() {
                 />
               ))}
             </SkeletonTheme>
+          ) : results.length === 0 ? (
+            <p className="catalogue__notice" role="status">
+              {t("store_no_results")}
+            </p>
           ) : mode === "classics" ? (
             results.map((game) => (
               <GameItemClassics
@@ -855,7 +885,11 @@ export default function Catalogue() {
           </div>
         </div>
 
-        <div className="catalogue__filters-container">
+        <aside
+          className="catalogue__filters-container"
+          aria-label={t("store_filters")}
+        >
+          <h2>{t("store_filters")}</h2>
           <div className="catalogue__filters-sections">
             <CatalogueModeToggle />
 
@@ -991,7 +1025,7 @@ export default function Catalogue() {
                 );
               })}
           </div>
-        </div>
+        </aside>
       </div>
     </div>
   );
