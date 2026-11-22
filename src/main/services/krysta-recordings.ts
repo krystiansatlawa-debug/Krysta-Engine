@@ -61,6 +61,7 @@ type Active = {
   pid: number;
   prefs: Settings;
   saving: boolean;
+  manual: boolean;
   stopped: boolean;
 };
 const defaults: Settings = {
@@ -196,7 +197,11 @@ function cancel(pause = false) {
     end(current);
   }
 }
-function stopRecording() {
+async function stopRecording() {
+  if (current?.manual) {
+    await finishManualRecording();
+    return;
+  }
   cancel(true);
 }
 async function saveSettings(next: Settings) {
@@ -234,7 +239,7 @@ function applyHotkey(s: Settings) {
     try {
       if (
         globalShortcut.register(desired, () => {
-          void trigger(null, ["Manual clip"]);
+          void toggleManualRecording();
         })
       )
         registered = desired;
@@ -329,7 +334,7 @@ async function persist(a: Active, result: Result, names: string[]) {
     result.data.length > Math.ceil(maxBytes / 3) * 4 + 4 ||
     !Number.isFinite(result.duration) ||
     result.duration < 1 ||
-    result.duration > a.prefs.seconds + a.prefs.preSeconds + 4
+    result.duration > (a.manual ? 60 * 60 : a.prefs.seconds + a.prefs.preSeconds + 4)
   )
     throw Error("Recording incomplete or too short");
   const bytes = Buffer.from(result.data, "base64");
@@ -517,6 +522,7 @@ async function openCapture(
     pid,
     prefs,
     saving: false,
+    manual: false,
     stopped: false,
   };
   current = a;
@@ -626,6 +632,67 @@ async function ensure(expected: string | null = null): Promise<Active | null> {
     });
   return opening;
 }
+// A manual session uses the same recorder as achievement clips but has no
+// preset duration. The second hotkey ends and persists the active session.
+let manualTransition: Promise<void> | null = null;
+async function startManualRecording() {
+  const prefs = await settings();
+  if (!prefs.enabled) {
+    lastError = "Włącz nagrywanie w ustawieniach / Enable recording in settings";
+    return;
+  }
+  if (triggering || current?.saving) return;
+  const a = await ensure();
+  if (!a || a.stopped || !(await sameForeground(a))) {
+    lastError = "Nie rozpoznano aktywnego okna gry / Active game window not found";
+    return;
+  }
+  if (!(await enoughSpace(a.prefs, 8 * 1024 ** 2, true))) {
+    lastError = "Limit nagrań lub brak miejsca / Recording storage limit";
+    return;
+  }
+  try {
+    await a.win.webContents.executeJavaScript("globalThis.krystaManualStart()", true);
+    if (a.stopped || current !== a) return;
+    a.manual = true;
+    a.saving = true;
+    lastError = "";
+  } catch (e) {
+    lastError = String(e).slice(0, 500);
+    if (current === a) end(a);
+  }
+}
+async function finishManualRecording() {
+  const a = current;
+  if (!a?.manual || a.stopped) return;
+  a.manual = false;
+  try {
+    const result = await Promise.race([
+      a.win.webContents.executeJavaScript("globalThis.krystaManualFinish()", true) as Promise<Result>,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(Error("Manual recording finalization timed out")), 20000)
+      ),
+    ]);
+    await persist(a, result, ["Manual recording"]);
+    lastError = "";
+  } catch (e) {
+    lastError = String(e).slice(0, 500);
+  } finally {
+    a.saving = false;
+    if (current === a) dispose(a);
+  }
+}
+function toggleManualRecording() {
+  // Serialize rapid double-presses so they cannot start two parallel captures.
+  if (manualTransition) return manualTransition;
+  manualTransition = (async () => {
+    if (current?.manual) await finishManualRecording();
+    else await startManualRecording();
+  })().finally(() => {
+    manualTransition = null;
+  });
+  return manualTransition;
+}
 let triggering = false;
 let pendingNames: string[] | null = null;
 let pendingKey: string | null = null;
@@ -657,7 +724,7 @@ async function trigger(expected: string | null, names: string[]) {
       return;
     if (!(await enoughSpace(a.prefs, 8 * 1024 ** 2, true)))
       throw Error("Recording storage limit or insufficient space");
-    if (a.stopped || !(await sameForeground(a))) return;
+    if (a.stopped || a.manual || !(await sameForeground(a))) return;
     a.saving = true;
     pendingKey = a.key;
     const result = await Promise.race([
@@ -748,6 +815,7 @@ export async function recordingState() {
     settings: s,
     folder: dir,
     recording: !!current?.saving,
+    manualRecording: !!current?.manual,
     buffering:
       !!current && !current.stopped && !current.saving && s.preSeconds > 0,
     shortcutError,
@@ -780,7 +848,7 @@ export async function openRecordingsFolder() {
   const error = await shell.openPath(dir);
   if (error) throw Error(error);
 }
-export { stopRecording };
+export { stopRecording, toggleManualRecording };
 function syncRecordingMonitor() {
   if (process.platform !== "win32" || !app.isReady() || quitting) return;
   const running = hasTrackedGamesRunning();
