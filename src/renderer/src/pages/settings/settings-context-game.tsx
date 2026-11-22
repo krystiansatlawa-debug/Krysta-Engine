@@ -138,6 +138,27 @@ export function SettingsContextGame() {
             : "Shows measured presentation FPS in the detected game. Borderless mode is recommended."}
         </p>
         <h3>{pl ? "Skrót klawiszowy licznika FPS" : "FPS counter shortcut"}</h3>
+        <label htmlFor="krysta-fps-hotkey-select">
+          {pl ? "Wybierz skrót z listy" : "Choose a shortcut"}
+        </label>
+        <select
+          id="krysta-fps-hotkey-select"
+          value={hotkey}
+          disabled={window.electron.platform !== "win32"}
+          onChange={(e) => void saveHotkey(e.target.value)}
+          style={{ background: "#202020", color: "inherit", border: "1px solid #555", borderRadius: 4, padding: 8, maxWidth: 300 }}
+        >
+          {["", "Control+Shift+F10", "Control+Shift+F11", "Control+Alt+F10", "Alt+F10", "F10", "F11", "F12"].concat(
+            hotkey && !["Control+Shift+F10", "Control+Shift+F11", "Control+Alt+F10", "Alt+F10", "F10", "F11", "F12"].includes(hotkey) ? [hotkey] : []
+          ).map((value) => (
+            <option key={value || "off"} value={value}>
+              {value ? value.replace("Control", "Ctrl") : pl ? "Bez skrótu" : "No shortcut"}
+            </option>
+          ))}
+        </select>
+        <small>{pl
+          ? "Możesz wybrać gotowy skrót albo przypisać własny przyciskiem poniżej. Skrót działa podczas gry."
+          : "Choose a shortcut or record your own with the button below. The shortcut works in games."}</small>
         <button
           type="button"
           disabled={window.electron.platform !== "win32"}
