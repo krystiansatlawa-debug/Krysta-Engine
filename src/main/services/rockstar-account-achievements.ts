@@ -71,8 +71,8 @@ async function bearerToken(): Promise<string | null> {
   const cookies = await authSession().cookies.get({ name: "BearerToken" });
   const valid = cookies.find(
     (cookie) =>
-      (cookie.domain === "rockstargames.com" ||
-        cookie.domain.endsWith(".rockstargames.com")) &&
+      ((cookie.domain ?? "") === "rockstargames.com" ||
+        (cookie.domain ?? "").endsWith(".rockstargames.com")) &&
       cookie.value.length > 20 &&
       cookie.value.length < 8192
   );
