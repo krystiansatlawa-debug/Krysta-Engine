@@ -415,9 +415,6 @@ export default function Library() {
   const { t } = useTranslation(["library", "sidebar", "game_details"]);
   const playLabel = t("play", { ns: "game_details" });
   const navigate = useNavigate();
-  const runningGameId = useAppSelector(
-    (state) => state.gameRunning.gameRunning?.id
-  );
 
   const selectedCollectionId = searchParams.get("collection");
   const pendingPatches = useKrystaPendingPatches();

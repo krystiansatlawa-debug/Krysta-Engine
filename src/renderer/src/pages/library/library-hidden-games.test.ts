@@ -213,6 +213,7 @@ async function renderLibrary(
       sortLibraryGames: (games: TestGame[]) => games,
     },
     "react-router-dom": {
+      useNavigate: () => noop,
       useSearchParams: () => [searchParams, noop],
     },
     "./library-game-card": { LibraryGameCard: gameCard },
