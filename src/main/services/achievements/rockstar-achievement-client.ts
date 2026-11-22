@@ -12,7 +12,7 @@ export const rockstarAchievementTitles = {
   "gtav-legacy": "gtav",
   "gtav-enhanced": "gtav",
   rdr2: "rdr2",
-  gtaiv: "gta4",
+  gtaiv: "gtaiv",
   maxpayne3: "mp3",
   lanoire: "lan",
 } as const;
