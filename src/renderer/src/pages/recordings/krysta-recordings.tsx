@@ -122,6 +122,13 @@ export default function KrystaRecordings() {
               ? "Nagrywanie jest wyłączone. Włącz je w ustawieniach nagrywania."
               : "Recording is disabled. Enable it in recording settings."}
         </p>
+        {state?.shortcutError && (
+          <p role="alert">
+            {pl
+              ? "Skrót jest zajęty. Wybierz inny w ustawieniach nagrywania."
+              : "The hotkey is unavailable. Choose another in recording settings."}
+          </p>
+        )}
         {state?.buffering && (
           <p role="status">
             {pl ? "Bufor klipów aktywny" : "Replay buffer active"}
