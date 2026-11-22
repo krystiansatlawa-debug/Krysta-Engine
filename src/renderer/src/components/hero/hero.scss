@@ -80,6 +80,7 @@
   min-height: 260px;
   border-radius: 14px;
   box-shadow: none;
+  isolation: isolate;
 }
 .krysta-featured .hero__backdrop {
   background: linear-gradient(
