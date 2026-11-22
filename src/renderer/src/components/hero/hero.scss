@@ -118,19 +118,78 @@
   padding: 12px 24px;
   font-weight: 700;
 }
-.krysta-featured__dots {
+.krysta-featured__controls {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 8px 16px;
   padding-top: 12px;
 }
-.krysta-featured__dots button {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #424242;
-  cursor: pointer;
+.krysta-featured__dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
 }
-.krysta-featured__dots button[aria-current="true"] {
-  background: #ffffff;
+.krysta-featured__dots button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+
+  &::before {
+    content: "";
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #888;
+  }
+
+  &[aria-current="true"]::before {
+    background: #fff;
+  }
+}
+.krysta-featured__playback {
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid #5d5d5d;
+  border-radius: 6px;
+  background: transparent;
+  color: #dadbe1;
+  cursor: pointer;
+
+  &:hover {
+    background: #333;
+  }
+}
+.krysta-featured button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .krysta-featured .hero__content {
+    animation: featured-content-enter 240ms ease-out;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .krysta-featured .hero__media {
+    transition: none;
+    transform: none;
+  }
+}
+@keyframes featured-content-enter {
+  from {
+    opacity: 0.4;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
