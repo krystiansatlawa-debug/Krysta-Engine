@@ -26,9 +26,12 @@ import {
   selectGroupedLibrary,
   selectIsLibraryLoading,
   setHeaderTitle,
+  setLibrarySearchQuery,
 } from "@renderer/features";
 import {
   HeartIcon,
+  DeviceDesktopIcon,
+  XIcon,
   TelescopeIcon,
   FileDirectoryIcon,
   PlusIcon,
@@ -1247,6 +1250,17 @@ export default function Library() {
     selectedCollectionId === HIDDEN_COLLECTION_ID;
   const isFavoritesCollectionSelected =
     selectedCollectionId === FAVORITES_COLLECTION_ID;
+  const showClearFilters =
+    effectiveCategory !== "all" ||
+    selectedCollectionId !== null ||
+    effectiveSources.length > 0 ||
+    selectedPlatforms.length > 0 ||
+    showInstalledOnly ||
+    Boolean(searchQuery.trim());
+  const activeCollection = libraryCollections.find(
+    ({ id }) => id === selectedCollectionId
+  );
+
   const shouldShowFavoritesEmptyState =
     hasGames &&
     !isLibraryLoading &&
@@ -1295,6 +1309,36 @@ export default function Library() {
                 category={effectiveCategory}
                 onCategoryChange={handleCategoryChange}
               />
+              <div
+                className="library__quick-filters"
+                role="group"
+                aria-label={t("quick_filters")}
+              >
+                <button
+                  type="button"
+                  className="library__filter-chip"
+                  aria-pressed={showInstalledOnly}
+                  onClick={() =>
+                    handleShowInstalledOnlyChange(!showInstalledOnly)
+                  }
+                >
+                  <DeviceDesktopIcon size={14} /> {t("installed_filter")}
+                </button>
+                <button
+                  type="button"
+                  className="library__filter-chip"
+                  aria-pressed={isFavoritesCollectionSelected}
+                  onClick={() =>
+                    handleCollectionSelect(
+                      isFavoritesCollectionSelected
+                        ? null
+                        : FAVORITES_COLLECTION_ID
+                    )
+                  }
+                >
+                  <HeartIcon size={14} /> {t("favorites")}
+                </button>
+              </div>
               <LibraryFiltersMenu
                 collections={libraryCollections}
                 selectedCollectionId={selectedCollectionId}
@@ -1365,6 +1409,78 @@ export default function Library() {
               </Button>
             )}
           </div>
+          {showControls &&
+            (showSourceFilter || showPlatformFilter || showClearFilters) && (
+              <div className="library__quick-sources">
+                {showSourceFilter &&
+                  availableSources.map((source) => (
+                    <button
+                      type="button"
+                      className="library__filter-chip"
+                      key={source}
+                      aria-pressed={effectiveSources.includes(source)}
+                      onClick={() =>
+                        handleSourcesChange(
+                          effectiveSources.includes(source)
+                            ? effectiveSources.filter((item) => item !== source)
+                            : [...effectiveSources, source]
+                        )
+                      }
+                    >
+                      {t(`library_${source}`)}
+                    </button>
+                  ))}
+                {showPlatformFilter &&
+                  uniquePlatforms.slice(0, 5).map((platform) => (
+                    <button
+                      type="button"
+                      className="library__filter-chip"
+                      key={platform}
+                      aria-pressed={selectedPlatforms.includes(platform)}
+                      onClick={() =>
+                        handlePlatformsChange(
+                          selectedPlatforms.includes(platform)
+                            ? selectedPlatforms.filter(
+                                (item) => item !== platform
+                              )
+                            : [...selectedPlatforms, platform]
+                        )
+                      }
+                    >
+                      {platform}
+                    </button>
+                  ))}
+                {activeCollection && !isFavoritesCollectionSelected && (
+                  <button
+                    type="button"
+                    className="library__filter-chip"
+                    aria-pressed="true"
+                    aria-label={t("clear_collection_filter", {
+                      name: activeCollection.name,
+                    })}
+                    onClick={() => handleCollectionSelect(null)}
+                  >
+                    {activeCollection.name} <XIcon size={12} />
+                  </button>
+                )}
+                {showClearFilters && (
+                  <button
+                    type="button"
+                    className="library__filter-chip library__filter-chip--clear"
+                    onClick={() => {
+                      handleCategoryChange("all");
+                      handleCollectionSelect(null);
+                      handleSourcesChange([]);
+                      handlePlatformsChange([]);
+                      handleShowInstalledOnlyChange(false);
+                      dispatch(setLibrarySearchQuery(""));
+                    }}
+                  >
+                    <XIcon size={12} /> {t("clear_filters")}
+                  </button>
+                )}
+              </div>
+            )}
         </div>
       </div>
 

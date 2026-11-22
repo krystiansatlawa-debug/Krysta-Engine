@@ -173,10 +173,13 @@ async function renderLibrary(
       selectIsLibraryLoading: () => false,
       selectGroupedLibrary: () => library,
       setHeaderTitle: noop,
+      setLibrarySearchQuery: noop,
     },
     "@primer/octicons-react": Object.fromEntries(
       [
         "HeartIcon",
+        "DeviceDesktopIcon",
+        "XIcon",
         "TelescopeIcon",
         "FileDirectoryIcon",
         "SearchIcon",
@@ -306,7 +309,9 @@ async function renderLibrary(
       });
     },
     retry: async () => {
-      const button = dom.window.document.querySelector("button");
+      const button = [...dom.window.document.querySelectorAll("button")].find(
+        (item) => item.textContent === "retry_hidden_games"
+      );
       assert.ok(button, "the local hidden-library error offers a retry");
       await act(async () => button.click());
     },

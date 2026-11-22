@@ -10,7 +10,7 @@ import {
 } from "@renderer/features";
 import { useAppDispatch } from "@renderer/hooks";
 import type { CatalogueSearchPayload } from "@types";
-import { gameGenres, gameTagGroups } from "./browse-categories";
+import { CatalogueCategoriesMenu } from "./catalogue-categories-menu";
 import { CatalogueStoreSearch } from "./catalogue-store-search";
 import { CatalogueWishlistProvider } from "./catalogue-wishlist";
 import "./catalogue-discover.scss";
@@ -87,54 +87,9 @@ export function CatalogueLayout() {
                   </NavLink>
                 </div>
               </details>
-              <details>
-                <summary>
-                  {t("store_categories")} <ChevronDownIcon size={12} />
-                </summary>
-                <div className="catalogue-layout__menu catalogue-layout__menu--columns">
-                  {gameGenres.map((genre) => (
-                    <button
-                      key={genre}
-                      type="button"
-                      onClick={() => browse({ genres: [genre] })}
-                    >
-                      {t(`browse_labels.${genre}`, { defaultValue: genre })}
-                    </button>
-                  ))}
-                </div>
-              </details>
-              <details>
-                <summary>
-                  {t("store_play_styles")} <ChevronDownIcon size={12} />
-                </summary>
-                <div className="catalogue-layout__menu catalogue-layout__menu--columns">
-                  {gameTagGroups[0].tags.map(([id, label]) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => browse({ tags: [id] })}
-                    >
-                      {t(`browse_labels.${label}`, { defaultValue: label })}
-                    </button>
-                  ))}
-                </div>
-              </details>
-              <details>
-                <summary>
-                  {t("store_sections")} <ChevronDownIcon size={12} />
-                </summary>
-                <div className="catalogue-layout__menu">
-                  <NavLink onClick={closeMenu} to="/catalogue/wishlist">
-                    {t("catalogue_wishlist")}
-                  </NavLink>
-                  <NavLink onClick={closeMenu} to="/catalogue/top">
-                    {t("catalogue_top")}
-                  </NavLink>
-                  <NavLink onClick={closeMenu} to="/catalogue/releases">
-                    {t("catalogue_calendar")}
-                  </NavLink>
-                </div>
-              </details>
+              <CatalogueCategoriesMenu
+                onChooseTag={(tag) => browse({ tags: [tag] })}
+              />
             </nav>
             <CatalogueStoreSearch />
           </div>

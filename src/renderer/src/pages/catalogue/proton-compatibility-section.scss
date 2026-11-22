@@ -17,19 +17,6 @@
     font-size: globals.$small-font-size;
     color: globals.$muted-color;
     line-height: 1.4;
-
-    &--deck {
-      display: flex;
-      align-items: center;
-      gap: globals.$spacing-unit;
-    }
-  }
-
-  &__deck-icon {
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
-    filter: brightness(0) saturate(100%) invert(100%);
   }
 
   &__option-list {

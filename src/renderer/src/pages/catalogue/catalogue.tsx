@@ -1,3 +1,4 @@
+import { getCatalogueSteamTags, getSteamTagLabel } from "@shared";
 import { Link } from "react-router-dom";
 import { CatalogueStoreSearch } from "./catalogue-store-search";
 import type {
@@ -34,6 +35,7 @@ import { debounce } from "lodash-es";
 import { useTranslation } from "react-i18next";
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import cn from "classnames";
+import { gameTagGroups } from "./browse-categories";
 import { CatalogueModeToggle } from "./catalogue-mode-toggle";
 // Imported directly: as a lazy chunk it popped in above the other filters.
 import { ReleaseYearSection } from "./release-year-section";
@@ -109,6 +111,7 @@ const sortValues = [
   "releaseDate:asc",
   "alphabetical:asc",
   "alphabetical:desc",
+  "reviewScore:desc",
   "hydraScore:desc",
   "hydraScore:asc",
 ] as const;
@@ -321,36 +324,44 @@ export default function Catalogue() {
 
   const language = i18n.language.split("-")[0];
 
-  const steamGenresMapping = useMemo<Record<string, string>>(() => {
-    if (!steamGenres[language]) return {};
+  const steamGenreItems = useMemo(() => {
+    const original = steamGenres.en ?? [];
+    return original
+      .map((value, index) => ({
+        label:
+          language === "pl"
+            ? t(`browse_labels.${value}`, { ns: "home", defaultValue: value })
+            : (steamGenres[language]?.[index] ?? value),
+        value,
+      }))
+      .sort((first, second) =>
+        first.label.localeCompare(second.label, language)
+      );
+  }, [steamGenres, language, t]);
 
-    return steamGenres[language].reduce((prev, genre, index) => {
-      prev[genre] = steamGenres["en"][index];
-      return prev;
-    }, {});
-  }, [steamGenres, language]);
+  const steamGenresFilterItems = useMemo(
+    () =>
+      steamGenreItems.map((item) => ({
+        ...item,
+        checked: filters.genres.includes(item.value),
+      })),
+    [steamGenreItems, filters.genres]
+  );
 
-  const steamGenresFilterItems = useMemo(() => {
-    return Object.entries(steamGenresMapping)
-      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
-      .map(([key, value]) => ({
-        label: key,
-        value: value,
-        checked: filters.genres.includes(value),
-      }));
-  }, [steamGenresMapping, filters.genres]);
-
-  const steamUserTagsFilterItems = useMemo(() => {
-    if (!steamUserTags[language]) return [];
-
-    return Object.entries(steamUserTags[language])
-      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
-      .map(([key, value]) => ({
-        label: key,
-        value: value,
-        checked: filters.tags.includes(value),
-      }));
-  }, [steamUserTags, filters.tags, language]);
+  const catalogueTags = useMemo(
+    () => getCatalogueSteamTags(steamUserTags, i18n.language),
+    [steamUserTags, i18n.language]
+  );
+  const steamUserTagsFilterItems = useMemo(
+    () =>
+      catalogueTags.map(({ label, id, english }) => ({
+        label,
+        value: id,
+        searchAlias: english,
+        checked: filters.tags.includes(id),
+      })),
+    [catalogueTags, filters.tags]
+  );
 
   const classicsPlatforms = useMemo(
     () => filters.platforms ?? [],
@@ -490,34 +501,26 @@ export default function Catalogue() {
     const protonThreshold = protonCompatibilityThresholds.find((threshold) =>
       areSameValues(threshold.values, filters.protondbSupportBadges)
     );
-    const deckCompatible = areSameValues(filters.deckCompatibility, [
-      "playable",
-      "verified",
-    ]);
 
     return [
       ...filters.genres.map((genre) => ({
-        label: Object.keys(steamGenresMapping).find(
-          (key) => steamGenresMapping[key] === genre
-        ) as string,
+        label:
+          steamGenreItems.find(({ value }) => value === genre)?.label ?? genre,
         filterType: t("genres"),
         orbColor: filterCategoryColors.genres,
         key: "genres",
         value: genre,
       })),
 
-      ...filters.tags.map((tag) => {
-        const tagsForLanguage = steamUserTags[language] ?? {};
-        return {
-          label: Object.keys(tagsForLanguage).find(
-            (key) => tagsForLanguage[key] === tag
-          ),
-          filterType: t("tags"),
-          orbColor: filterCategoryColors.tags,
-          key: "tags",
-          value: tag,
-        };
-      }),
+      ...filters.tags.map((tag) => ({
+        label:
+          catalogueTags.find(({ id }) => id === tag)?.label ??
+          getSteamTagLabel(tag, i18n.language, String(tag)),
+        filterType: t("tags"),
+        orbColor: filterCategoryColors.tags,
+        key: "tags",
+        value: tag,
+      })),
 
       ...filters.downloadSourceFingerprints.map((fingerprint) => ({
         label: downloadSources.find(
@@ -559,17 +562,13 @@ export default function Catalogue() {
           ]
         : []),
 
-      ...(shouldShowProtonFeatures && deckCompatible
-        ? [
-            {
-              label: t("steam_deck_compatible"),
-              filterType: t("steam_deck_minimum"),
-              orbColor: filterCategoryColors.deckCompatibility,
-              key: "deckCompatibility",
-              value: "threshold",
-            },
-          ]
-        : []),
+      ...filters.deckCompatibility.map((value) => ({
+        label: t(`deck_${value}`, { ns: "game_details", defaultValue: value }),
+        filterType: "Steam Deck",
+        orbColor: filterCategoryColors.deckCompatibility,
+        key: "deckCompatibility",
+        value,
+      })),
 
       ...(filters.releaseYear
         ? [
@@ -585,10 +584,10 @@ export default function Catalogue() {
     ];
   }, [
     filters,
-    steamUserTags,
+    catalogueTags,
+    i18n.language,
     downloadSources,
-    steamGenresMapping,
-    language,
+    steamGenreItems,
     shouldShowProtonFeatures,
     t,
   ]);
@@ -596,16 +595,16 @@ export default function Catalogue() {
   const filterSections = useMemo(() => {
     return [
       {
-        title: t("genres"),
+        title: t("store_narrow_by_tags"),
+        items: steamUserTagsFilterItems,
+        key: "tags",
+        isLoading: !steamUserTags.en,
+      },
+      {
+        title: t("store_narrow_by_genres"),
         items: steamGenresFilterItems,
         key: "genres",
         isLoading: !steamGenres[language],
-      },
-      {
-        title: t("tags"),
-        items: steamUserTagsFilterItems,
-        key: "tags",
-        isLoading: !steamUserTags[language],
       },
       {
         title: t("download_sources"),
@@ -692,6 +691,11 @@ export default function Catalogue() {
         label: t("sort_title_desc"),
       },
       {
+        key: "reviewScore:desc",
+        value: "reviewScore:desc",
+        label: t("store_sort_by_reviews"),
+      },
+      {
         key: "hydraScore:desc",
         value: "hydraScore:desc",
         label: t("sort_highest_rating"),
@@ -711,10 +715,20 @@ export default function Catalogue() {
     protonCompatibilityThresholds.find((threshold) =>
       areSameValues(threshold.values, filters.protondbSupportBadges)
     )?.value ?? "";
-  const isDeckCompatible = areSameValues(filters.deckCompatibility, [
-    "playable",
-    "verified",
-  ]);
+  const playModeIds = gameTagGroups[0].tags.slice(0, 11).map(([id]) => id);
+  const playModeItems = playModeIds.flatMap((id) => {
+    const item = steamUserTagsFilterItems.find(({ value }) => value === id);
+    return item ? [item] : [];
+  });
+  const deckValues = ["verified", "playable"] as const;
+  const toggleTag = (tag: number) =>
+    dispatch(
+      setFilters({
+        tags: filters.tags.includes(tag)
+          ? filters.tags.filter((value) => value !== tag)
+          : [...filters.tags, tag],
+      })
+    );
 
   return (
     <div className="catalogue" ref={cataloguePageRef}>
@@ -904,17 +918,6 @@ export default function Catalogue() {
               />
             )}
 
-            {mode === "modern" && (
-              <ReleaseYearSection
-                title={t("release_year")}
-                color={filterCategoryColors.releaseYear}
-                value={filters.releaseYear}
-                onChange={(value) =>
-                  dispatch(setFilters({ releaseYear: value }))
-                }
-              />
-            )}
-
             {mode === "modern" &&
               filterSections.map((section) => (
                 <FilterSection
@@ -922,9 +925,8 @@ export default function Catalogue() {
                   title={section.title}
                   onClear={() => dispatch(setFilters({ [section.key]: [] }))}
                   color={filterCategoryColors[section.key]}
-                  initiallyOpen={
-                    section.key === "genres" || section.key === "tags"
-                  }
+                  initiallyOpen={section.key === "tags"}
+                  showSelectedOption={section.key === "tags"}
                   onSelect={(value) => {
                     if (filters[section.key].includes(value)) {
                       dispatch(
@@ -954,12 +956,69 @@ export default function Catalogue() {
                 />
               ))}
 
+            {mode === "modern" && (
+              <>
+                <FilterSection
+                  title={t("store_narrow_by_players")}
+                  items={playModeItems}
+                  onSelect={(value) => toggleTag(Number(value))}
+                  onClear={() =>
+                    dispatch(
+                      setFilters({
+                        tags: filters.tags.filter(
+                          (id) => !playModeIds.includes(id)
+                        ),
+                      })
+                    )
+                  }
+                  color={filterCategoryColors.tags}
+                  canSearch={false}
+                />
+                <FilterSection
+                  title={t("store_narrow_by_deck")}
+                  items={deckValues.map((value) => ({
+                    value,
+                    label: t(`deck_${value}`, { ns: "game_details" }),
+                    checked: filters.deckCompatibility.includes(value),
+                  }))}
+                  onSelect={(value) => {
+                    const option = deckValues.find(
+                      (candidate) => candidate === value
+                    );
+                    if (!option) return;
+                    const current = filters.deckCompatibility;
+                    dispatch(
+                      setFilters({
+                        deckCompatibility: current.includes(option)
+                          ? current.filter((item) => item !== option)
+                          : [...current, option],
+                      })
+                    );
+                  }}
+                  onClear={() =>
+                    dispatch(setFilters({ deckCompatibility: [] }))
+                  }
+                  color={filterCategoryColors.deckCompatibility}
+                  canSearch={false}
+                />
+              </>
+            )}
+            {mode === "modern" && (
+              <ReleaseYearSection
+                title={t("store_narrow_by_year")}
+                color={filterCategoryColors.releaseYear}
+                value={filters.releaseYear}
+                onChange={(value) =>
+                  dispatch(setFilters({ releaseYear: value }))
+                }
+              />
+            )}
+
             {mode === "modern" && shouldShowProtonFeatures && (
               <Suspense fallback={null}>
                 <ProtonCompatibilitySection
                   title={t("protondb")}
                   protonSliderLabel={t("protondb_minimum")}
-                  deckSliderLabel={t("steam_deck_minimum")}
                   protonOptions={protonCompatibilityThresholds.map(
                     (threshold) => ({
                       value: threshold.value,
@@ -968,8 +1027,6 @@ export default function Catalogue() {
                     })
                   )}
                   protonValue={protonThresholdValue}
-                  deckChecked={isDeckCompatible}
-                  deckLabel={t("steam_deck_compatible")}
                   color={filterCategoryColors.protondbSupportBadges}
                   onProtonChange={(value) => {
                     const nextThreshold = protonCompatibilityThresholds.find(
@@ -980,15 +1037,6 @@ export default function Catalogue() {
                       setFilters({
                         protondbSupportBadges: nextThreshold
                           ? [...nextThreshold.values]
-                          : [],
-                      })
-                    );
-                  }}
-                  onDeckChange={(checked) => {
-                    dispatch(
-                      setFilters({
-                        deckCompatibility: checked
-                          ? ["playable", "verified"]
                           : [],
                       })
                     );

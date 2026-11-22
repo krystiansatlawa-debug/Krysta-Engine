@@ -31,6 +31,7 @@ import { levelDBService } from "./services/leveldb.service";
 import Catalogue from "./pages/catalogue/catalogue";
 import CatalogueDiscover from "./pages/catalogue/catalogue-discover";
 import { CatalogueLayout } from "./pages/catalogue/catalogue-layout";
+import { CatalogueTagsPage } from "./pages/catalogue/catalogue-categories";
 import {
   CatalogueTopPage,
   CatalogueWishlistPage,
@@ -151,6 +152,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                   <Route path="/catalogue" element={<CatalogueLayout />}>
                     <Route index element={<CatalogueDiscover />} />
                     <Route path="search" element={<Catalogue />} />
+                    <Route path="tags" element={<CatalogueTagsPage />} />
                     <Route
                       path="wishlist"
                       element={<CatalogueWishlistPage />}

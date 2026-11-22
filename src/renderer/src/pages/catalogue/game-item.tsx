@@ -64,6 +64,10 @@ export function GameItem({ game }: GameItemProps) {
 
   const genres = useMemo(() => {
     return game.genres?.map((genre) => {
+      if (language === "pl") {
+        return t(`browse_labels.${genre}`, { ns: "home", defaultValue: genre });
+      }
+
       const index = steamGenres["en"]?.findIndex(
         (steamGenre) => steamGenre === genre
       );
@@ -78,7 +82,7 @@ export function GameItem({ game }: GameItemProps) {
 
       return genre;
     });
-  }, [game.genres, language, steamGenres]);
+  }, [game.genres, language, steamGenres, t]);
 
   const libraryImage = useMemo(() => {
     if (game.libraryImageUrl) {

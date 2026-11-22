@@ -16,6 +16,11 @@
     "error_boundary_restart": "Restart"
   },
   "home": {
+    "store_show_all_tags": "Show all tags",
+    "store_popular_categories": "Popular categories",
+    "store_genres_and_themes": "All genres and themes",
+    "store_expand_categories": "Expand",
+    "store_collapse_categories": "Collapse",
     "library_home": "My library",
     "open_library": "Open library",
     "continue_playing": "Continue playing",
@@ -28,10 +33,8 @@
     "library_collections": "Your collections",
     "library_favorites": "Favorites",
     "store_categories": "Categories",
-    "store_sections": "Special Sections",
     "store_browse": "Browse",
     "store_recommendations": "Recommendations",
-    "store_play_styles": "Ways to play",
     "store_featured": "Featured & Recommended",
     "catalogue_discover": "Discover",
     "catalogue_search": "Search and filters",
@@ -282,6 +285,13 @@
     "installation_complete_message": "Common redistributables installed successfully"
   },
   "catalogue": {
+    "store_narrow_by_tags": "Narrow by tags",
+    "store_narrow_by_genres": "Narrow by genre",
+    "store_show_selected_tags": "Show selected tags",
+    "store_narrow_by_year": "Narrow by release year",
+    "store_narrow_by_deck": "Narrow by Steam Deck compatibility",
+    "store_narrow_by_players": "Narrow by number of players",
+    "store_sort_by_reviews": "User reviews",
     "search": "Filter…",
     "developers": "Developers",
     "genres": "Genres",
@@ -2708,6 +2718,9 @@
     "shop": "Shop"
   },
   "library": {
+    "quick_filters": "Quick filters",
+    "installed_filter": "Installed",
+    "clear_collection_filter": "Remove collection filter: {{name}}",
     "library": "Library",
     "hidden_games": "Concealed games",
     "hidden_from_others_tooltip": "Only you can see this game on your profile and in your library.",
