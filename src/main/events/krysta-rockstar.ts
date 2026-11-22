@@ -7,6 +7,14 @@ import { db, gamesSublevel, gamesShopAssetsSublevel, levelKeys } from "@main/lev
 import { libraryWriteQueue } from "@main/services/library-sync/library-write-queue";
 import { getGameAssets } from "./catalogue/get-game-assets";
 import type { Game } from "@types";
+import {
+  connectRockstarAchievements,
+  rockstarAccountState,
+  readRockstarAccountAwards,
+  disconnectRockstarAchievements,
+} from "@main/services/rockstar-account-achievements";
+import { rockstarAchievementTitles } from "@main/services/achievements/rockstar-achievement-client";
+
 
 const exec = promisify(execFile);
 const configuredFolders = db.sublevel<string, string>("krysta-rockstar-folders", {
@@ -325,6 +333,14 @@ async function localAchievementMetadata() {
   }
   return { profileCount, titleDirectories, unlockSyncAvailable: false };
 }
+ipcMain.handle("krysta:rockstar-account-connect", () => connectRockstarAchievements());
+ipcMain.handle("krysta:rockstar-account-state", () => rockstarAccountState());
+ipcMain.handle("krysta:rockstar-account-disconnect", () => disconnectRockstarAchievements());
+ipcMain.handle("krysta:rockstar-account-awards", (_event, gameId: unknown) => {
+  if (typeof gameId !== "string" || !Object.hasOwn(rockstarAchievementTitles, gameId))
+    throw Error("Unsupported Rockstar game");
+  return readRockstarAccountAwards(gameId as keyof typeof rockstarAchievementTitles);
+});
 let importing = false;
 let lastSync: string | null = null;
 ipcMain.handle("krysta:rockstar-scan", async () => ({
