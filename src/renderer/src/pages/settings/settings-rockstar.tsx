@@ -14,11 +14,51 @@ export function SettingsRockstar() {
   const [state, setState] = useState<Awaited<
     ReturnType<typeof window.electron.scanRockstar>
   > | null>(null);
+  const [account, setAccount] = useState<{connected: boolean; username: string | null} | null>(null);
+  const [awards, setAwards] = useState<Awaited<ReturnType<typeof window.electron.getRockstarAccountAwards>> | null>(null);
+  const [selectedGame, setSelectedGame] = useState("gtav-legacy");
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [accountMessage, setAccountMessage] = useState("");
+  const refreshAccount = async () => {
+    setAccount(await window.electron.getRockstarAccount());
+  };
+  const accountAction = async (action: "connect" | "refresh" | "disconnect" | "sync") => {
+    if (accountBusy) return;
+    setAccountBusy(true);
+    setAccountMessage("");
+    try {
+      if (action === "connect") {
+        await window.electron.connectRockstarAccount();
+        setAccountMessage(pl
+          ? "Zaloguj się w oknie Rockstar, zamknij je, a następnie kliknij Sprawdź połączenie."
+          : "Sign in in the Rockstar window, close it, then click Check connection.");
+      } else if (action === "disconnect") {
+        await window.electron.disconnectRockstarAccount();
+        setAwards(null);
+        await refreshAccount();
+      } else if (action === "sync") {
+        const result = await window.electron.getRockstarAccountAwards(selectedGame);
+        setAwards(result);
+        setAccountMessage(pl
+          ? `Pobrano ${result.awards.length} potwierdzonych osiągnięć.`
+          : `Fetched ${result.awards.length} verified unlocks.`);
+      } else {
+        await refreshAccount();
+      }
+    } catch (error) {
+      setAccountMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setAccountBusy(false);
+    }
+  };
   const [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
   useEffect(() => {
     let active = true;
+    void window.electron.getRockstarAccount().then((value) => {
+      if (active) setAccount(value);
+    }).catch(() => {});
     void window.electron
       .scanRockstar()
       .then((v) => {
@@ -158,6 +198,64 @@ export function SettingsRockstar() {
             : `Social Club: local profiles: ${state.achievements.profileCount}, game data folders: ${state.achievements.titleDirectories}. Unlocked achievement synchronization requires a separate Rockstar account connection and is not available yet.`}
         </p>
       )}
+      <section style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+        <h3>{pl ? "Osiągnięcia Rockstar Social Club" : "Rockstar Social Club achievements"}</h3>
+        <p>{account?.connected
+          ? (pl ? `Połączono: ${account.username || "Rockstar Games"}` : `Connected: ${account.username || "Rockstar Games"}`)
+          : (pl ? "Konto niepołączone — zaloguj się przez oficjalną stronę Rockstar."
+            : "Account not connected — use the official Rockstar sign-in.")}</p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <Button theme="outline" disabled={accountBusy} onClick={() => void accountAction("connect")}>
+            {pl ? "Połącz konto Rockstar" : "Connect Rockstar account"}
+          </Button>
+          <Button theme="outline" disabled={accountBusy} onClick={() => void accountAction("refresh")}>
+            {pl ? "Sprawdź połączenie" : "Check connection"}
+          </Button>
+          <Button theme="outline" disabled={accountBusy || !account?.connected} onClick={() => void accountAction("disconnect")}>
+            {pl ? "Rozłącz konto" : "Disconnect"}
+          </Button>
+        </div>
+        {account?.connected && (
+          <>
+            <label htmlFor="rockstar-achievement-title">{pl ? "Gra Rockstar" : "Rockstar game"}</label>
+            <select id="rockstar-achievement-title" value={selectedGame} onChange={(e) => {
+              setSelectedGame(e.target.value);
+              setAwards(null);
+            }}>
+              <option value="gtav-legacy">Grand Theft Auto V</option>
+              <option value="gtav-enhanced">Grand Theft Auto V Enhanced</option>
+              <option value="rdr2">Red Dead Redemption 2</option>
+              <option value="gtaiv">Grand Theft Auto IV</option>
+              <option value="maxpayne3">Max Payne 3</option>
+              <option value="lanoire">L.A. Noire</option>
+            </select>
+            <Button theme="outline" disabled={accountBusy} onClick={() => void accountAction("sync")}>
+              {pl ? "Pobierz osiągnięcia" : "Fetch achievements"}
+            </Button>
+          </>
+        )}
+        {awards && (
+          <div>
+            <strong>{pl ? "Potwierdzone osiągnięcia" : "Confirmed unlocks"}: {awards.awards.length}</strong>
+            <small style={{ display: "block" }}>
+              {pl ? "Rockstar zwraca identyfikatory osiągnięć. Nazwy i ikony wymagają lokalnego katalogu gry."
+                : "Rockstar returns achievement IDs. Names and icons require the local game catalogue."}
+            </small>
+            <ul>
+              {awards.awards.slice(0, 150).map((award) => (
+                <li key={award.id}>
+                  {pl ? "Osiągnięcie" : "Achievement"} #{award.id}
+                  {award.unlockTime ? ` · ${new Date(award.unlockTime).toLocaleString(i18n.language)}` : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {accountMessage && <p role="status">{accountMessage}</p>}
+        <small>{pl
+          ? "Odczyt tylko do podglądu: nie odblokowuje osiągnięć Steam ani Epic. Korzysta z nieoficjalnie udokumentowanego interfejsu Rockstar; może wymagać ponownego logowania."
+          : "Read-only: does not unlock Steam or Epic achievements. The Rockstar interface is undocumented and may require reauthentication."}</small>
+      </section>
       {notice && <p role="status">{notice}</p>}
     </SettingsIntegrationCard>
   );
