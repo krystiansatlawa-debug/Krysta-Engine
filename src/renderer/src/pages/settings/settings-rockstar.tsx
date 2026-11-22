@@ -151,6 +151,13 @@ export function SettingsRockstar() {
           <SettingsIntegrationLastSynced lastSyncedAt={state?.lastSync ?? null} />
         </>
       )}
+      {state?.achievements && (
+        <p>
+          {pl
+            ? `Social Club: wykryte profile lokalne: ${state.achievements.profileCount}, foldery danych gier: ${state.achievements.titleDirectories}. Odczyt zdobytych osiągnięć wymaga osobnego połączenia konta Rockstar; nie jest jeszcze dostępny.`
+            : `Social Club: local profiles: ${state.achievements.profileCount}, game data folders: ${state.achievements.titleDirectories}. Unlocked achievement synchronization requires a separate Rockstar account connection and is not available yet.`}
+        </p>
+      )}
       {notice && <p role="status">{notice}</p>}
     </SettingsIntegrationCard>
   );
