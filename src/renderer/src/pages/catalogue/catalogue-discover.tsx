@@ -19,7 +19,7 @@ import type {
   Steam250Game,
 } from "@types";
 
-import { gameGenres, gameTags } from "./browse-categories";
+import { CatalogueCategories } from "./catalogue-categories";
 
 const newest = { sortBy: "releaseDate", sortOrder: "desc" } as const;
 const shelves = [
@@ -121,20 +121,6 @@ export default function CatalogueDiscover() {
     navigate("/catalogue/search");
   };
 
-  const browseLabel = (name: string) =>
-    t(`browse_labels.${name}`, { defaultValue: name });
-
-  const renderGenre = (name: (typeof gameGenres)[number]) => (
-    <Button
-      key={name}
-      size="small"
-      theme="outline"
-      onClick={() => openResults({ genres: [name] })}
-    >
-      {browseLabel(name)}
-    </Button>
-  );
-
   const hasError = Object.values(results).some((games) => games === null);
 
   return (
@@ -161,29 +147,10 @@ export default function CatalogueDiscover() {
             </Button>
           )}
         </header>
-        <div className="catalogue-discover__tags">
-          {gameGenres.slice(0, 8).map(renderGenre)}
-        </div>
-        <details className="catalogue-discover__more">
-          <summary>{t("browse_more")}</summary>
-          <h3>{t("browse_genres")}</h3>
-          <div className="catalogue-discover__tags">
-            {gameGenres.slice(8).map(renderGenre)}
-          </div>
-          <h3>{t("browse_tags")}</h3>
-          <div className="catalogue-discover__tags">
-            {gameTags.map(([id, name]) => (
-              <Button
-                key={id}
-                size="small"
-                theme="outline"
-                onClick={() => openResults({ tags: [id] })}
-              >
-                {browseLabel(name)}
-              </Button>
-            ))}
-          </div>
-        </details>
+        <CatalogueCategories
+          onChooseGenre={(genre) => openResults({ genres: [genre] })}
+          onChooseTag={(id) => openResults({ tags: [id] })}
+        />
       </section>
 
       {hasError && (
