@@ -136,9 +136,11 @@ function SteamTagDirectory({
 }
 
 export function CatalogueCategories({
+  artworkForGenre,
   onChooseGenre,
   onChooseTag,
 }: Readonly<{
+  artworkForGenre: (genre: string) => string | null | undefined;
   onChooseGenre: (genre: string) => void;
   onChooseTag: (id: number) => void;
 }>) {
@@ -160,8 +162,20 @@ export function CatalogueCategories({
 
   return (
     <>
-      <div className="catalogue-discover__tags">
-        {gameGenres.slice(0, 8).map(renderGenre)}
+      <div className="catalogue-discover__genre-cards">
+        {gameGenres.slice(0, 8).map((genre) => {
+          const artwork = artworkForGenre(genre);
+          return (
+            <button
+              type="button"
+              key={genre}
+              onClick={() => onChooseGenre(genre)}
+            >
+              {artwork && <img src={artwork} alt="" loading="lazy" />}
+              <span>{label(genre)}</span>
+            </button>
+          );
+        })}
       </div>
       <details className="catalogue-discover__more">
         <summary>{t("browse_more")}</summary>

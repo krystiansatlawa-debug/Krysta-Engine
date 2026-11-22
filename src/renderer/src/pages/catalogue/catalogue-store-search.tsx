@@ -11,7 +11,9 @@ import {
   useSearchSuggestions,
 } from "@renderer/hooks";
 
-export function CatalogueStoreSearch() {
+export function CatalogueStoreSearch({
+  inline = false,
+}: Readonly<{ inline?: boolean }>) {
   const { t } = useTranslation("catalogue");
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -41,7 +43,11 @@ export function CatalogueStoreSearch() {
 
   return (
     <form
-      className="catalogue-store-search"
+      className={
+        inline
+          ? "catalogue-store-search catalogue-store-search--inline"
+          : "catalogue-store-search"
+      }
       role="search"
       aria-label={t("store_search")}
       onSubmit={(event) => {
@@ -81,7 +87,7 @@ export function CatalogueStoreSearch() {
         aria-label={t("store_search")}
         title={t("store_search")}
       >
-        <SearchIcon />
+        {inline ? t("store_submit_search") : <SearchIcon />}
       </button>
       {open && suggestions.length > 0 && (
         <ul

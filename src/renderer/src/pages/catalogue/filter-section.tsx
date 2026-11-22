@@ -24,6 +24,7 @@ export interface FilterSectionProps {
   onClear: () => void;
   /** The list hasn't loaded yet: keep the section's full height meanwhile. */
   isLoading?: boolean;
+  initiallyOpen?: boolean;
 }
 
 const FILTER_ITEM_HEIGHT = 28;
@@ -37,10 +38,11 @@ export function FilterSection({
   onSelect,
   onClear,
   isLoading = false,
+  initiallyOpen = true,
 }: FilterSectionProps) {
   const [search, setSearch] = useState("");
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(initiallyOpen);
   const { t } = useTranslation("catalogue");
 
   const availableGroups = useMemo(() => {

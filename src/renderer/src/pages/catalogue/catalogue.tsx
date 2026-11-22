@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+import { CatalogueStoreSearch } from "./catalogue-store-search";
 import type {
   CatalogueSearchPayload,
   CatalogueSearchResult,
@@ -731,157 +733,158 @@ export default function Catalogue() {
         }}
         onShowRecompilations={showRecompilationsSkippingClassicsOnboarding}
       />
-      <div className="catalogue__header">
-        <div className="catalogue__header-row">
-          <div className="catalogue__header-summary">
-            <h1>{filters.title || t("store_all_games")}</h1>
-            {!showSkeleton && !searchFailed && (
-              <span className="catalogue__result-count" role="status">
-                {t("result_count", { resultCount: formatNumber(itemsCount) })}
-              </span>
-            )}
-          </div>
-
-          <div className="catalogue__sort-inline">
-            <span className="catalogue__sort-label">{t("sort_by")}</span>
-            <SelectField
-              theme="dark"
-              className="catalogue__sort-select"
-              value={
-                sortValues.includes(selectedSortValue as CatalogueSortValue)
-                  ? selectedSortValue
-                  : "popularity:desc"
-              }
-              options={sortOptions}
-              onChange={(event) => {
-                const [sortBy, sortOrder] = event.target.value.split(":") as [
-                  CatalogueSearchPayload["sortBy"],
-                  CatalogueSearchPayload["sortOrder"],
-                ];
-
-                dispatch(setFilters({ sortBy, sortOrder }));
-              }}
-            />
-          </div>
+      <div className="catalogue__heading">
+        <div className="catalogue-store-width">
+          <Link to="/catalogue">{t("catalogue", { ns: "sidebar" })}</Link>
+          <h1>{t("store_all_games")}</h1>
         </div>
-
-        {selectedFiltersCount > 0 && (
-          <div className="catalogue__header-row catalogue__header-row--filters">
-            <span className="catalogue__active-filters-label">
-              {t("active_filters")}
-            </span>
-
-            <div className="catalogue__filters-wrapper">
-              <ul className="catalogue__filters-list">
-                {activeGroupedFilters.map((filter) => (
-                  <li key={`${filter.key}-${filter.value}`}>
-                    <FilterItem
-                      filter={filter.label ?? ""}
-                      filterType={filter.filterType}
-                      orbColor={filter.orbColor}
-                      onRemove={() => {
-                        if (filter.value === "range") {
-                          dispatch(setFilters({ releaseYear: undefined }));
-                          return;
-                        }
-
-                        if (filter.key === "recompilation") {
-                          dispatch(setFilters({ [filter.key]: undefined }));
-                          return;
-                        }
-
-                        if (filter.value === "threshold") {
-                          dispatch(setFilters({ [filter.key]: [] }));
-                          return;
-                        }
-
-                        const currentValues =
-                          (filters[filter.key] as
-                            | (string | number)[]
-                            | undefined) ?? [];
-
-                        dispatch(
-                          setFilters({
-                            [filter.key]: currentValues.filter(
-                              (item) => item !== filter.value
-                            ),
-                          })
-                        );
-                      }}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <Button
-              type="button"
-              theme="outline"
-              className="catalogue__clear-all-button"
-              onClick={() => dispatch(setFilters(clearAllCategoryFilters))}
-            >
-              {t("clear_filters", {
-                filterCount: formatNumber(selectedFiltersCount),
-              })}
-            </Button>
-          </div>
-        )}
       </div>
+      <div className="catalogue__content catalogue-store-width">
+        <div className="catalogue__results">
+          <div className="catalogue__header-row catalogue__search-bar">
+            <CatalogueStoreSearch inline />
+            <div className="catalogue__sort-inline">
+              <span className="catalogue__sort-label">{t("sort_by")}</span>
+              <SelectField
+                theme="dark"
+                className="catalogue__sort-select"
+                value={
+                  sortValues.includes(selectedSortValue as CatalogueSortValue)
+                    ? selectedSortValue
+                    : "popularity:desc"
+                }
+                options={sortOptions}
+                onChange={(event) => {
+                  const [sortBy, sortOrder] = event.target.value.split(":") as [
+                    CatalogueSearchPayload["sortBy"],
+                    CatalogueSearchPayload["sortOrder"],
+                  ];
 
-      <div className="catalogue__content">
-        <div
-          className={cn("catalogue__games-container", {
-            "catalogue__games-container--classics": mode === "classics",
-          })}
-        >
-          {searchFailed ? (
-            <div className="catalogue__notice">
-              <p role="status">{t("browse_load_error", { ns: "home" })}</p>
+                  dispatch(setFilters({ sortBy, sortOrder }));
+                }}
+              />
+            </div>
+          </div>
+          {selectedFiltersCount > 0 && (
+            <div className="catalogue__header-row catalogue__header-row--filters">
+              <span className="catalogue__active-filters-label">
+                {t("active_filters")}
+              </span>
+
+              <div className="catalogue__filters-wrapper">
+                <ul className="catalogue__filters-list">
+                  {activeGroupedFilters.map((filter) => (
+                    <li key={`${filter.key}-${filter.value}`}>
+                      <FilterItem
+                        filter={filter.label ?? ""}
+                        filterType={filter.filterType}
+                        orbColor={filter.orbColor}
+                        onRemove={() => {
+                          if (filter.value === "range") {
+                            dispatch(setFilters({ releaseYear: undefined }));
+                            return;
+                          }
+
+                          if (filter.key === "recompilation") {
+                            dispatch(setFilters({ [filter.key]: undefined }));
+                            return;
+                          }
+
+                          if (filter.value === "threshold") {
+                            dispatch(setFilters({ [filter.key]: [] }));
+                            return;
+                          }
+
+                          const currentValues =
+                            (filters[filter.key] as
+                              | (string | number)[]
+                              | undefined) ?? [];
+
+                          dispatch(
+                            setFilters({
+                              [filter.key]: currentValues.filter(
+                                (item) => item !== filter.value
+                              ),
+                            })
+                          );
+                        }}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
               <Button
+                type="button"
                 theme="outline"
-                onClick={() => setSearchAttempt((attempt) => attempt + 1)}
+                className="catalogue__clear-all-button"
+                onClick={() => dispatch(setFilters(clearAllCategoryFilters))}
               >
-                {t("browse_retry", { ns: "home" })}
+                {t("clear_filters", {
+                  filterCount: formatNumber(selectedFiltersCount),
+                })}
               </Button>
             </div>
-          ) : showSkeleton ? (
-            <SkeletonTheme baseColor="#1c1c1c" highlightColor="#444">
-              {Array.from({ length: PAGE_SIZE }).map((_, i) => (
-                <Skeleton
-                  key={i}
-                  className={cn("catalogue__skeleton", {
-                    "catalogue__skeleton--classics": mode === "classics",
-                  })}
-                />
-              ))}
-            </SkeletonTheme>
-          ) : results.length === 0 ? (
-            <p className="catalogue__notice" role="status">
-              {t("store_no_results")}
-            </p>
-          ) : mode === "classics" ? (
-            results.map((game) => (
-              <GameItemClassics
-                key={game.id}
-                game={game}
-                showRecompilationBadge={isRecompilationsEnabled}
-              />
-            ))
-          ) : (
-            results.map((game) => <GameItem key={game.id} game={game} />)
           )}
+          {!showSkeleton && !searchFailed && (
+            <p className="catalogue__result-count" role="status">
+              {t("result_count", { resultCount: formatNumber(itemsCount) })}
+            </p>
+          )}
+          <div
+            className={cn("catalogue__games-container", {
+              "catalogue__games-container--classics": mode === "classics",
+            })}
+          >
+            {searchFailed ? (
+              <div className="catalogue__notice">
+                <p role="status">{t("browse_load_error", { ns: "home" })}</p>
+                <Button
+                  theme="outline"
+                  onClick={() => setSearchAttempt((attempt) => attempt + 1)}
+                >
+                  {t("browse_retry", { ns: "home" })}
+                </Button>
+              </div>
+            ) : showSkeleton ? (
+              <SkeletonTheme baseColor="#1c1c1c" highlightColor="#444">
+                {Array.from({ length: PAGE_SIZE }).map((_, i) => (
+                  <Skeleton
+                    key={i}
+                    className={cn("catalogue__skeleton", {
+                      "catalogue__skeleton--classics": mode === "classics",
+                    })}
+                  />
+                ))}
+              </SkeletonTheme>
+            ) : results.length === 0 ? (
+              <p className="catalogue__notice" role="status">
+                {t("store_no_results")}
+              </p>
+            ) : mode === "classics" ? (
+              results.map((game) => (
+                <GameItemClassics
+                  key={game.id}
+                  game={game}
+                  showRecompilationBadge={isRecompilationsEnabled}
+                />
+              ))
+            ) : (
+              results.map((game) => <GameItem key={game.id} game={game} />)
+            )}
 
-          <div className="catalogue__pagination-container">
-            <Pagination
-              page={page}
-              totalPages={Math.ceil(itemsCount / PAGE_SIZE)}
-              onPageChange={(page) => {
-                dispatch(setPage(page));
-                if (cataloguePageRef.current) {
-                  cataloguePageRef.current.scrollTop = 0;
-                }
-              }}
-            />
+            <div className="catalogue__pagination-container">
+              <Pagination
+                page={page}
+                totalPages={Math.ceil(itemsCount / PAGE_SIZE)}
+                onPageChange={(page) => {
+                  dispatch(setPage(page));
+                  if (cataloguePageRef.current) {
+                    cataloguePageRef.current.scrollTop = 0;
+                  }
+                }}
+              />
+            </div>
           </div>
         </div>
 
@@ -889,10 +892,7 @@ export default function Catalogue() {
           className="catalogue__filters-container"
           aria-label={t("store_filters")}
         >
-          <h2>{t("store_filters")}</h2>
           <div className="catalogue__filters-sections">
-            <CatalogueModeToggle />
-
             {mode === "classics" && isRecompilationsEnabled && (
               <RecompilationFilterToggle
                 checked={filters.recompilation === "has"}
@@ -903,6 +903,56 @@ export default function Catalogue() {
                 }
               />
             )}
+
+            {mode === "modern" && (
+              <ReleaseYearSection
+                title={t("release_year")}
+                color={filterCategoryColors.releaseYear}
+                value={filters.releaseYear}
+                onChange={(value) =>
+                  dispatch(setFilters({ releaseYear: value }))
+                }
+              />
+            )}
+
+            {mode === "modern" &&
+              filterSections.map((section) => (
+                <FilterSection
+                  key={section.key}
+                  title={section.title}
+                  onClear={() => dispatch(setFilters({ [section.key]: [] }))}
+                  color={filterCategoryColors[section.key]}
+                  initiallyOpen={
+                    section.key === "genres" || section.key === "tags"
+                  }
+                  onSelect={(value) => {
+                    if (filters[section.key].includes(value)) {
+                      dispatch(
+                        setFilters({
+                          [section.key]: filters[
+                            section.key as
+                              | "genres"
+                              | "tags"
+                              | "downloadSourceFingerprints"
+                              | "developers"
+                              | "publishers"
+                              | "protondbSupportBadges"
+                              | "deckCompatibility"
+                          ].filter((item) => item !== value),
+                        })
+                      );
+                    } else {
+                      dispatch(
+                        setFilters({
+                          [section.key]: [...filters[section.key], value],
+                        })
+                      );
+                    }
+                  }}
+                  items={section.items}
+                  isLoading={section.isLoading}
+                />
+              ))}
 
             {mode === "modern" && shouldShowProtonFeatures && (
               <Suspense fallback={null}>
@@ -947,52 +997,7 @@ export default function Catalogue() {
               </Suspense>
             )}
 
-            {mode === "modern" && (
-              <ReleaseYearSection
-                title={t("release_year")}
-                color={filterCategoryColors.releaseYear}
-                value={filters.releaseYear}
-                onChange={(value) =>
-                  dispatch(setFilters({ releaseYear: value }))
-                }
-              />
-            )}
-
-            {mode === "modern" &&
-              filterSections.map((section) => (
-                <FilterSection
-                  key={section.key}
-                  title={section.title}
-                  onClear={() => dispatch(setFilters({ [section.key]: [] }))}
-                  color={filterCategoryColors[section.key]}
-                  onSelect={(value) => {
-                    if (filters[section.key].includes(value)) {
-                      dispatch(
-                        setFilters({
-                          [section.key]: filters[
-                            section.key as
-                              | "genres"
-                              | "tags"
-                              | "downloadSourceFingerprints"
-                              | "developers"
-                              | "publishers"
-                              | "protondbSupportBadges"
-                              | "deckCompatibility"
-                          ].filter((item) => item !== value),
-                        })
-                      );
-                    } else {
-                      dispatch(
-                        setFilters({
-                          [section.key]: [...filters[section.key], value],
-                        })
-                      );
-                    }
-                  }}
-                  items={section.items}
-                  isLoading={section.isLoading}
-                />
-              ))}
+            <CatalogueModeToggle />
 
             {mode === "classics" &&
               classicsFilterSections.map((section) => {

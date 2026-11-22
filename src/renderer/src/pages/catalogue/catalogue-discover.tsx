@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ArrowRightIcon } from "@primer/octicons-react";
 import Skeleton from "react-loading-skeleton";
 
-import { Button, GameCard, Hero } from "@renderer/components";
+import { Button, Hero } from "@renderer/components";
 import { clearFilters, setFilters, setMode } from "@renderer/features";
 import { catalogueSearchSlice } from "@renderer/features/catalogue-search";
 import { buildGameDetailsPath, ensureArray } from "@renderer/helpers";
@@ -17,6 +17,7 @@ import type {
   DownloadSource,
   ShopAssets,
   Steam250Game,
+  TrendingGame,
 } from "@types";
 
 import { CatalogueCategories } from "./catalogue-categories";
@@ -33,7 +34,7 @@ type ShelfId = (typeof shelves)[number]["id"];
 type ShelfGames = (ShopAssets | CatalogueSearchResult)[];
 type ShelfResults = Partial<Record<ShelfId, ShelfGames | null>>;
 
-const shelfSize = 6;
+const shelfSize = 10;
 
 export default function CatalogueDiscover() {
   const { t } = useTranslation("home");
@@ -45,6 +46,7 @@ export default function CatalogueDiscover() {
   const [activeShelf, setActiveShelf] = useState<ShelfId>(
     CatalogueCategory.Hot
   );
+  const [hoveredGame, setHoveredGame] = useState<string>();
   const [randomGame, setRandomGame] = useState<Steam250Game | null>(null);
 
   useEffect(() => {
@@ -126,39 +128,29 @@ export default function CatalogueDiscover() {
   };
 
   const games = results[activeShelf];
+  const allGames = useMemo(
+    () => Object.values(results).flatMap((games) => games ?? []),
+    [results]
+  );
+  const alternatives = useMemo(
+    () =>
+      (results[CatalogueCategory.Hot] ?? []).flatMap((game): TrendingGame[] =>
+        "libraryHeroImageUrl" in game
+          ? [{ ...game, description: null, uri: buildGameDetailsPath(game) }]
+          : []
+      ),
+    [results]
+  );
+  const gameKey = (game: ShelfGames[number]) => `${game.shop}:${game.objectId}`;
+  const preview =
+    games?.find((game) => gameKey(game) === hoveredGame) ?? games?.[0];
 
   return (
     <section className="catalogue-discover">
-      <Hero />
-
-      <section className="catalogue-discover__browse">
-        <header className="catalogue-discover__heading">
-          <h1>{t("browse_games")}</h1>
-          {randomGame && (
-            <Button
-              theme="outline"
-              size="small"
-              onClick={() =>
-                navigate(
-                  buildGameDetailsPath(
-                    { ...randomGame, shop: "steam" },
-                    { fromRandomizer: "1" }
-                  )
-                )
-              }
-            >
-              {t("surprise_me")}
-            </Button>
-          )}
-        </header>
-        <CatalogueCategories
-          onChooseGenre={(genre) => openResults({ genres: [genre] })}
-          onChooseTag={(id) => openResults({ tags: [id] })}
-        />
-      </section>
+      <Hero alternatives={alternatives} />
 
       <section
-        className="catalogue-discover__shelf"
+        className="catalogue-discover__shelf catalogue-store-width"
         aria-busy={games === undefined}
       >
         <div className="catalogue-discover__shelf-picker">
@@ -167,7 +159,10 @@ export default function CatalogueDiscover() {
               type="button"
               key={id}
               aria-pressed={activeShelf === id}
-              onClick={() => setActiveShelf(id)}
+              onClick={() => {
+                setActiveShelf(id);
+                setHoveredGame(undefined);
+              }}
             >
               {t(label)}
             </button>
@@ -194,26 +189,61 @@ export default function CatalogueDiscover() {
         ) : games?.length === 0 ? (
           <p role="status">{t("no_results")}</p>
         ) : (
-          <div className="catalogue-discover__games">
-            {games
-              ? games.map((game) => (
-                  <div
-                    className="catalogue-discover__game"
-                    key={`${game.shop}:${game.objectId}`}
-                  >
-                    <GameCard
-                      game={game}
-                      onClick={() => navigate(buildGameDetailsPath(game))}
+          <div className="catalogue-discover__shelf-body">
+            <div className="catalogue-discover__games">
+              {games
+                ? games.map((game) => (
+                    <article
+                      className="catalogue-discover__game"
+                      key={gameKey(game)}
+                      data-highlighted={preview === game}
+                    >
+                      <Link
+                        to={buildGameDetailsPath(game)}
+                        onPointerEnter={() => setHoveredGame(gameKey(game))}
+                        onFocus={() => setHoveredGame(gameKey(game))}
+                      >
+                        {game.libraryImageUrl && (
+                          <img
+                            src={game.libraryImageUrl}
+                            alt=""
+                            loading="lazy"
+                          />
+                        )}
+                        <span>
+                          <strong>{game.title}</strong>
+                          {"genres" in game && game.genres?.length > 0 && (
+                            <small>{game.genres.slice(0, 3).join(", ")}</small>
+                          )}
+                        </span>
+                      </Link>
+                      <CatalogueWishlistButton game={game} />
+                    </article>
+                  ))
+                : Array.from({ length: shelfSize }, (_, index) => (
+                    <Skeleton
+                      key={index}
+                      className="catalogue-discover__placeholder"
                     />
-                    <CatalogueWishlistButton game={game} />
-                  </div>
-                ))
-              : Array.from({ length: shelfSize }, (_, index) => (
-                  <Skeleton
-                    key={index}
-                    className="catalogue-discover__placeholder"
-                  />
-                ))}
+                  ))}
+            </div>
+            {preview && (
+              <aside className="catalogue-discover__preview">
+                <Link to={buildGameDetailsPath(preview)}>
+                  <strong>{preview.title}</strong>
+                  {"genres" in preview && preview.genres?.length > 0 && (
+                    <div className="catalogue-discover__preview-genres">
+                      {preview.genres.slice(0, 4).map((genre) => (
+                        <span key={genre}>{genre}</span>
+                      ))}
+                    </div>
+                  )}
+                  {preview.libraryImageUrl && (
+                    <img src={preview.libraryImageUrl} alt="" loading="lazy" />
+                  )}
+                </Link>
+              </aside>
+            )}
           </div>
         )}
 
@@ -227,6 +257,40 @@ export default function CatalogueDiscover() {
             {t("browse_all_new")} <ArrowRightIcon />
           </Button>
         )}
+      </section>
+
+      <section className="catalogue-discover__browse catalogue-store-width">
+        <header className="catalogue-discover__heading">
+          <h2>{t("browse_games")}</h2>
+          {randomGame && (
+            <Button
+              theme="outline"
+              size="small"
+              onClick={() =>
+                navigate(
+                  buildGameDetailsPath(
+                    { ...randomGame, shop: "steam" },
+                    { fromRandomizer: "1" }
+                  )
+                )
+              }
+            >
+              {t("surprise_me")}
+            </Button>
+          )}
+        </header>
+        <CatalogueCategories
+          artworkForGenre={(genre) =>
+            allGames.find(
+              (game) =>
+                "genres" in game &&
+                game.genres?.includes(genre) &&
+                game.libraryImageUrl
+            )?.libraryImageUrl
+          }
+          onChooseGenre={(genre) => openResults({ genres: [genre] })}
+          onChooseTag={(id) => openResults({ tags: [id] })}
+        />
       </section>
     </section>
   );
