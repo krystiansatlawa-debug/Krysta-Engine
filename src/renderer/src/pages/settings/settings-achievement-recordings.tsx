@@ -63,7 +63,7 @@ export function SettingsAchievementRecordings() {
       <CheckboxField
         label={
           pl
-            ? "Włącz nagrywanie gier (F9 ręcznie i automatycznie przy osiągnięciach)"
+            ? "Włącz nagrywanie gier ręcznie i przy osiągnięciach"
             : "Enable game recording (manual hotkey and achievements)"
         }
         checked={state?.settings.enabled ?? false}
@@ -137,8 +137,12 @@ export function SettingsAchievementRecordings() {
       ))}
       <SelectField
         className="settings-screenshots__select"
-        label={pl ? "Skrót START/STOP ręcznego nagrywania" : "Manual recording START/STOP hotkey"}
-        value={state?.settings.hotkey ?? "Control+Shift+F9"}
+        label={
+          pl
+            ? "Skrót START/STOP ręcznego nagrywania"
+            : "Manual recording START/STOP hotkey"
+        }
+        value={state?.settings.hotkey ?? "F9"}
         options={[
           "",
           "Control+Shift+F9",

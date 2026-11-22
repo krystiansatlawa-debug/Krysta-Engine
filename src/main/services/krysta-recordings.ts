@@ -33,6 +33,7 @@ type Settings = {
   fps: number;
   limitGb: number;
   hotkey: string;
+  hotkeyVersion: 1;
   folder?: string;
 };
 type Clip = {
@@ -62,7 +63,7 @@ type Active = {
   pid: number;
   prefs: Settings;
   saving: boolean;
-  manual: boolean;
+  manual: "recording" | "finishing" | null;
   stopped: boolean;
 };
 const defaults: Settings = {
@@ -73,7 +74,8 @@ const defaults: Settings = {
   quality: 1080,
   fps: 30,
   limitGb: 10,
-  hotkey: "Control+Shift+F9",
+  hotkey: "F9",
+  hotkeyVersion: 1,
 };
 const durations = [5, 10, 15, 30, 45, 60],
   preDurations = [0, 5, 10, 15, 30],
@@ -92,10 +94,21 @@ const thumbnail = (value: unknown): value is string =>
   typeof value === "string" &&
   value.length <= 24000 &&
   /^data:image\/jpeg;base64,[a-zA-Z0-9+/=]+$/.test(value);
-function normalize(value: unknown): Settings | null {
+function normalize(value: unknown, migrateLegacy = false): Settings | null {
   if (!value || typeof value !== "object") return null;
-  const raw = value as Partial<Settings>,
-    s = { ...defaults, ...raw };
+  const raw = value as Partial<Settings>;
+  const hotkey =
+    migrateLegacy &&
+    raw.hotkeyVersion === undefined &&
+    raw.hotkey === "Control+Shift+F9"
+      ? defaults.hotkey
+      : (raw.hotkey ?? defaults.hotkey);
+  const s = {
+    ...defaults,
+    ...raw,
+    hotkey,
+    hotkeyVersion: defaults.hotkeyVersion,
+  };
   if (
     typeof s.enabled !== "boolean" ||
     typeof s.audio !== "boolean" ||
@@ -122,7 +135,7 @@ async function settings(): Promise<Settings> {
   if (!loading)
     loading = fs
       .readFile(settingsPath(), "utf8")
-      .then((s) => normalize(JSON.parse(s)) ?? { ...defaults })
+      .then((s) => normalize(JSON.parse(s), true) ?? { ...defaults })
       .catch(() => ({ ...defaults }))
       .then((s) => (preferences = s))
       .finally(() => {
@@ -184,6 +197,10 @@ function dispose(a: Active) {
 }
 function end(a: Active) {
   if (a.stopped) return;
+  if (a.manual) {
+    if (a.manual === "recording") void finishManualRecording(a);
+    return;
+  }
   a.stopped = true;
   if (a.saving && !a.win.isDestroyed())
     void a.win.webContents
@@ -200,7 +217,7 @@ function cancel(pause = false) {
 }
 async function stopRecording() {
   if (current?.manual) {
-    await finishManualRecording();
+    if (current.manual === "recording") await finishManualRecording(current);
     return;
   }
   cancel(true);
@@ -232,7 +249,7 @@ async function saveSettings(next: Settings) {
 function applyHotkey(s: Settings) {
   if (process.platform !== "win32" || !app.isReady()) return;
   const desired = s.enabled ? s.hotkey : "";
-  if (registered === desired) return;
+  if (registered === desired && !shortcutError) return;
   if (registered) globalShortcut.unregister(registered);
   registered = "";
   shortcutError = false;
@@ -328,14 +345,20 @@ async function list(dir: string): Promise<Clip[]> {
   }
   return clips.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
-async function persist(a: Active, result: Result, names: string[], manual = false) {
+async function persist(
+  a: Active,
+  result: Result,
+  names: string[],
+  manual = false
+) {
   if (
     !result ||
     typeof result.data !== "string" ||
     result.data.length > Math.ceil(maxBytes / 3) * 4 + 4 ||
     !Number.isFinite(result.duration) ||
     result.duration < 1 ||
-    result.duration > (manual ? 60 * 60 : a.prefs.seconds + a.prefs.preSeconds + 4)
+    result.duration >
+      (manual ? 60 * 60 : a.prefs.seconds + a.prefs.preSeconds + 4)
   )
     throw Error("Recording incomplete or too short");
   const bytes = Buffer.from(result.data, "base64");
@@ -493,7 +516,6 @@ async function openCapture(
   const source = sources.find((s) => isWindowsWindowSource(s.id, handle));
   const foreground = await resolveForegroundWindow();
   if (
-    !source ||
     !foreground ||
     foreground.processId !== pid ||
     foreground.windowHandle !== handle ||
@@ -501,6 +523,10 @@ async function openCapture(
     quitting
   )
     return null;
+  if (!source)
+    throw Error(
+      "Okno gry jest niedostępne dla nagrywania. Spróbuj trybu bez ramek. / The game window is unavailable for capture. Try borderless mode."
+    );
   const captureSession = session.fromPartition("krysta-recordings-worker");
   const win = new BrowserWindow({
     show: false,
@@ -523,7 +549,7 @@ async function openCapture(
     pid,
     prefs,
     saving: false,
-    manual: false,
+    manual: null,
     stopped: false,
   };
   current = a;
@@ -637,44 +663,66 @@ async function ensure(expected: string | null = null): Promise<Active | null> {
 // preset duration. The second hotkey ends and persists the active session.
 let manualTransition: Promise<void> | null = null;
 async function startManualRecording() {
-  const prefs = await settings();
-  if (!prefs.enabled) {
-    lastError = "Włącz nagrywanie w ustawieniach / Enable recording in settings";
-    return;
-  }
-  if (triggering || current?.saving) return;
-  const a = await ensure();
-  if (!a || a.stopped || !(await sameForeground(a))) {
-    lastError = "Nie rozpoznano aktywnego okna gry / Active game window not found";
-    return;
-  }
-  if (!(await enoughSpace(a.prefs, 8 * 1024 ** 2, true))) {
-    lastError = "Limit nagrań lub brak miejsca / Recording storage limit";
-    return;
-  }
+  lastError = "";
+  let a: Active | null = null;
   try {
-    await a.win.webContents.executeJavaScript("globalThis.krystaManualStart()", true);
-    if (a.stopped || current !== a) return;
-    a.manual = true;
+    const prefs = await settings();
+    if (!prefs.enabled)
+      throw Error(
+        "Włącz nagrywanie w ustawieniach / Enable recording in settings"
+      );
+    if (triggering || current?.saving)
+      throw Error(
+        "Zaczekaj na zapis bieżącego klipu / Wait for the current clip"
+      );
+
+    // An explicit hotkey press can restart capture after stopping the replay buffer.
+    pausedWindow = "";
+    a = await ensure();
+    if (!a || a.stopped || !(await sameForeground(a)))
+      throw Error(
+        lastError ||
+          "Nie rozpoznano aktywnego okna gry / Active game window not found"
+      );
+    if (!(await enoughSpace(a.prefs, 8 * 1024 ** 2, true)))
+      throw Error("Limit nagrań lub brak miejsca / Recording storage limit");
+
+    await a.win.webContents.executeJavaScript(
+      "globalThis.krystaManualStart()",
+      true
+    );
+    if (a.stopped || current !== a)
+      throw Error(
+        "Aktywne okno gry zmieniło się / The active game window changed"
+      );
+    a.manual = "recording";
     a.saving = true;
-    lastError = "";
     void showRecordingNotice("started");
-  } catch (e) {
-    lastError = String(e).slice(0, 500);
-    if (current === a) end(a);
+  } catch (error) {
+    lastError = (error instanceof Error ? error.message : String(error)).slice(
+      0,
+      500
+    );
+    if (a && current === a) end(a);
     void showRecordingNotice("failed");
   }
 }
-async function finishManualRecording() {
-  const a = current;
-  if (!a?.manual || a.stopped) return;
-  a.manual = false;
+async function finishManualRecording(a: Active) {
+  if (a.manual !== "recording" || a.stopped) return;
+  a.manual = "finishing";
+  let deadline: ReturnType<typeof setTimeout> | undefined;
   try {
     const result = await Promise.race([
-      a.win.webContents.executeJavaScript("globalThis.krystaManualFinish()", true) as Promise<Result>,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(Error("Manual recording finalization timed out")), 20000)
-      ),
+      a.win.webContents.executeJavaScript(
+        "globalThis.krystaManualFinish()",
+        true
+      ) as Promise<Result>,
+      new Promise<never>((_, reject) => {
+        deadline = setTimeout(
+          () => reject(Error("Manual recording finalization timed out")),
+          20000
+        );
+      }),
     ]);
     await persist(a, result, ["Manual recording"], true);
     lastError = "";
@@ -683,6 +731,7 @@ async function finishManualRecording() {
     lastError = String(e).slice(0, 500);
     void showRecordingNotice("failed");
   } finally {
+    if (deadline) clearTimeout(deadline);
     a.saving = false;
     if (current === a) dispose(a);
   }
@@ -691,8 +740,8 @@ function toggleManualRecording() {
   // Serialize rapid double-presses so they cannot start two parallel captures.
   if (manualTransition) return manualTransition;
   manualTransition = (async () => {
-    if (current?.manual) await finishManualRecording();
-    else await startManualRecording();
+    if (current?.manual === "recording") await finishManualRecording(current);
+    else if (!current?.manual) await startManualRecording();
   })().finally(() => {
     manualTransition = null;
   });

@@ -188,10 +188,8 @@
           buffered = null;
         }
         finish();
-        if (manual) {
-          stopSegment(manual);
-          manual = null;
-        }
+        // The main process can still save this segment after the capture track ends.
+        stopSegment(manual);
         stream?.getTracks().forEach((t) => t.stop());
         stopPreview();
       };
