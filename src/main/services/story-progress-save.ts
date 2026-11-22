@@ -11,6 +11,7 @@ import {
 } from "./far-cry-4-story-save.js";
 
 export type StorySaveSource =
+  | "gtaiv"
   | "gtav"
   | "gtav-enhanced"
   | "rdr2"
@@ -18,26 +19,29 @@ export type StorySaveSource =
   | "far-cry-4";
 
 export const storySaveSteamAppIds: Readonly<Record<StorySaveSource, string>> = {
+  gtaiv: "12210",
   gtav: "271590",
   "gtav-enhanced": "3240220",
   rdr2: "1174180",
   cyberpunk: "1091500",
   "far-cry-4": "298110",
 };
-const steamIds: ReadonlyMap<string, StorySaveSource> = new Map(
-  Object.entries(storySaveSteamAppIds).map(([source, id]) => [
-    id,
-    source as StorySaveSource,
-  ])
-);
+const steamIds: ReadonlyMap<string, StorySaveSource> = new Map([
+  ...Object.entries(storySaveSteamAppIds).map(
+    ([source, id]) => [id, source as StorySaveSource] as const
+  ),
+  ["12220", "gtaiv"], // Episodes from Liberty City
+]);
 
 const rockstarIds: ReadonlyMap<string, StorySaveSource> = new Map([
+  ["rockstar-gtaiv", "gtaiv"],
   ["rockstar-gtav-legacy", "gtav"],
   ["rockstar-gtav-enhanced", "gtav-enhanced"],
   ["rockstar-rdr2", "rdr2"],
 ]);
 
 const executables: ReadonlyMap<string, StorySaveSource> = new Map([
+  ["gtaiv.exe", "gtaiv"],
   ["gta5.exe", "gtav"],
   ["gta5_enhanced.exe", "gtav-enhanced"],
   ["rdr2.exe", "rdr2"],
@@ -47,6 +51,9 @@ const executables: ReadonlyMap<string, StorySaveSource> = new Map([
 ]);
 
 const gameTitles: ReadonlyMap<string, StorySaveSource> = new Map([
+  ["grand theft auto iv", "gtaiv"],
+  ["grand theft auto iv the complete edition", "gtaiv"],
+  ["grand theft auto episodes from liberty city", "gtaiv"],
   ["grand theft auto v", "gtav"],
   ["grand theft auto v legacy", "gtav"],
   ["grand theft auto v enhanced", "gtav-enhanced"],
@@ -147,10 +154,29 @@ const cyberpunkSummaries: ReadonlyMap<string, string> = new Map([
 ]);
 
 const rockstarHeaderSize = 260;
+const gtaIvHeaderSize = 0x115;
+
+export function parseGtaIvStoryHeader(bytes: Buffer): SaveDetails | null {
+  // PC SGTA4 slots store the localized name shown in the game's Load menu.
+  // The title is independent of the encrypted/profile-bound data and stats.
+  if (
+    bytes.length < gtaIvHeaderSize ||
+    bytes.readUInt32LE(0) !== 57 ||
+    bytes.toString("latin1", 0x0c, 0x10) !== "SAVE" ||
+    bytes.toString("latin1", 0x110, 0x115) !== "BLOCK"
+  )
+    return null;
+  const title = bytes.toString("utf16le", 0x10, 0x110);
+  const terminator = title.indexOf("\0");
+  if (terminator < 0) return null;
+  const saveTitle = title.slice(0, terminator).trim();
+  if (!saveTitle || /[\p{Cc}\p{Cs}\uFFFD]/u.test(saveTitle)) return null;
+  return { percent: null, saveTitle, saveTitleKind: "save-title" };
+}
 
 export function parseRockstarStoryHeader(
   bytes: Buffer,
-  source: keyof typeof rockstarFolders
+  source: Exclude<keyof typeof rockstarFolders, "gtaiv">
 ): SaveDetails | null {
   // PC save headers contain a big-endian version and a UTF-16LE display title.
   // The encrypted body is not needed for the total completion shown here.
@@ -269,13 +295,17 @@ async function readBounded(file: string, limit: number) {
 }
 
 const rockstarFolders = {
+  gtaiv: ["GTA IV"],
   gtav: ["GTA V", "GTAV"],
   "gtav-enhanced": ["GTAV Enhanced", "GTA V Enhanced"],
   rdr2: ["Red Dead Redemption 2"],
 };
 
-const rockstarSlotPattern = (source: keyof typeof rockstarFolders) =>
-  source === "rdr2" ? /^SRDR3\d{4}$/i : /^SGTA5\d{4}$/i;
+const rockstarSlotPattern = (source: keyof typeof rockstarFolders) => {
+  if (source === "rdr2") return /^SRDR3\d{4}$/i;
+  if (source === "gtaiv") return /^SGTA4\d{2}$/i;
+  return /^SGTA5\d{4}$/i;
+};
 
 const cyberpunkMetadataPattern = /^metadata\.\d+\.json$/i;
 const farCry4SlotPattern = /^(?:\d+\.save|SaveSlot\d+\.sav(?:\.\d+)?)$/i;
@@ -418,7 +448,22 @@ export async function readLatestStorySave(
             path.join(documents, "Rockstar Games", folder)
           )
   );
-  const roots = [...new Set([...defaults, ...(paths.directFolders ?? [])])];
+  const legacyGtaIv =
+    source === "gtaiv"
+      ? paths.profiles.map(({ home }) =>
+          path.join(
+            home,
+            "AppData",
+            "Local",
+            "Rockstar Games",
+            "GTA IV",
+            "savegames"
+          )
+        )
+      : [];
+  const roots = [
+    ...new Set([...defaults, ...legacyGtaIv, ...(paths.directFolders ?? [])]),
+  ];
   let detectedFiles = paths.detectedFiles;
   if (source === "far-cry-4" && !detectedFiles) {
     const selectedFiles: string[] = [];
@@ -443,17 +488,23 @@ export async function readLatestStorySave(
   for (const { file, savedAt } of candidates) {
     if (!canRead()) return waiting;
     try {
-      const details =
-        source === "cyberpunk"
-          ? await readCyberpunkSlot(file)
-          : source === "far-cry-4"
-            ? parseFarCry4StorySave(
-                await readBounded(file, farCry4SaveLimit + 1)
-              )
-            : parseRockstarStoryHeader(
-                await readBounded(file, rockstarHeaderSize),
-                source
-              );
+      let details: SaveDetails | null;
+      if (source === "cyberpunk") {
+        details = await readCyberpunkSlot(file);
+      } else if (source === "far-cry-4") {
+        details = parseFarCry4StorySave(
+          await readBounded(file, farCry4SaveLimit + 1)
+        );
+      } else if (source === "gtaiv") {
+        details = parseGtaIvStoryHeader(
+          await readBounded(file, gtaIvHeaderSize)
+        );
+      } else {
+        details = parseRockstarStoryHeader(
+          await readBounded(file, rockstarHeaderSize),
+          source
+        );
+      }
       if (!canRead()) return waiting;
       if (details)
         return { automatic: { ...details, savedAt }, status: "ready" };
@@ -494,6 +545,7 @@ export async function readDiscoveredStorySave(
     const name = path.basename(file);
     if (rockstarSlotPattern("rdr2").test(name)) formats.add("rdr2");
     else if (rockstarSlotPattern("gtav").test(name)) formats.add("gtav");
+    else if (rockstarSlotPattern("gtaiv").test(name)) formats.add("gtaiv");
     else if (
       name.toLowerCase() === "sav.dat" ||
       cyberpunkMetadataPattern.test(name)

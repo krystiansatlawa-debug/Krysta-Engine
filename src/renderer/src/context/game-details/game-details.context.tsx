@@ -91,9 +91,10 @@ export function GameDetailsContextProvider({
   const [shopDetails, setShopDetails] = useState<ShopDetailsWithAssets | null>(
     null
   );
-  const [achievements, setAchievements] = useState<UserAchievement[] | null>(
-    null
-  );
+  const [achievementSnapshot, setAchievementSnapshot] = useState<{
+    key: string;
+    entries: UserAchievement[];
+  } | null>(null);
   const [game, setGame] = useState<LibraryGame | null>(null);
   const [hasNSFWContentBlocked, setHasNSFWContentBlocked] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -151,6 +152,22 @@ export function GameDetailsContextProvider({
     lockAchievementIdentity || isUbisoftRoute
       ? objectId
       : (presentation?.achievementGame?.objectId ?? operationalObjectId);
+  const achievementKey = JSON.stringify([
+    shop,
+    objectId,
+    achievementShop,
+    achievementObjectId,
+    userDetails?.id,
+  ]);
+  const achievements =
+    achievementSnapshot?.key === achievementKey
+      ? achievementSnapshot.entries
+      : null;
+  const setAchievements = useCallback(
+    (entries: UserAchievement[]) =>
+      setAchievementSnapshot({ key: achievementKey, entries }),
+    [achievementKey]
+  );
   const pageSyncKey = useRef("");
 
   useEffect(() => {
@@ -308,6 +325,7 @@ export function GameDetailsContextProvider({
     operationalObjectId,
     achievementShop,
     achievementObjectId,
+    setAchievements,
     userDetails,
     isUbisoftRoute,
     userPreferences?.disableNsfwAlert,
@@ -387,7 +405,7 @@ export function GameDetailsContextProvider({
     setGame(null);
     setIsLoading(true);
     setIsGameRunning(false);
-    setAchievements(null);
+    setAchievementSnapshot(null);
     setGameOptionsInitialCategory("general");
     if (syncHeaderTitle) dispatch(setHeaderTitle(gameTitle));
     refreshGameDetails().catch(() => {});
@@ -545,7 +563,13 @@ export function GameDetailsContextProvider({
     return () => {
       unsubscribe.forEach((stop) => stop());
     };
-  }, [achievementObjectId, achievementShop, userDetails, presentation]);
+  }, [
+    achievementObjectId,
+    achievementShop,
+    userDetails,
+    presentation,
+    setAchievements,
+  ]);
 
   useEffect(() => {
     if (shop === "custom") return;

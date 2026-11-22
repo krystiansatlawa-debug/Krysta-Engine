@@ -7,7 +7,7 @@ export interface GameStoryProgress {
 export interface AutomaticGameStoryProgress {
   percent: number | null;
   saveTitle: string;
-  saveTitleKind?: "chapter";
+  saveTitleKind?: "chapter" | "save-title";
   trackedQuestId?: string;
   summaryKey?: string;
   missionDescription?: string;

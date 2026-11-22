@@ -6,6 +6,7 @@ import { test } from "node:test";
 import {
   identifyStorySaveSource,
   parseCyberpunkStoryMetadata,
+  parseGtaIvStoryHeader,
   parseRockstarStoryHeader,
   readLatestStorySave,
   readDiscoveredStorySave,
@@ -382,5 +383,52 @@ test("reads true campaign flags from the newest valid Far Cry 4 PC save", async 
   assert.equal(
     (await readDiscoveredStorySave([broken], source, () => true)).status,
     "unreadable"
+  );
+});
+
+test("reads the latest GTA IV PC slot from Rockstar folders and discovered files", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "krysta-gta-iv-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const profile = path.join(
+    root,
+    "Rockstar Games",
+    "GTA IV",
+    "Profiles",
+    "a0b1c2d3"
+  );
+  await mkdir(profile, { recursive: true });
+  const save = path.join(profile, "SGTA400");
+  const empty = path.join(profile, "SGTA401");
+  const bytes = Buffer.alloc(400);
+  bytes.writeUInt32LE(57);
+  bytes.write("SAVE", 0x0c, "latin1");
+  bytes.write("Drei Blätter", 0x10, "utf16le");
+  bytes.write("BLOCK", 0x110, "latin1");
+  await writeFile(save, bytes);
+  await writeFile(empty, bytes.subarray(0, 260));
+
+  assert.equal(
+    identifyStorySaveSource({ shop: "steam", objectId: "12210" }),
+    "gtaiv"
+  );
+  assert.equal(
+    identifyStorySaveSource({ shop: "steam", objectId: "12220" }),
+    "gtaiv"
+  );
+  assert.equal(parseGtaIvStoryHeader(Buffer.alloc(400)), null);
+  assert.equal(parseGtaIvStoryHeader(bytes.subarray(0, 0x110)), null);
+
+  const latest = await readLatestStorySave(
+    "gtaiv",
+    { profiles: [{ documents: root, home: root }] },
+    () => true
+  );
+  assert.equal(latest.status, "ready");
+  assert.equal(latest.automatic?.saveTitle, "Drei Blätter");
+  assert.equal(latest.automatic?.percent, null);
+  assert.equal(latest.automatic?.saveTitleKind, "save-title");
+  assert.deepEqual(
+    await readDiscoveredStorySave([empty, save], undefined, () => true),
+    latest
   );
 });

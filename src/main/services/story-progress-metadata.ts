@@ -13,7 +13,7 @@ const MAX_FOLDER_ENTRIES = 500;
 const METADATA_EXTENSION = /\.(?:json|ini|xml|sav|save|dat|bin|gz)$/i;
 const SAVE_FILE_EXTENSION =
   /\.(?:sav(?:\.\d+)?|save|json|ini|xml|dat|bin|srm|sra|state|dsv|gci|mcr|ps2|gz)$/i;
-const ROCKSTAR_SLOT = /^(?:SGTA5|SRDR3)\d{4}$/i;
+const ROCKSTAR_SLOT = /^(?:(?:SGTA5|SRDR3)\d{4}|SGTA4\d{2})$/i;
 
 const normalizeKey = (key: string) =>
   key.toLowerCase().replace(/[^a-z0-9]/g, "");

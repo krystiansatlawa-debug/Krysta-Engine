@@ -47,11 +47,11 @@ const customFolders = db.sublevel<string, string>("story-save-folders", {
 const queued = new Map<string, PendingScan>();
 let activeScan: { key: string; result: Promise<CompletedScan> } | undefined;
 const canRead = () => !hasTrackedGamesRunning();
-const storyReaderVersion = 1;
+const storyReaderVersion = 2;
 
 function storyKey(game: Game, source: StorySaveSource | undefined) {
   const { shop, objectId } = getGameCatalogueIdentity(game);
-  return source && source !== "far-cry-4"
+  return source && source !== "far-cry-4" && source !== "gtaiv"
     ? source
     : levelKeys.game(shop, objectId);
 }
@@ -87,14 +87,15 @@ async function defaultSavePaths(
       profiles.push({ home, documents: path.join(oneDrive, "Documents") });
     }
   } else if (process.platform === "linux") {
+    const catalogueGame = getGameCatalogueIdentity(game);
+    const protonAppId =
+      source === "gtaiv" &&
+      catalogueGame.shop === "steam" &&
+      catalogueGame.objectId === "12220"
+        ? catalogueGame.objectId
+        : storySaveSteamAppIds[source];
     const prefixes = (await getSteamLibraryFolders()).map((root) =>
-      path.join(
-        root,
-        "steamapps",
-        "compatdata",
-        storySaveSteamAppIds[source],
-        "pfx"
-      )
+      path.join(root, "steamapps", "compatdata", protonAppId, "pfx")
     );
     if (game.winePrefixPath) {
       prefixes.unshift(
