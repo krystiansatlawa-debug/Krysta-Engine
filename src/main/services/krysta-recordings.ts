@@ -327,14 +327,14 @@ async function list(dir: string): Promise<Clip[]> {
   }
   return clips.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
-async function persist(a: Active, result: Result, names: string[]) {
+async function persist(a: Active, result: Result, names: string[], manual = false) {
   if (
     !result ||
     typeof result.data !== "string" ||
     result.data.length > Math.ceil(maxBytes / 3) * 4 + 4 ||
     !Number.isFinite(result.duration) ||
     result.duration < 1 ||
-    result.duration > (a.manual ? 60 * 60 : a.prefs.seconds + a.prefs.preSeconds + 4)
+    result.duration > (manual ? 60 * 60 : a.prefs.seconds + a.prefs.preSeconds + 4)
   )
     throw Error("Recording incomplete or too short");
   const bytes = Buffer.from(result.data, "base64");
@@ -673,7 +673,7 @@ async function finishManualRecording() {
         setTimeout(() => reject(Error("Manual recording finalization timed out")), 20000)
       ),
     ]);
-    await persist(a, result, ["Manual recording"]);
+    await persist(a, result, ["Manual recording"], true);
     lastError = "";
   } catch (e) {
     lastError = String(e).slice(0, 500);
