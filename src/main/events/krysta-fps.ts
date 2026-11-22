@@ -419,7 +419,7 @@ if (process.platform === "win32") {
     poll = setInterval(() => {
       if (
         gamesPlaytime.size > 0 &&
-        (status === "missing-tool" || status === "waiting-game")
+        (status === "missing-tool" || status === "waiting-game" || status === "waiting-frames" || status === "capture-error")
       )
         refresh();
     }, 3000);
