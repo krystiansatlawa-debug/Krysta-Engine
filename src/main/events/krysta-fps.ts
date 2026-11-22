@@ -15,6 +15,8 @@ import { join, basename, extname } from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 import { gamesSublevel } from "@main/level";
+import { resolveForegroundGame } from "@main/services/screenshots/foreground-game";
+import { NativeAddon } from "@main/services/native-addon";
 import {
   gamesPlaytime,
   onTrackedGamesRunningChange,
@@ -154,7 +156,20 @@ async function reconcile() {
   const tool = await findTool(p);
   const keys = Array.from(gamesPlaytime.keys());
   let target: { key: string; exe: string } | null = null;
+  // Prefer the real foreground game process, not a launcher/bootstrap EXE.
+  // Rockstar, Ubisoft and many modded games launch a different process.
+  const foreground = await resolveForegroundGame("deeplink").catch(() => null);
+  if (foreground?.status === "resolved" && foreground.foreground?.processId) {
+    const pid = foreground.foreground.processId;
+    const processes = await NativeAddon.listProcesses().catch(() => []);
+    const process = processes.find((item) => item.pid === pid);
+    const executable = process?.exe;
+    if (executable && extname(executable).toLowerCase() === ".exe") {
+      target = { key: foreground.target.gameKey, exe: basename(executable) };
+    }
+  }
   for (const key of keys.reverse()) {
+    if (target) break;
     const game = await gamesSublevel.get(key).catch(() => null);
     if (
       game?.executablePath &&
@@ -207,7 +222,7 @@ async function reconcile() {
   w.setIgnoreMouseEvents(true);
   w.setAlwaysOnTop(true, "screen-saver");
   const html =
-    '<html><body style="margin:0;background:transparent"><div id="fps" style="display:inline-block;color:#d7d7d7;background:rgba(40,40,40,.78);border:1px solid rgba(255,255,255,.10);border-radius:3px;padding:3px 6px;font: 12px Arial,sans-serif;font-weight:500">FPS: --</div></body></html>';
+    '<html><body style="margin:0;background:transparent"><div id="fps" style="display:inline-block;color:#fff;background:rgba(16,18,22,.90);border:1px solid rgba(255,255,255,.3);border-radius:5px;padding:4px 8px;font:bold 13px Arial,sans-serif">FPS: --</div></body></html>';
   await w
     .loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html))
     .catch(() => {});
@@ -229,6 +244,7 @@ async function reconcile() {
   );
   child = proc;
   status = "waiting-frames";
+  let receivedCsvHeader = false;
   let timeColumn = -1,
     chainColumn = -1,
     pidColumn = -1,
@@ -242,6 +258,7 @@ async function reconcile() {
       .replace(/^\uFEFF/, "")
       .split(",");
     if (row.includes("MsBetweenPresents")) {
+      receivedCsvHeader = true;
       timeColumn = row.indexOf("MsBetweenPresents");
       chainColumn = row.indexOf("SwapChainAddress");
       pidColumn = row.indexOf("ProcessID");
@@ -274,6 +291,7 @@ async function reconcile() {
     }
     samples.clear();
     status = best ? "measuring" : "waiting-frames";
+    if (!receivedCsvHeader && proc.exitCode !== null) status = "capture-error";
     show(
       best ? "FPS: " + Math.round((1000 * best.count) / best.sum) : "FPS: --"
     );
@@ -282,6 +300,7 @@ async function reconcile() {
     if (child === proc) {
       stop();
       status = "capture-error";
+      if (!lastError) lastError = "PresentMon stopped before FPS data arrived";
     }
   };
   proc.once("error", (e) => {
@@ -379,8 +398,10 @@ ipcMain.handle("krysta:fps-set-hotkey", async (_e, value: unknown) => {
   if (value && !value.includes("+") && !/^F\d+$/.test(value))
     throw Error("Use a modifier with letters or numbers");
   const pref = await readPreference();
-  if (pref.enabled && !registerHotkey(value))
+  if (pref.enabled && !registerHotkey(value)) {
+    shortcutError = true;
     throw Error("Shortcut already in use");
+  }
   await savePreference({ ...(await readPreference()), hotkey: value });
   shortcutError = false;
   return value;
