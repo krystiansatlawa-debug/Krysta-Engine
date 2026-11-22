@@ -194,8 +194,8 @@ export function SettingsRockstar() {
       {state?.achievements && (
         <p>
           {pl
-            ? `Social Club: wykryte profile lokalne: ${state.achievements.profileCount}, foldery danych gier: ${state.achievements.titleDirectories}. Odczyt zdobytych osiągnięć wymaga osobnego połączenia konta Rockstar; nie jest jeszcze dostępny.`
-            : `Social Club: local profiles: ${state.achievements.profileCount}, game data folders: ${state.achievements.titleDirectories}. Unlocked achievement synchronization requires a separate Rockstar account connection and is not available yet.`}
+            ? `Social Club: wykryte profile lokalne: ${state.achievements.profileCount}, foldery danych gier: ${state.achievements.titleDirectories}. Aby pobrać zdobyte osiągnięcia, połącz konto Rockstar w sekcji poniżej.`
+            : `Social Club: local profiles: ${state.achievements.profileCount}, game data folders: ${state.achievements.titleDirectories}. Connect your Rockstar account below to fetch confirmed achievement unlocks.`}
         </p>
       )}
       <section style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
