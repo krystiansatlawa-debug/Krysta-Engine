@@ -360,6 +360,8 @@
     "story_progress_total_completion": "Total game completion",
     "story_progress_story_completion": "Story completion",
     "story_progress_percent_missing": "The save provides no completion percentage.",
+    "story_progress_completed_missions": "Completed missions found in the save: {{count}}",
+    "story_progress_completed_missions_total": "Completed missions: {{count}} / {{total}}",
     "story_progress_save_title": "Latest save title",
     "story_progress_current_chapter": "Chapter in the latest save",
     "story_progress_tracked_quest": "Tracked quest in the latest save",

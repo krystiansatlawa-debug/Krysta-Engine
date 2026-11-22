@@ -206,3 +206,50 @@ test("detects gzip and UTF-16 story metadata in save slots by their contents", a
     null
   );
 });
+
+test("reports explicit mission counts and nested mission details across save formats", () => {
+  assert.deepEqual(
+    parseGenericStoryMetadata(
+      JSON.stringify({
+        campaign: {
+          completedQuests: ["intro", "rescue", "intro"],
+          totalQuests: 9,
+          trackedQuest: { title: "Find shelter", summary: "Reach the ridge." },
+        },
+        achievements: { completedStoryMissions: 50 },
+      })
+    ),
+    {
+      percent: null,
+      saveTitle: "Find shelter",
+      missionDescription: "Reach the ridge.",
+      completedMissions: 2,
+      totalMissions: 9,
+    }
+  );
+  assert.deepEqual(
+    parseGenericStoryMetadata(
+      '<save><campaign completedMissions="0" totalMissions="12"><currentQuest name="Prologue"/></campaign></save>',
+      "xml"
+    ),
+    {
+      percent: null,
+      saveTitle: "Prologue",
+      completedMissions: 0,
+      totalMissions: 12,
+    }
+  );
+  assert.deepEqual(
+    parseGenericStoryMetadata(
+      "[Campaign]\ncompletedMissions=3\ntotalMissions=2",
+      "ini"
+    ),
+    { percent: null, saveTitle: "", completedMissions: 3 }
+  );
+  assert.equal(
+    parseGenericStoryMetadata(
+      '{"sideQuests":{"completedStoryMissions":15},"completedMissions":57}'
+    ),
+    null
+  );
+});

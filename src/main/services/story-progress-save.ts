@@ -1,15 +1,28 @@
 import { lstat, open, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { AutomaticGameStoryProgress, Game, StorySaveStatus } from "@types";
-import { readGenericStoryMetadataFiles } from "./story-progress-metadata.js";
+import {
+  discoverSelectedStorySaveFiles,
+  readGenericStoryMetadataFiles,
+} from "./story-progress-metadata.js";
+import {
+  farCry4SaveLimit,
+  parseFarCry4StorySave,
+} from "./far-cry-4-story-save.js";
 
-export type StorySaveSource = "gtav" | "gtav-enhanced" | "rdr2" | "cyberpunk";
+export type StorySaveSource =
+  | "gtav"
+  | "gtav-enhanced"
+  | "rdr2"
+  | "cyberpunk"
+  | "far-cry-4";
 
 export const storySaveSteamAppIds: Readonly<Record<StorySaveSource, string>> = {
   gtav: "271590",
   "gtav-enhanced": "3240220",
   rdr2: "1174180",
   cyberpunk: "1091500",
+  "far-cry-4": "298110",
 };
 const steamIds: ReadonlyMap<string, StorySaveSource> = new Map(
   Object.entries(storySaveSteamAppIds).map(([source, id]) => [
@@ -30,6 +43,7 @@ const executables: ReadonlyMap<string, StorySaveSource> = new Map([
   ["rdr2.exe", "rdr2"],
   ["playrdr2.exe", "rdr2"],
   ["cyberpunk2077.exe", "cyberpunk"],
+  ["farcry4.exe", "far-cry-4"],
 ]);
 
 const gameTitles: ReadonlyMap<string, StorySaveSource> = new Map([
@@ -44,6 +58,9 @@ const gameTitles: ReadonlyMap<string, StorySaveSource> = new Map([
   ["rdr2", "rdr2"],
   ["cyberpunk 2077", "cyberpunk"],
   ["cyberpunk 2077 ultimate edition", "cyberpunk"],
+  ["far cry 4", "far-cry-4"],
+  ["far cry 4 gold edition", "far-cry-4"],
+  ["far cry 4 complete edition", "far-cry-4"],
 ]);
 
 export function identifyStorySaveSource(
@@ -133,7 +150,7 @@ const rockstarHeaderSize = 260;
 
 export function parseRockstarStoryHeader(
   bytes: Buffer,
-  source: Exclude<StorySaveSource, "cyberpunk">
+  source: keyof typeof rockstarFolders
 ): SaveDetails | null {
   // PC save headers contain a big-endian version and a UTF-16LE display title.
   // The encrypted body is not needed for the total completion shown here.
@@ -208,7 +225,10 @@ export function parseCyberpunkStoryMetadata(json: string): SaveDetails | null {
       percent: null,
       saveTitle: title,
       summaryKey: cyberpunkSummaries.get(
-        title.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").trim()
+        title
+          .toLowerCase()
+          .replace(/[^\p{L}\p{N}\s]/gu, "")
+          .trim()
       ),
     };
   }
@@ -258,6 +278,7 @@ const rockstarSlotPattern = (source: keyof typeof rockstarFolders) =>
   source === "rdr2" ? /^SRDR3\d{4}$/i : /^SGTA5\d{4}$/i;
 
 const cyberpunkMetadataPattern = /^metadata\.\d+\.json$/i;
+const farCry4SlotPattern = /^(?:\d+\.save|SaveSlot\d+\.sav(?:\.\d+)?)$/i;
 
 async function findRockstarSlots(
   source: keyof typeof rockstarFolders,
@@ -358,7 +379,11 @@ async function findDetectedSlots(
         !cyberpunkMetadataPattern.test(name)
       )
         continue;
-    } else if (!rockstarSlotPattern(source).test(name)) {
+    } else if (
+      source === "far-cry-4"
+        ? !farCry4SlotPattern.test(name)
+        : !rockstarSlotPattern(source).test(name)
+    ) {
       continue;
     }
     const candidate = source === "cyberpunk" ? path.dirname(file) : file;
@@ -385,18 +410,33 @@ export async function readLatestStorySave(
   if (!canRead()) return waiting;
 
   const defaults = paths.profiles.flatMap(({ home, documents }) =>
-    source === "cyberpunk"
-      ? [path.join(home, "Saved Games", "CD Projekt Red", "Cyberpunk 2077")]
-      : rockstarFolders[source].map((folder) =>
-          path.join(documents, "Rockstar Games", folder)
-        )
+    source === "far-cry-4"
+      ? []
+      : source === "cyberpunk"
+        ? [path.join(home, "Saved Games", "CD Projekt Red", "Cyberpunk 2077")]
+        : rockstarFolders[source].map((folder) =>
+            path.join(documents, "Rockstar Games", folder)
+          )
   );
   const roots = [...new Set([...defaults, ...(paths.directFolders ?? [])])];
-  const candidates = paths.detectedFiles
-    ? await findDetectedSlots(source, paths.detectedFiles, canRead)
+  let detectedFiles = paths.detectedFiles;
+  if (source === "far-cry-4" && !detectedFiles) {
+    const selectedFiles: string[] = [];
+    for (const root of roots) {
+      if (!canRead()) return waiting;
+      selectedFiles.push(
+        ...(await discoverSelectedStorySaveFiles(root, canRead))
+      );
+    }
+    detectedFiles = selectedFiles;
+  }
+  const candidates = detectedFiles
+    ? await findDetectedSlots(source, detectedFiles, canRead)
     : source === "cyberpunk"
       ? await findCyberpunkSlots(roots, canRead)
-      : await findRockstarSlots(source, roots, canRead);
+      : source === "far-cry-4"
+        ? []
+        : await findRockstarSlots(source, roots, canRead);
 
   if (!canRead()) return waiting;
   candidates.sort((a, b) => b.savedAt - a.savedAt);
@@ -406,10 +446,14 @@ export async function readLatestStorySave(
       const details =
         source === "cyberpunk"
           ? await readCyberpunkSlot(file)
-          : parseRockstarStoryHeader(
-              await readBounded(file, rockstarHeaderSize),
-              source
-            );
+          : source === "far-cry-4"
+            ? parseFarCry4StorySave(
+                await readBounded(file, farCry4SaveLimit + 1)
+              )
+            : parseRockstarStoryHeader(
+                await readBounded(file, rockstarHeaderSize),
+                source
+              );
       if (!canRead()) return waiting;
       if (details)
         return { automatic: { ...details, savedAt }, status: "ready" };

@@ -106,7 +106,10 @@ export function GameStoryProgress({
         if (!active) return;
         setProgress(value.manual);
         setSaveView(value);
-        if (!reload && value.automaticStatus === "not-found") {
+        if (
+          !reload &&
+          (value.automaticStatus === "not-found" || value.shouldRefreshSave)
+        ) {
           // Load cached data first and skip the scan when browsing past this card.
           initialScan = window.setTimeout(() => {
             void window.electron
@@ -242,9 +245,11 @@ export function GameStoryProgress({
             {automatic ? (
               <>
                 {automatic.percent === null ? (
-                  <p className="game-story-progress__empty">
-                    {t("story_progress_percent_missing")}
-                  </p>
+                  automatic.completedMissions === undefined && (
+                    <p className="game-story-progress__empty">
+                      {t("story_progress_percent_missing")}
+                    </p>
+                  )
                 ) : (
                   <StoryMeter
                     percent={automatic.percent}
@@ -254,6 +259,19 @@ export function GameStoryProgress({
                         : "story_progress_total_completion"
                     )}
                   />
+                )}
+                {automatic.completedMissions !== undefined && (
+                  <p>
+                    {t(
+                      automatic.totalMissions === undefined
+                        ? "story_progress_completed_missions"
+                        : "story_progress_completed_missions_total",
+                      {
+                        count: automatic.completedMissions,
+                        total: automatic.totalMissions,
+                      }
+                    )}
+                  </p>
                 )}
                 {(automatic.saveTitle ||
                   automatic.trackedQuestId ||

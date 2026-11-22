@@ -278,3 +278,109 @@ test("keeps the newest save date for a format without a parser", async (t) => {
     }
   );
 });
+
+test("reads true campaign flags from the newest valid Far Cry 4 PC save", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "krysta-far-cry-4-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const word = (value: number) => {
+    const buffer = Buffer.alloc(4);
+    buffer.writeUInt32LE(value);
+    return buffer;
+  };
+  const node = (key: number, fields: Buffer[], children: Buffer[]) =>
+    Buffer.concat([
+      Buffer.of(children.length),
+      word(key),
+      Buffer.of(fields.length),
+      ...fields,
+      ...children,
+    ]);
+  const field = (key: number, value: Buffer) =>
+    Buffer.concat([word(key), Buffer.of(value.length), value]);
+  const flag = (name: string, value: number) =>
+    node(
+      0x8ede36e7,
+      [
+        field(0x3f3ba283, Buffer.from(name + "\0")),
+        field(0xee6a8fdf, Buffer.of(value)),
+      ],
+      []
+    );
+  const hierarchy = [
+    0x586818e3, 0x7e51e3e7, 0xc3205e95, 0xe8de2d18, 0xdc8f68cb, 0xe8d4929f,
+    0x25ee66e6, 0x8ede36e7,
+  ];
+  const makeSave = (flags: Buffer[]) => {
+    const body = hierarchy.reduceRight(
+      (children, key) => [node(key, [], children)],
+      flags
+    );
+    return Buffer.concat([
+      Buffer.alloc(657),
+      Buffer.from([0x6e, 0x62, 0x43, 0x46, 2, 0, 0, 0]),
+      word(hierarchy.length + flags.length),
+      word(flags.length * 2),
+      ...body,
+    ]);
+  };
+  const timestamp = new Date("2026-11-21T09:00:00Z");
+  const older = path.join(root, "1.save");
+  const valid = path.join(root, "SaveSlot1.sav.100");
+  const broken = path.join(root, "2.save");
+  const save = makeSave([
+    flag("mis_090_debriefdone", 1),
+    flag("mis_090_debriefdone", 1),
+    flag("mis_110_debriefdone", 0),
+    flag("mis_210_for_sabal", 1),
+  ]);
+  await writeFile(older, makeSave([flag("mis_010_alternativeending", 0)]));
+  await utimes(
+    older,
+    new Date(timestamp.getTime() - 1000),
+    new Date(timestamp.getTime() - 1000)
+  );
+  await writeFile(valid, save);
+  await utimes(valid, timestamp, timestamp);
+  await writeFile(broken, save.subarray(0, -1));
+
+  const source = identifyStorySaveSource({
+    shop: "custom",
+    objectId: "ubisoft-420",
+    title: "Far Cry® 4",
+  });
+  assert.equal(source, "far-cry-4");
+  assert.equal(
+    identifyStorySaveSource({ shop: "steam", objectId: "298110" }),
+    source
+  );
+  const expected = {
+    automatic: {
+      percent: null,
+      saveTitle: "",
+      completedMissions: 1,
+      savedAt: timestamp.getTime(),
+    },
+    status: "ready",
+  };
+  assert.deepEqual(
+    await readDiscoveredStorySave([older, valid, broken], source, () => true),
+    expected
+  );
+  assert.deepEqual(
+    await readLatestStorySave(
+      "far-cry-4",
+      { profiles: [], directFolders: [root] },
+      () => true
+    ),
+    expected
+  );
+  assert.equal(
+    (await readDiscoveredStorySave([older], source, () => true)).automatic
+      ?.completedMissions,
+    0
+  );
+  assert.equal(
+    (await readDiscoveredStorySave([broken], source, () => true)).status,
+    "unreadable"
+  );
+});

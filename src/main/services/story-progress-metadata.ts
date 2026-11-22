@@ -12,7 +12,7 @@ const MAX_METADATA_FILES = 96;
 const MAX_FOLDER_ENTRIES = 500;
 const METADATA_EXTENSION = /\.(?:json|ini|xml|sav|save|dat|bin|gz)$/i;
 const SAVE_FILE_EXTENSION =
-  /\.(?:sav|save|json|ini|xml|dat|bin|srm|sra|state|dsv|gci|mcr|ps2|gz)$/i;
+  /\.(?:sav(?:\.\d+)?|save|json|ini|xml|dat|bin|srm|sra|state|dsv|gci|mcr|ps2|gz)$/i;
 const ROCKSTAR_SLOT = /^(?:SGTA5|SRDR3)\d{4}$/i;
 
 const normalizeKey = (key: string) =>
@@ -53,6 +53,26 @@ const trackedMissionKeys = new Set([
   "mainquestname",
   "mainmissionname",
 ]);
+const scopedMissionTitleKeys = new Set(["name", "title", "displayname"]);
+const scopedMissionCountKeys = new Set([
+  "completedmissions",
+  "missionscompleted",
+  "completedquests",
+  "questscompleted",
+]);
+const explicitMissionCountKeys = new Set([
+  "completedstorymissions",
+  "completedcampaignmissions",
+  "completedmainquests",
+  "completedmainmissions",
+]);
+const scopedMissionTotalKeys = new Set(["totalmissions", "totalquests"]);
+const explicitMissionTotalKeys = new Set([
+  "totalstorymissions",
+  "totalcampaignmissions",
+  "totalmainquests",
+  "totalmainmissions",
+]);
 const explicitChapterKeys = new Set([
   "currentstorychapter",
   "currentcampaignchapter",
@@ -88,6 +108,26 @@ function percentage(value: unknown): number | null {
     : null;
 }
 
+function missionCount(value: unknown): number | null {
+  if (
+    Array.isArray(value) &&
+    value.length <= 10_000 &&
+    value.every((entry) => !!safeText(entry, 160))
+  ) {
+    return new Set(value.map((entry: string) => entry.trim())).size;
+  }
+  const count =
+    typeof value === "string" && /^\d{1,5}$/.test(value.trim())
+      ? Number(value)
+      : value;
+  return typeof count === "number" &&
+    Number.isInteger(count) &&
+    count >= 0 &&
+    count <= 10_000
+    ? count
+    : null;
+}
+
 function safeText(value: unknown, maxLength: number): string {
   if (
     typeof value !== "string" ||
@@ -107,10 +147,13 @@ function parseXml(input: string): Record<string, unknown> {
   parser.on("doctype", () => {
     throw new Error("Unexpected document type in a save file");
   });
-  parser.on("opentag", () => {
+  parser.on("opentag", ({ attributes }) => {
     if (stack.length > 20)
       throw new Error("Save metadata is nested too deeply");
-    stack.push({ fields: Object.create(null), text: "" });
+    stack.push({
+      fields: Object.assign(Object.create(null), attributes),
+      text: "",
+    });
   });
   const appendText = (text: string) => {
     stack[stack.length - 1].text += text;
@@ -169,6 +212,9 @@ export function parseGenericStoryMetadata(
   let saveTitle = "";
   let chapter = "";
   let description = "";
+  let missionProgress:
+    | { completedMissions: number; totalMissions?: number }
+    | undefined;
   let visited = 0;
 
   const walk = (node: unknown, ancestors: string[], depth: number) => {
@@ -181,20 +227,37 @@ export function parseGenericStoryMetadata(
     )
       return;
 
-    for (const [rawKey, value] of Object.entries(node)) {
-      const key = normalizeKey(rawKey);
-      const relatedToStory = ancestors.some((part) =>
-        /^(?:story|mainstory|campaign|mainquest|mainmission|storyprogress|storydata|questprogress)$/.test(
-          part
-        )
-      );
-      const unrelated = ancestors.some((part) =>
+    const relatedToStory = ancestors.some((part) =>
+      /^(?:story|mainstory|campaign|mainquest|mainmission|storyprogress|storydata|questprogress)$/.test(
+        part
+      )
+    );
+    if (
+      ancestors.some((part) =>
         /^(?:achievements?|skills?|inventory|stats|statistics|settings|config|graphics|sidequests?|sidemissions?|multiplayer|lobbies|online)$/.test(
           part
         )
-      );
-      if (unrelated) continue;
+      )
+    )
+      return;
+    const insideTrackedMission = trackedMissionKeys.has(ancestors.at(-1) ?? "");
+    let completedMissions: number | null = null;
+    let totalMissions: number | null = null;
 
+    for (const [rawKey, value] of Object.entries(node)) {
+      const key = normalizeKey(rawKey);
+      if (
+        explicitMissionCountKeys.has(key) ||
+        (relatedToStory && scopedMissionCountKeys.has(key))
+      ) {
+        completedMissions ??= missionCount(value);
+      }
+      if (
+        explicitMissionTotalKeys.has(key) ||
+        (relatedToStory && scopedMissionTotalKeys.has(key))
+      ) {
+        if (!Array.isArray(value)) totalMissions ??= missionCount(value);
+      }
       if (
         percent === null &&
         (progressKeys.has(key) ||
@@ -202,7 +265,11 @@ export function parseGenericStoryMetadata(
       ) {
         percent = percentage(value);
       }
-      if (!saveTitle && trackedMissionKeys.has(key)) {
+      if (
+        !saveTitle &&
+        (trackedMissionKeys.has(key) ||
+          (insideTrackedMission && scopedMissionTitleKeys.has(key)))
+      ) {
         saveTitle = safeText(value, 160);
       }
       if (
@@ -212,23 +279,37 @@ export function parseGenericStoryMetadata(
       ) {
         chapter = safeText(value, 160);
       }
-      if (!description && missionDescriptionKeys.has(key)) {
+      if (
+        !description &&
+        (missionDescriptionKeys.has(key) ||
+          (insideTrackedMission &&
+            (key === "description" || key === "summary")))
+      ) {
         description = safeText(value, 500);
       }
       if (typeof value === "object" && value !== null) {
         walk(value, [...ancestors, key], depth + 1);
       }
     }
+    if (!missionProgress && completedMissions !== null) {
+      missionProgress = {
+        completedMissions,
+        ...(totalMissions &&
+          totalMissions >= completedMissions && { totalMissions }),
+      };
+    }
   };
 
   walk(data, [], 0);
-  if (percent === null && !saveTitle && !chapter) return null;
+  if (percent === null && !saveTitle && !chapter && !missionProgress)
+    return null;
   return {
     percent,
     saveTitle: saveTitle || chapter,
     ...(!saveTitle && chapter && { saveTitleKind: "chapter" as const }),
     ...(percent !== null && { progressKind: "story" as const }),
     ...(description && { missionDescription: description }),
+    ...missionProgress,
   };
 }
 

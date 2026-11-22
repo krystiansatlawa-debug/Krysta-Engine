@@ -12,6 +12,8 @@ export interface AutomaticGameStoryProgress {
   summaryKey?: string;
   missionDescription?: string;
   progressKind?: "story" | "overall";
+  completedMissions?: number;
+  totalMissions?: number;
   savedAt: number;
 }
 
@@ -29,4 +31,5 @@ export interface GameStoryProgressView {
   lastSaveAt: number | null;
   hasCustomSaveFolder: boolean;
   canSelectSaveFolder: boolean;
+  shouldRefreshSave?: boolean;
 }
