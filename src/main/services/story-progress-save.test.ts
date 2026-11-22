@@ -6,6 +6,7 @@ import { test } from "node:test";
 import {
   identifyStorySaveSource,
   parseCyberpunkStoryMetadata,
+  parseGtaIvStoryHeader,
   parseRockstarStoryHeader,
   readLatestStorySave,
   readDiscoveredStorySave,
@@ -276,5 +277,158 @@ test("keeps the newest save date for a format without a parser", async (t) => {
       status: "save-found",
       lastSaveAt: newerDate.getTime(),
     }
+  );
+});
+
+test("reads true campaign flags from the newest valid Far Cry 4 PC save", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "krysta-far-cry-4-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const word = (value: number) => {
+    const buffer = Buffer.alloc(4);
+    buffer.writeUInt32LE(value);
+    return buffer;
+  };
+  const node = (key: number, fields: Buffer[], children: Buffer[]) =>
+    Buffer.concat([
+      Buffer.of(children.length),
+      word(key),
+      Buffer.of(fields.length),
+      ...fields,
+      ...children,
+    ]);
+  const field = (key: number, value: Buffer) =>
+    Buffer.concat([word(key), Buffer.of(value.length), value]);
+  const flag = (name: string, value: number) =>
+    node(
+      0x8ede36e7,
+      [
+        field(0x3f3ba283, Buffer.from(name + "\0")),
+        field(0xee6a8fdf, Buffer.of(value)),
+      ],
+      []
+    );
+  const hierarchy = [
+    0x586818e3, 0x7e51e3e7, 0xc3205e95, 0xe8de2d18, 0xdc8f68cb, 0xe8d4929f,
+    0x25ee66e6, 0x8ede36e7,
+  ];
+  const makeSave = (flags: Buffer[]) => {
+    const body = hierarchy.reduceRight(
+      (children, key) => [node(key, [], children)],
+      flags
+    );
+    return Buffer.concat([
+      Buffer.alloc(657),
+      Buffer.from([0x6e, 0x62, 0x43, 0x46, 2, 0, 0, 0]),
+      word(hierarchy.length + flags.length),
+      word(flags.length * 2),
+      ...body,
+    ]);
+  };
+  const timestamp = new Date("2026-11-21T09:00:00Z");
+  const older = path.join(root, "1.save");
+  const valid = path.join(root, "SaveSlot1.sav.100");
+  const broken = path.join(root, "2.save");
+  const save = makeSave([
+    flag("mis_090_debriefdone", 1),
+    flag("mis_090_debriefdone", 1),
+    flag("mis_110_debriefdone", 0),
+    flag("mis_210_for_sabal", 1),
+  ]);
+  await writeFile(older, makeSave([flag("mis_010_alternativeending", 0)]));
+  await utimes(
+    older,
+    new Date(timestamp.getTime() - 1000),
+    new Date(timestamp.getTime() - 1000)
+  );
+  await writeFile(valid, save);
+  await utimes(valid, timestamp, timestamp);
+  await writeFile(broken, save.subarray(0, -1));
+
+  const source = identifyStorySaveSource({
+    shop: "custom",
+    objectId: "ubisoft-420",
+    title: "Far Cry® 4",
+  });
+  assert.equal(source, "far-cry-4");
+  assert.equal(
+    identifyStorySaveSource({ shop: "steam", objectId: "298110" }),
+    source
+  );
+  const expected = {
+    automatic: {
+      percent: null,
+      saveTitle: "",
+      completedMissions: 1,
+      savedAt: timestamp.getTime(),
+    },
+    status: "ready",
+  };
+  assert.deepEqual(
+    await readDiscoveredStorySave([older, valid, broken], source, () => true),
+    expected
+  );
+  assert.deepEqual(
+    await readLatestStorySave(
+      "far-cry-4",
+      { profiles: [], directFolders: [root] },
+      () => true
+    ),
+    expected
+  );
+  assert.equal(
+    (await readDiscoveredStorySave([older], source, () => true)).automatic
+      ?.completedMissions,
+    0
+  );
+  assert.equal(
+    (await readDiscoveredStorySave([broken], source, () => true)).status,
+    "unreadable"
+  );
+});
+
+test("reads the latest GTA IV PC slot from Rockstar folders and discovered files", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "krysta-gta-iv-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const profile = path.join(
+    root,
+    "Rockstar Games",
+    "GTA IV",
+    "Profiles",
+    "a0b1c2d3"
+  );
+  await mkdir(profile, { recursive: true });
+  const save = path.join(profile, "SGTA400");
+  const empty = path.join(profile, "SGTA401");
+  const bytes = Buffer.alloc(400);
+  bytes.writeUInt32LE(57);
+  bytes.write("SAVE", 0x0c, "latin1");
+  bytes.write("Drei Blätter", 0x10, "utf16le");
+  bytes.write("BLOCK", 0x110, "latin1");
+  await writeFile(save, bytes);
+  await writeFile(empty, bytes.subarray(0, 260));
+
+  assert.equal(
+    identifyStorySaveSource({ shop: "steam", objectId: "12210" }),
+    "gtaiv"
+  );
+  assert.equal(
+    identifyStorySaveSource({ shop: "steam", objectId: "12220" }),
+    "gtaiv"
+  );
+  assert.equal(parseGtaIvStoryHeader(Buffer.alloc(400)), null);
+  assert.equal(parseGtaIvStoryHeader(bytes.subarray(0, 0x110)), null);
+
+  const latest = await readLatestStorySave(
+    "gtaiv",
+    { profiles: [{ documents: root, home: root }] },
+    () => true
+  );
+  assert.equal(latest.status, "ready");
+  assert.equal(latest.automatic?.saveTitle, "Drei Blätter");
+  assert.equal(latest.automatic?.percent, null);
+  assert.equal(latest.automatic?.saveTitleKind, "save-title");
+  assert.deepEqual(
+    await readDiscoveredStorySave([empty, save], undefined, () => true),
+    latest
   );
 });

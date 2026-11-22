@@ -4,20 +4,55 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: calc(globals.$spacing-unit * 2);
+  gap: 18px;
   width: 100%;
-  padding: globals.$page-gutter;
+  min-height: 0;
+  padding-bottom: 28px;
+  background: var(--catalogue-background);
   scroll-behavior: smooth;
+
+  &__heading {
+    background: linear-gradient(
+      90deg,
+      #182329,
+      #244147 37%,
+      #244147 65%,
+      #182329
+    );
+    padding: 18px 0 14px;
+
+    a {
+      color: #a8bdc2;
+      font-size: 12px;
+      text-decoration: none;
+
+      &:hover {
+        color: #fff;
+      }
+    }
+
+    h1 {
+      color: globals.$body-color;
+      font-size: 19px;
+      font-weight: 500;
+      margin-top: 4px;
+    }
+  }
 
   &__filters-container {
     width: 100%;
-    align-self: flex-start;
+    align-self: start;
   }
 
-  &__header {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+  &__results {
+    min-width: 0;
+  }
+
+  &__search-bar {
+    min-height: 40px;
+    padding: 5px 8px;
+    margin-bottom: 5px;
+    background: #11191d;
   }
 
   &__header-row {
@@ -32,18 +67,6 @@
     }
   }
 
-  &__header-summary {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  &__filters-hint {
-    font-size: globals.$small-font-size;
-    color: rgba(255, 255, 255, 0.6);
-  }
-
   &__sort-inline {
     display: flex;
     gap: 8px;
@@ -52,8 +75,8 @@
   }
 
   &__sort-label {
-    font-size: globals.$body-font-size;
-    color: rgba(255, 255, 255, 0.7);
+    font-size: globals.$small-font-size;
+    color: #b0c1c5;
     white-space: nowrap;
   }
 
@@ -92,10 +115,15 @@
   }
 
   &__sort-select {
-    min-width: 180px;
+    min-width: 115px;
 
     .select-field {
       width: 100%;
+
+      select {
+        min-height: 26px;
+        padding-block: 2px;
+      }
 
       &__option {
         width: 100%;
@@ -105,8 +133,8 @@
 
   &__content {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) globals.$page-rail-width;
-    gap: calc(globals.$spacing-unit * 2);
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 26%);
+    gap: 13px;
     align-items: start;
 
     // Below this the results column gets too narrow beside the rail, so the
@@ -121,7 +149,7 @@
     flex-direction: column;
     width: 100%;
     min-width: 0;
-    gap: 8px;
+    gap: 5px;
 
     &--classics {
       display: grid;
@@ -148,6 +176,9 @@
   }
 
   &__result-count {
+    margin-bottom: 5px;
+    background: #151e23;
+    padding: 8px;
     font-size: globals.$small-font-size;
     font-weight: 500;
     color: globals.$body-color;
@@ -157,10 +188,42 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+
+    .filter-section {
+      border-radius: 0;
+      background: transparent;
+      border: 1px solid #ffffff15;
+      box-shadow: none;
+    }
+
+    .filter-section__button {
+      padding: 5px 8px;
+      background: var(--catalogue-panel-heading);
+      font-weight: 400;
+    }
+
+    .filter-section__title {
+      font-size: 12px;
+      font-weight: 400;
+    }
+
+    .filter-section__orb {
+      display: none;
+    }
+  }
+
+  &__notice {
+    display: grid;
+    justify-items: start;
+    gap: 12px;
+    grid-column: 1 / -1;
+    padding: 16px;
+    background: globals.$dark-background-color;
+    border: 1px solid globals.$border-color;
   }
 
   &__skeleton {
-    height: 105px;
+    height: 72px;
     border-radius: 4px;
     border: solid 1px rgba(255, 255, 255, 0.15);
 

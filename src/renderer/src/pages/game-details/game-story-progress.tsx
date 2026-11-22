@@ -15,11 +15,13 @@ import {
   STORY_MISSION_NAME_LIMIT,
 } from "../../../../shared/game-story-progress";
 import { storyProgressCardRegistry } from "./story-progress-card-registry";
+import type { StoryAchievementMilestone } from "./story-achievement-milestones";
 import "./game-story-progress.scss";
 
 interface GameStoryProgressProps {
   shop: GameShop;
   objectId: string;
+  milestone: StoryAchievementMilestone | null;
 }
 
 function StoryMeter({
@@ -53,6 +55,7 @@ function StoryMeter({
 export function GameStoryProgress({
   shop,
   objectId,
+  milestone,
 }: Readonly<GameStoryProgressProps>) {
   const { t } = useTranslation("game_details");
   const { formatDateTime } = useDate();
@@ -85,6 +88,11 @@ export function GameStoryProgress({
     canSelectSaveFolder,
   } = saveView;
   const lastSaveAt = saveView.lastSaveAt ?? automatic?.savedAt ?? null;
+  const accountMilestone =
+    automatic?.progressKind === "story" ||
+    automatic?.completedMissions !== undefined
+      ? null
+      : milestone;
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [reload, setReload] = useState(0);
@@ -106,7 +114,10 @@ export function GameStoryProgress({
         if (!active) return;
         setProgress(value.manual);
         setSaveView(value);
-        if (!reload && value.automaticStatus === "not-found") {
+        if (
+          !reload &&
+          (value.automaticStatus === "not-found" || value.shouldRefreshSave)
+        ) {
           // Load cached data first and skip the scan when browsing past this card.
           initialScan = window.setTimeout(() => {
             void window.electron
@@ -242,9 +253,12 @@ export function GameStoryProgress({
             {automatic ? (
               <>
                 {automatic.percent === null ? (
-                  <p className="game-story-progress__empty">
-                    {t("story_progress_percent_missing")}
-                  </p>
+                  automatic.completedMissions === undefined &&
+                  automatic.saveTitleKind !== "save-title" && (
+                    <p className="game-story-progress__empty">
+                      {t("story_progress_percent_missing")}
+                    </p>
+                  )
                 ) : (
                   <StoryMeter
                     percent={automatic.percent}
@@ -254,6 +268,19 @@ export function GameStoryProgress({
                         : "story_progress_total_completion"
                     )}
                   />
+                )}
+                {automatic.completedMissions !== undefined && (
+                  <p>
+                    {t(
+                      automatic.totalMissions === undefined
+                        ? "story_progress_completed_missions"
+                        : "story_progress_completed_missions_total",
+                      {
+                        count: automatic.completedMissions,
+                        total: automatic.totalMissions,
+                      }
+                    )}
+                  </p>
                 )}
                 {(automatic.saveTitle ||
                   automatic.trackedQuestId ||
@@ -267,8 +294,9 @@ export function GameStoryProgress({
                               ? "story_progress_quest_id"
                               : automatic.saveTitleKind === "chapter"
                                 ? "story_progress_current_chapter"
-                                : automatic.progressKind === "story" ||
-                                    automatic.percent === null
+                                : automatic.saveTitleKind !== "save-title" &&
+                                    (automatic.progressKind === "story" ||
+                                      automatic.percent === null)
                                   ? "story_progress_tracked_quest"
                                   : "story_progress_save_title"
                           )}
@@ -327,6 +355,25 @@ export function GameStoryProgress({
             {folderError && (
               <p role="alert">{t("story_progress_folder_error")}</p>
             )}
+          </div>
+        )}
+        {accountMilestone && !loading && (
+          <div className="game-story-progress__snapshot">
+            <h3>{t("story_progress_from_achievements")}</h3>
+            <div className="game-story-progress__mission">
+              <strong>{accountMilestone.title}</strong>
+              {accountMilestone.chapter !== undefined && (
+                <p>
+                  {t("story_progress_confirmed_chapter", {
+                    chapter: accountMilestone.chapter,
+                    total: accountMilestone.totalChapters,
+                  })}
+                </p>
+              )}
+              {accountMilestone.finale && (
+                <p>{t("story_progress_confirmed_finale")}</p>
+              )}
+            </div>
           </div>
         )}
         {!editing && progress && (

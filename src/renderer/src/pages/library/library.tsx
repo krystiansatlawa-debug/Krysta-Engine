@@ -19,6 +19,8 @@ import {
   useAppDispatch,
   useAppSelector,
   useGameCollections,
+  useLibraryCollectionSelection,
+  LIBRARY_COLLECTION_STORAGE_KEY,
   useToast,
   useUserDetails,
 } from "@renderer/hooks";
@@ -26,9 +28,12 @@ import {
   selectGroupedLibrary,
   selectIsLibraryLoading,
   setHeaderTitle,
+  setLibrarySearchQuery,
 } from "@renderer/features";
 import {
   HeartIcon,
+  DeviceDesktopIcon,
+  XIcon,
   TelescopeIcon,
   FileDirectoryIcon,
   PlusIcon,
@@ -37,12 +42,11 @@ import {
   SyncIcon,
 } from "@primer/octicons-react";
 import { useTranslation } from "react-i18next";
-import { AuthPage, groupLibraryGames, removeDiacritics } from "@shared";
+import { groupLibraryGames, removeDiacritics } from "@shared";
 import { GameCollection, LibraryGame } from "@types";
 import {
   Button,
   ConfirmationModal,
-  CreateCollectionModal,
   GameContextMenu,
 } from "@renderer/components";
 import { SidebarAddingCustomGameModal } from "@renderer/components/sidebar/sidebar-adding-custom-game-modal";
@@ -53,7 +57,7 @@ import {
   isGameInstalled,
   sortLibraryGames,
 } from "@renderer/helpers";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { LibraryGameCard } from "./library-game-card";
 import { LibraryGameCardLarge } from "./library-game-card-large";
 import {
@@ -244,7 +248,8 @@ export default function Library() {
     hasLoaded: hasLoadedCollections,
     hasFailed: hasFailedToLoadCollections,
   } = useGameCollections();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { selectedCollectionId, selectCollection: handleCollectionSelect } =
+    useLibraryCollectionSelection();
   const { openCollectionContextMenu } = useCollectionContextMenu();
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -282,8 +287,6 @@ export default function Library() {
     visible: boolean;
     position: { x: number; y: number };
   }>({ game: null, visible: false, position: { x: 0, y: 0 } });
-  const [showCreateCollectionModal, setShowCreateCollectionModal] =
-    useState(false);
   const [showAddGameModal, setShowAddGameModal] = useState(false);
   const { isScanSupported, isScanning, openScanModal } = useScanGames();
 
@@ -416,41 +419,20 @@ export default function Library() {
   const playLabel = t("play", { ns: "game_details" });
   const navigate = useNavigate();
 
-  const selectedCollectionId = searchParams.get("collection");
   const pendingPatches = useKrystaPendingPatches();
-
-  const handleCollectionSelect = useCallback(
-    (collectionId: string | null) => {
-      const params = new URLSearchParams(searchParams);
-
-      if (collectionId) {
-        params.set("collection", collectionId);
-        localStorage.setItem("library-collection", collectionId);
-      } else {
-        params.delete("collection");
-        localStorage.removeItem("library-collection");
-      }
-
-      setSearchParams(params, { replace: true });
-    },
-    [searchParams, setSearchParams]
-  );
-
   const hasRestoredCollection = useRef(false);
 
   useLayoutEffect(() => {
     if (hasRestoredCollection.current) return;
     hasRestoredCollection.current = true;
 
-    if (searchParams.get("collection")) return;
+    if (selectedCollectionId) return;
 
-    const savedCollectionId = localStorage.getItem("library-collection");
-    if (!savedCollectionId) return;
-
-    const params = new URLSearchParams(searchParams);
-    params.set("collection", savedCollectionId);
-    setSearchParams(params, { replace: true });
-  }, [searchParams, setSearchParams]);
+    const savedCollectionId = localStorage.getItem(
+      LIBRARY_COLLECTION_STORAGE_KEY
+    );
+    if (savedCollectionId) handleCollectionSelect(savedCollectionId);
+  }, [selectedCollectionId, handleCollectionSelect]);
 
   const handleViewModeChange = useCallback((mode: ViewMode) => {
     setViewMode(mode);
@@ -474,19 +456,13 @@ export default function Library() {
       .getClassicsImportStatus()
       .then((importing) => setIsImportingClassics(importing));
 
+    if (accountId && !hasLoadedCollections) void loadCollections();
+
     window.electron
       .refreshLibraryAssets()
       .catch(() => {})
       .finally(() => {
-        const collectionsPromise = hasLoadedCollections
-          ? Promise.resolve([])
-          : loadCollections();
-
-        void Promise.all([
-          updateLibrary(),
-          updateHiddenGames(),
-          collectionsPromise,
-        ]);
+        void Promise.all([updateLibrary(), updateHiddenGames()]);
       });
 
     return () => {
@@ -494,6 +470,7 @@ export default function Library() {
       unsubscribeClassicsImport();
     };
   }, [
+    accountId,
     dispatch,
     t,
     updateLibrary,
@@ -536,15 +513,6 @@ export default function Library() {
       window.removeEventListener("hydra:game-pin-toggled", handlePinToggled);
     };
   }, [updateLibrary]);
-
-  const handleCreateCollectionButtonClick = useCallback(() => {
-    if (!userDetails) {
-      window.electron.openAuthWindow(AuthPage.SignIn);
-      return;
-    }
-
-    setShowCreateCollectionModal(true);
-  }, [userDetails]);
 
   useEffect(() => {
     if (!selectedCollectionId) return;
@@ -899,16 +867,14 @@ export default function Library() {
     return groupedLibrary.filter((game) => game.favorite).length;
   }, [groupedLibrary]);
 
-  const libraryCollections = useMemo<GameCollection[]>(() => {
+  const libraryGameViews = useMemo<GameCollection[]>(() => {
     return [
       {
         id: FAVORITES_COLLECTION_ID,
         name: t("favorites"),
         gamesCount: favoritesCount,
       },
-      ...(userDetails &&
-      (groupedHiddenGames.length > 0 ||
-        selectedCollectionId === HIDDEN_COLLECTION_ID)
+      ...(userDetails
         ? [
             {
               id: HIDDEN_COLLECTION_ID,
@@ -935,20 +901,12 @@ export default function Library() {
           (game) => getGameCollectionIds(game).length === 0
         ).length,
       },
-      ...collections.map((collection) => ({
-        ...collection,
-        gamesCount: groupedLibrary.filter((game) =>
-          getGameCollectionIds(game).includes(collection.id)
-        ).length,
-      })),
     ];
   }, [
-    collections,
     groupedLibrary,
     favoritesCount,
     pendingPatches,
     groupedHiddenGames,
-    selectedCollectionId,
     t,
     userDetails,
   ]);
@@ -1247,6 +1205,17 @@ export default function Library() {
     selectedCollectionId === HIDDEN_COLLECTION_ID;
   const isFavoritesCollectionSelected =
     selectedCollectionId === FAVORITES_COLLECTION_ID;
+  const showClearFilters =
+    effectiveCategory !== "all" ||
+    selectedCollectionId !== null ||
+    effectiveSources.length > 0 ||
+    selectedPlatforms.length > 0 ||
+    showInstalledOnly ||
+    Boolean(searchQuery.trim());
+  const activeCollection =
+    libraryGameViews.find(({ id }) => id === selectedCollectionId) ??
+    collections.find(({ id }) => id === selectedCollectionId);
+
   const shouldShowFavoritesEmptyState =
     hasGames &&
     !isLibraryLoading &&
@@ -1295,16 +1264,42 @@ export default function Library() {
                 category={effectiveCategory}
                 onCategoryChange={handleCategoryChange}
               />
+              <div
+                className="library__quick-filters"
+                role="group"
+                aria-label={t("quick_filters")}
+              >
+                <button
+                  type="button"
+                  className="library__filter-chip"
+                  aria-pressed={showInstalledOnly}
+                  onClick={() =>
+                    handleShowInstalledOnlyChange(!showInstalledOnly)
+                  }
+                >
+                  <DeviceDesktopIcon size={14} /> {t("installed_filter")}
+                </button>
+                <button
+                  type="button"
+                  className="library__filter-chip"
+                  aria-pressed={isFavoritesCollectionSelected}
+                  onClick={() =>
+                    handleCollectionSelect(
+                      isFavoritesCollectionSelected
+                        ? null
+                        : FAVORITES_COLLECTION_ID
+                    )
+                  }
+                >
+                  <HeartIcon size={14} /> {t("favorites")}
+                </button>
+              </div>
               <LibraryFiltersMenu
-                collections={libraryCollections}
+                gameViews={libraryGameViews}
                 selectedCollectionId={selectedCollectionId}
                 favoritesCollectionId={FAVORITES_COLLECTION_ID}
                 hiddenCollectionId={HIDDEN_COLLECTION_ID}
-                uncategorizedCollectionId={UNCATEGORIZED_COLLECTION_ID}
-                updatesCollectionId={UPDATES_COLLECTION_ID}
                 onCollectionSelect={handleCollectionSelect}
-                onCollectionCreate={handleCreateCollectionButtonClick}
-                onCollectionContextMenu={openCollectionContextMenu}
                 showSources={showSourceFilter}
                 sources={availableSources}
                 selectedSources={effectiveSources}
@@ -1365,6 +1360,78 @@ export default function Library() {
               </Button>
             )}
           </div>
+          {showControls &&
+            (showSourceFilter || showPlatformFilter || showClearFilters) && (
+              <div className="library__quick-sources">
+                {showSourceFilter &&
+                  availableSources.map((source) => (
+                    <button
+                      type="button"
+                      className="library__filter-chip"
+                      key={source}
+                      aria-pressed={effectiveSources.includes(source)}
+                      onClick={() =>
+                        handleSourcesChange(
+                          effectiveSources.includes(source)
+                            ? effectiveSources.filter((item) => item !== source)
+                            : [...effectiveSources, source]
+                        )
+                      }
+                    >
+                      {t(`library_${source}`)}
+                    </button>
+                  ))}
+                {showPlatformFilter &&
+                  uniquePlatforms.slice(0, 5).map((platform) => (
+                    <button
+                      type="button"
+                      className="library__filter-chip"
+                      key={platform}
+                      aria-pressed={selectedPlatforms.includes(platform)}
+                      onClick={() =>
+                        handlePlatformsChange(
+                          selectedPlatforms.includes(platform)
+                            ? selectedPlatforms.filter(
+                                (item) => item !== platform
+                              )
+                            : [...selectedPlatforms, platform]
+                        )
+                      }
+                    >
+                      {platform}
+                    </button>
+                  ))}
+                {activeCollection && !isFavoritesCollectionSelected && (
+                  <button
+                    type="button"
+                    className="library__filter-chip"
+                    aria-pressed="true"
+                    aria-label={t("clear_collection_filter", {
+                      name: activeCollection.name,
+                    })}
+                    onClick={() => handleCollectionSelect(null)}
+                  >
+                    {activeCollection.name} <XIcon size={12} />
+                  </button>
+                )}
+                {showClearFilters && (
+                  <button
+                    type="button"
+                    className="library__filter-chip library__filter-chip--clear"
+                    onClick={() => {
+                      handleCategoryChange("all");
+                      handleCollectionSelect(null);
+                      handleSourcesChange([]);
+                      handlePlatformsChange([]);
+                      handleShowInstalledOnlyChange(false);
+                      dispatch(setLibrarySearchQuery(""));
+                    }}
+                  >
+                    <XIcon size={12} /> {t("clear_filters")}
+                  </button>
+                )}
+              </div>
+            )}
         </div>
       </div>
 
@@ -1563,11 +1630,6 @@ export default function Library() {
         confirmButtonTheme="danger"
         onClose={() => setShowResetCustomOrderModal(false)}
         onConfirm={handleResetCustomOrder}
-      />
-
-      <CreateCollectionModal
-        visible={showCreateCollectionModal}
-        onClose={() => setShowCreateCollectionModal(false)}
       />
 
       <SidebarAddingCustomGameModal

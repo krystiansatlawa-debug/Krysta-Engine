@@ -1,3 +1,4 @@
+import { removeDiacritics } from "@shared";
 import { CheckboxField } from "@renderer/components/checkbox-field/checkbox-field";
 import { TextField } from "@renderer/components/text-field/text-field";
 import { useFormat } from "@renderer/hooks";
@@ -14,6 +15,7 @@ export interface FilterSectionProps {
     value: string | number;
     checked: boolean;
     group?: string;
+    searchAlias?: string;
   }[];
   groups?: readonly {
     label: string;
@@ -24,6 +26,9 @@ export interface FilterSectionProps {
   onClear: () => void;
   /** The list hasn't loaded yet: keep the section's full height meanwhile. */
   isLoading?: boolean;
+  initiallyOpen?: boolean;
+  showSelectedOption?: boolean;
+  canSearch?: boolean;
 }
 
 const FILTER_ITEM_HEIGHT = 28;
@@ -37,10 +42,14 @@ export function FilterSection({
   onSelect,
   onClear,
   isLoading = false,
+  initiallyOpen = true,
+  showSelectedOption = false,
+  canSearch = true,
 }: FilterSectionProps) {
+  const [selectedOnly, setSelectedOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(initiallyOpen);
   const { t } = useTranslation("catalogue");
 
   const availableGroups = useMemo(() => {
@@ -72,14 +81,16 @@ export function FilterSection({
   }, [activeGroup, items]);
 
   const filteredItems = useMemo(() => {
-    if (search.length > 0) {
-      return visibleItems.filter((item) =>
-        item.label.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-
-    return visibleItems;
-  }, [visibleItems, search]);
+    const query = removeDiacritics(search.trim()).toLocaleLowerCase();
+    return visibleItems.filter((item) => {
+      if (selectedOnly && !item.checked) return false;
+      if (!query) return true;
+      const names = item.searchAlias
+        ? `${item.label} ${item.searchAlias}`
+        : item.label;
+      return removeDiacritics(names).toLocaleLowerCase().includes(query);
+    });
+  }, [visibleItems, search, selectedOnly]);
 
   const selectedItemsCount = useMemo(() => {
     return items.filter((item) => item.checked).length;
@@ -186,13 +197,27 @@ export function FilterSection({
             </div>
           )}
 
-          <TextField
-            placeholder={t("search")}
-            onChange={(e) => onSearch(e.target.value)}
-            value={search}
-            containerProps={{ className: "filter-section__search" }}
-            theme="dark"
-          />
+          {showSelectedOption && (
+            <CheckboxField
+              label={t("store_show_selected_tags")}
+              checked={selectedOnly}
+              onChange={(event) => setSelectedOnly(event.target.checked)}
+            />
+          )}
+          {canSearch && (
+            <TextField
+              placeholder={t("search")}
+              onChange={(e) => onSearch(e.target.value)}
+              value={search}
+              containerProps={{ className: "filter-section__search" }}
+              theme="dark"
+            />
+          )}
+          {!isWaitingForItems && filteredItems.length === 0 && (
+            <span className="filter-section__count">
+              {t("browse_tags_no_results", { ns: "home" })}
+            </span>
+          )}
 
           {isWaitingForItems && (
             <div

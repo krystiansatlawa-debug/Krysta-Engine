@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ArrowRightIcon } from "@primer/octicons-react";
 import Skeleton from "react-loading-skeleton";
 
-import { Button, GameCard, Hero } from "@renderer/components";
+import { Button, Hero } from "@renderer/components";
 import { clearFilters, setFilters, setMode } from "@renderer/features";
 import { catalogueSearchSlice } from "@renderer/features/catalogue-search";
 import { buildGameDetailsPath, ensureArray } from "@renderer/helpers";
@@ -17,6 +17,7 @@ import type {
   DownloadSource,
   ShopAssets,
   Steam250Game,
+  TrendingGame,
 } from "@types";
 
 import { CatalogueCategories } from "./catalogue-categories";
@@ -33,7 +34,7 @@ type ShelfId = (typeof shelves)[number]["id"];
 type ShelfGames = (ShopAssets | CatalogueSearchResult)[];
 type ShelfResults = Partial<Record<ShelfId, ShelfGames | null>>;
 
-const shelfSize = 6;
+const shelfSize = 10;
 
 export default function CatalogueDiscover() {
   const { t } = useTranslation("home");
@@ -42,6 +43,10 @@ export default function CatalogueDiscover() {
   const mode = useAppSelector((state) => state.catalogueSearch.mode);
   const [results, setResults] = useState<ShelfResults>({});
   const [attempt, setAttempt] = useState(0);
+  const [activeShelf, setActiveShelf] = useState<ShelfId>(
+    CatalogueCategory.Hot
+  );
+  const [hoveredGame, setHoveredGame] = useState<string>();
   const [randomGame, setRandomGame] = useState<Steam250Game | null>(null);
 
   useEffect(() => {
@@ -122,15 +127,141 @@ export default function CatalogueDiscover() {
     navigate("/catalogue/search");
   };
 
-  const hasError = Object.values(results).some((games) => games === null);
+  const games = results[activeShelf];
+  const allGames = useMemo(
+    () => Object.values(results).flatMap((games) => games ?? []),
+    [results]
+  );
+  const alternatives = useMemo(
+    () =>
+      (results[CatalogueCategory.Hot] ?? []).flatMap((game): TrendingGame[] =>
+        "libraryHeroImageUrl" in game
+          ? [{ ...game, description: null, uri: buildGameDetailsPath(game) }]
+          : []
+      ),
+    [results]
+  );
+  const gameKey = (game: ShelfGames[number]) => `${game.shop}:${game.objectId}`;
+  const preview =
+    games?.find((game) => gameKey(game) === hoveredGame) ?? games?.[0];
 
   return (
     <section className="catalogue-discover">
-      <Hero />
+      <Hero alternatives={alternatives} />
 
-      <section className="catalogue-discover__browse">
+      <section
+        className="catalogue-discover__shelf catalogue-store-width"
+        aria-busy={games === undefined}
+      >
+        <div className="catalogue-discover__shelf-picker">
+          {shelves.map(({ id, label }) => (
+            <button
+              type="button"
+              key={id}
+              aria-pressed={activeShelf === id}
+              onClick={() => {
+                setActiveShelf(id);
+                setHoveredGame(undefined);
+              }}
+            >
+              {t(label)}
+            </button>
+          ))}
+        </div>
+
+        {games === null ? (
+          <div className="catalogue-discover__status" role="status">
+            <p>{t("browse_load_error")}</p>
+            <Button
+              theme="outline"
+              size="small"
+              onClick={() => {
+                setResults((current) => ({
+                  ...current,
+                  [activeShelf]: undefined,
+                }));
+                setAttempt((current) => current + 1);
+              }}
+            >
+              {t("browse_retry")}
+            </Button>
+          </div>
+        ) : games?.length === 0 ? (
+          <p role="status">{t("no_results")}</p>
+        ) : (
+          <div className="catalogue-discover__shelf-body">
+            <div className="catalogue-discover__games">
+              {games
+                ? games.map((game) => (
+                    <article
+                      className="catalogue-discover__game"
+                      key={gameKey(game)}
+                      data-highlighted={preview === game}
+                    >
+                      <Link
+                        to={buildGameDetailsPath(game)}
+                        onPointerEnter={() => setHoveredGame(gameKey(game))}
+                        onFocus={() => setHoveredGame(gameKey(game))}
+                      >
+                        {game.libraryImageUrl && (
+                          <img
+                            src={game.libraryImageUrl}
+                            alt=""
+                            loading="lazy"
+                          />
+                        )}
+                        <span>
+                          <strong>{game.title}</strong>
+                          {"genres" in game && game.genres?.length > 0 && (
+                            <small>{game.genres.slice(0, 3).join(", ")}</small>
+                          )}
+                        </span>
+                      </Link>
+                      <CatalogueWishlistButton game={game} />
+                    </article>
+                  ))
+                : Array.from({ length: shelfSize }, (_, index) => (
+                    <Skeleton
+                      key={index}
+                      className="catalogue-discover__placeholder"
+                    />
+                  ))}
+            </div>
+            {preview && (
+              <aside className="catalogue-discover__preview">
+                <Link to={buildGameDetailsPath(preview)}>
+                  <strong>{preview.title}</strong>
+                  {"genres" in preview && preview.genres?.length > 0 && (
+                    <div className="catalogue-discover__preview-genres">
+                      {preview.genres.slice(0, 4).map((genre) => (
+                        <span key={genre}>{genre}</span>
+                      ))}
+                    </div>
+                  )}
+                  {preview.libraryImageUrl && (
+                    <img src={preview.libraryImageUrl} alt="" loading="lazy" />
+                  )}
+                </Link>
+              </aside>
+            )}
+          </div>
+        )}
+
+        {activeShelf === "new" && games && (
+          <Button
+            theme="outline"
+            size="small"
+            className="catalogue-discover__browse-more"
+            onClick={() => openResults(newest)}
+          >
+            {t("browse_all_new")} <ArrowRightIcon />
+          </Button>
+        )}
+      </section>
+
+      <section className="catalogue-discover__browse catalogue-store-width">
         <header className="catalogue-discover__heading">
-          <h1>{t("browse_games")}</h1>
+          <h2>{t("browse_games")}</h2>
           {randomGame && (
             <Button
               theme="outline"
@@ -149,73 +280,18 @@ export default function CatalogueDiscover() {
           )}
         </header>
         <CatalogueCategories
+          artworkForGenre={(genre) =>
+            allGames.find(
+              (game) =>
+                "genres" in game &&
+                game.genres?.includes(genre) &&
+                game.libraryImageUrl
+            )?.libraryImageUrl
+          }
           onChooseGenre={(genre) => openResults({ genres: [genre] })}
           onChooseTag={(id) => openResults({ tags: [id] })}
         />
       </section>
-
-      {hasError && (
-        <div className="catalogue-discover__status" role="status">
-          <p>{t("browse_load_error")}</p>
-          <Button
-            theme="outline"
-            size="small"
-            onClick={() => {
-              setResults({});
-              setAttempt((current) => current + 1);
-            }}
-          >
-            {t("browse_retry")}
-          </Button>
-        </div>
-      )}
-
-      {shelves.map(({ id, label }) => {
-        const games = results[id];
-        if (games !== undefined && !games?.length) return null;
-
-        return (
-          <section
-            className="catalogue-discover__shelf"
-            key={id}
-            aria-busy={games === undefined}
-          >
-            <header className="catalogue-discover__heading">
-              <h2>{t(label)}</h2>
-              {id === "new" && (
-                <Button
-                  theme="outline"
-                  size="small"
-                  onClick={() => openResults(newest)}
-                >
-                  {t("browse_all_new")} <ArrowRightIcon />
-                </Button>
-              )}
-            </header>
-            <div className="catalogue-discover__games">
-              {games
-                ? games.map((game) => (
-                    <div
-                      className="catalogue-discover__game"
-                      key={`${game.shop}:${game.objectId}`}
-                    >
-                      <GameCard
-                        game={game}
-                        onClick={() => navigate(buildGameDetailsPath(game))}
-                      />
-                      <CatalogueWishlistButton game={game} />
-                    </div>
-                  ))
-                : Array.from({ length: shelfSize }, (_, index) => (
-                    <Skeleton
-                      key={index}
-                      className="catalogue-discover__placeholder"
-                    />
-                  ))}
-            </div>
-          </section>
-        );
-      })}
     </section>
   );
 }

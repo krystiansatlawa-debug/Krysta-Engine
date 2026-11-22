@@ -29,6 +29,7 @@ import {
 type CompletedScan = StorySaveScan & {
   installationKey?: string;
   saveObjectId?: string;
+  readerVersion?: number;
 };
 type PendingScan = {
   game: Game;
@@ -46,10 +47,13 @@ const customFolders = db.sublevel<string, string>("story-save-folders", {
 const queued = new Map<string, PendingScan>();
 let activeScan: { key: string; result: Promise<CompletedScan> } | undefined;
 const canRead = () => !hasTrackedGamesRunning();
+const storyReaderVersion = 2;
 
 function storyKey(game: Game, source: StorySaveSource | undefined) {
   const { shop, objectId } = getGameCatalogueIdentity(game);
-  return source ?? levelKeys.game(shop, objectId);
+  return source && source !== "far-cry-4" && source !== "gtaiv"
+    ? source
+    : levelKeys.game(shop, objectId);
 }
 
 let sessionRevision = 0;
@@ -83,14 +87,15 @@ async function defaultSavePaths(
       profiles.push({ home, documents: path.join(oneDrive, "Documents") });
     }
   } else if (process.platform === "linux") {
+    const catalogueGame = getGameCatalogueIdentity(game);
+    const protonAppId =
+      source === "gtaiv" &&
+      catalogueGame.shop === "steam" &&
+      catalogueGame.objectId === "12220"
+        ? catalogueGame.objectId
+        : storySaveSteamAppIds[source];
     const prefixes = (await getSteamLibraryFolders()).map((root) =>
-      path.join(
-        root,
-        "steamapps",
-        "compatdata",
-        storySaveSteamAppIds[source],
-        "pfx"
-      )
+      path.join(root, "steamapps", "compatdata", protonAppId, "pfx")
     );
     if (game.winePrefixPath) {
       prefixes.unshift(
@@ -131,8 +136,7 @@ async function readAutomaticSave(
   canContinue: () => boolean
 ) {
   if (folder) {
-    // Users can point any library game at its save directory, not just the
-    // four formats with dedicated parsers.
+    // Any library game can use a selected save directory.
     const recognized = source
       ? await readLatestStorySave(
           source,
@@ -183,7 +187,12 @@ async function readAutomaticSave(
       )
         return epicResult;
     }
-    if (!source || detected.status === "ready" || detected.status === "waiting")
+    if (
+      !source ||
+      source === "far-cry-4" ||
+      detected.status === "ready" ||
+      detected.status === "waiting"
+    )
       return detected;
 
     const paths = await defaultSavePaths(source, game, canContinue);
@@ -228,6 +237,7 @@ function refresh(key: string, scan: PendingScan) {
       automatic: current.automatic,
       status: current.status,
       lastSaveAt: current.lastSaveAt,
+      readerVersion: storyReaderVersion,
       ...((catalogue.shop !== game.shop ||
         catalogue.objectId !== game.objectId) && {
         installationKey: levelKeys.game(game.shop, game.objectId),
@@ -305,6 +315,10 @@ export async function getAutomaticStoryProgress(
       (source ? await customFolders.get(source) : undefined)
     ),
     canSelectSaveFolder: true,
+    ...(stored.readerVersion !== storyReaderVersion &&
+      (stored.status === "save-found" || stored.status === "unreadable") && {
+        shouldRefreshSave: true,
+      }),
   };
 }
 

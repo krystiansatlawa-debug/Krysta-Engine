@@ -125,7 +125,7 @@ export function AppTitleBar({
       </nav>
 
       <div className="title-bar__search">
-        <TitleBarSearch />
+        {!location.pathname.startsWith("/catalogue") && <TitleBarSearch />}
       </div>
 
       <button

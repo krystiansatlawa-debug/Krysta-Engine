@@ -86,6 +86,7 @@ export function CategoryFilter({
           key={option.value}
           type="button"
           className={`library-category-filter__option ${category === option.value ? "library-category-filter__option--active" : ""}`}
+          aria-pressed={category === option.value}
           onClick={() => onCategoryChange(option.value)}
         >
           {option.icon}

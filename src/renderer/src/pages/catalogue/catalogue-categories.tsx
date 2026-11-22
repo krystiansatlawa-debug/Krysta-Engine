@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { clearFilters, setFilters, setMode } from "@renderer/features";
+import { useAppDispatch } from "@renderer/hooks";
 import { useTranslation } from "react-i18next";
 import { Button } from "@renderer/components";
 import { getLocalizedSteamMetadata } from "@renderer/hooks/use-catalogue";
-import { removeDiacritics } from "@shared";
+import {
+  getCatalogueSteamTags,
+  getSteamTagLabel,
+  removeDiacritics,
+} from "@shared";
 import { gameGenres, gameTagGroups } from "./browse-categories";
 
 const tagPageSize = 24;
 const normalize = (text: string) =>
   removeDiacritics(text).toLocaleLowerCase().trim();
 
-type Tag = { id: number; english: string; label: string };
-
-function SteamTagDirectory({
+export function SteamTagDirectory({
   onChooseTag,
 }: Readonly<{ onChooseTag: (id: number) => void }>) {
   const { t, i18n } = useTranslation("home");
@@ -46,30 +51,10 @@ function SteamTagDirectory({
 
   const currentResult =
     result?.locale === locale && result.request === request ? result : null;
-  const tags = useMemo(() => {
-    const metadata = currentResult?.metadata;
-    if (!metadata) return [];
-
-    const language = locale.split("-")[0];
-    const localized = new Map(
-      Object.entries(metadata[language] ?? {}).map(([label, id]) => [id, label])
-    );
-    const unique = new Map<number, Tag>();
-    for (const [name, id] of Object.entries(metadata.en)) {
-      if (!Number.isInteger(id) || id <= 0 || unique.has(id)) continue;
-      const english = name.trim();
-      unique.set(id, {
-        id,
-        english,
-        label: t(`browse_labels.${english}`, {
-          defaultValue: localized.get(id)?.trim() || english,
-        }),
-      });
-    }
-    return Array.from(unique.values()).sort((a, b) =>
-      a.label.localeCompare(b.label, locale)
-    );
-  }, [currentResult, locale, t]);
+  const tags = useMemo(
+    () => getCatalogueSteamTags(currentResult?.metadata ?? {}, locale),
+    [currentResult, locale]
+  );
 
   if (!currentResult) return <p role="status">{t("browse_tags_loading")}</p>;
 
@@ -136,14 +121,15 @@ function SteamTagDirectory({
 }
 
 export function CatalogueCategories({
+  artworkForGenre,
   onChooseGenre,
   onChooseTag,
 }: Readonly<{
+  artworkForGenre: (genre: string) => string | null | undefined;
   onChooseGenre: (genre: string) => void;
   onChooseTag: (id: number) => void;
 }>) {
-  const { t } = useTranslation("home");
-  const [directoryOpened, setDirectoryOpened] = useState(false);
+  const { t, i18n } = useTranslation("home");
   const label = (name: string) =>
     t(`browse_labels.${name}`, { defaultValue: name });
 
@@ -160,20 +146,29 @@ export function CatalogueCategories({
 
   return (
     <>
-      <div className="catalogue-discover__tags">
-        {gameGenres.slice(0, 8).map(renderGenre)}
+      <div className="catalogue-discover__genre-cards">
+        {gameGenres.slice(0, 8).map((genre) => {
+          const artwork = artworkForGenre(genre);
+          return (
+            <button
+              type="button"
+              key={genre}
+              onClick={() => onChooseGenre(genre)}
+            >
+              {artwork && <img src={artwork} alt="" loading="lazy" />}
+              <span>{label(genre)}</span>
+            </button>
+          );
+        })}
       </div>
       <details className="catalogue-discover__more">
         <summary>{t("browse_more")}</summary>
-        <details
-          className="catalogue-discover__all-tags"
-          onToggle={(event) => {
-            if (event.currentTarget.open) setDirectoryOpened(true);
-          }}
+        <Link
+          className="catalogue-discover__all-tags-link"
+          to="/catalogue/tags"
         >
-          <summary>{t("browse_all_steam_tags")}</summary>
-          {directoryOpened && <SteamTagDirectory onChooseTag={onChooseTag} />}
-        </details>
+          {t("store_show_all_tags")}
+        </Link>
         <h3>{t("browse_genres")}</h3>
         <div className="catalogue-discover__tags">
           {gameGenres.slice(8).map(renderGenre)}
@@ -189,7 +184,7 @@ export function CatalogueCategories({
                   theme="outline"
                   onClick={() => onChooseTag(id)}
                 >
-                  {label(name)}
+                  {getSteamTagLabel(id, i18n.language, label(name))}
                 </Button>
               ))}
             </div>
@@ -197,5 +192,27 @@ export function CatalogueCategories({
         ))}
       </details>
     </>
+  );
+}
+
+export function CatalogueTagsPage() {
+  const { t } = useTranslation("home");
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+
+  return (
+    <section className="catalogue-discover">
+      <section className="catalogue-discover__tags-page catalogue-store-width">
+        <h1>{t("browse_all_steam_tags")}</h1>
+        <SteamTagDirectory
+          onChooseTag={(id) => {
+            dispatch(setMode("modern"));
+            dispatch(clearFilters());
+            dispatch(setFilters({ tags: [id] }));
+            navigate("/catalogue/search");
+          }}
+        />
+      </section>
+    </section>
   );
 }

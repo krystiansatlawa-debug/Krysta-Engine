@@ -7,11 +7,13 @@ export interface GameStoryProgress {
 export interface AutomaticGameStoryProgress {
   percent: number | null;
   saveTitle: string;
-  saveTitleKind?: "chapter";
+  saveTitleKind?: "chapter" | "save-title";
   trackedQuestId?: string;
   summaryKey?: string;
   missionDescription?: string;
   progressKind?: "story" | "overall";
+  completedMissions?: number;
+  totalMissions?: number;
   savedAt: number;
 }
 
@@ -29,4 +31,5 @@ export interface GameStoryProgressView {
   lastSaveAt: number | null;
   hasCustomSaveFolder: boolean;
   canSelectSaveFolder: boolean;
+  shouldRefreshSave?: boolean;
 }

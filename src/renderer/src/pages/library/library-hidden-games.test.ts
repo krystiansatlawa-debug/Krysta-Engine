@@ -162,6 +162,11 @@ async function renderLibrary(
           library: { searchQuery: "" },
           gameRunning: { gameRunning: null },
         }),
+      LIBRARY_COLLECTION_STORAGE_KEY: "library-collection",
+      useLibraryCollectionSelection: () => ({
+        selectedCollectionId: searchParams.get("collection"),
+        selectCollection: noop,
+      }),
       useGameCollections: () => ({
         collections,
         loadCollections,
@@ -173,10 +178,13 @@ async function renderLibrary(
       selectIsLibraryLoading: () => false,
       selectGroupedLibrary: () => library,
       setHeaderTitle: noop,
+      setLibrarySearchQuery: noop,
     },
     "@primer/octicons-react": Object.fromEntries(
       [
         "HeartIcon",
+        "DeviceDesktopIcon",
+        "XIcon",
         "TelescopeIcon",
         "FileDirectoryIcon",
         "SearchIcon",
@@ -193,7 +201,6 @@ async function renderLibrary(
     "@renderer/components": {
       Button: () => null,
       ConfirmationModal: () => null,
-      CreateCollectionModal: () => null,
       GameContextMenu: () => null,
     },
     "@renderer/context": {
@@ -214,7 +221,6 @@ async function renderLibrary(
     },
     "react-router-dom": {
       useNavigate: () => noop,
-      useSearchParams: () => [searchParams, noop],
     },
     "./library-game-card": { LibraryGameCard: gameCard },
     "./library-game-card-large": { LibraryGameCardLarge: gameCard },
@@ -306,7 +312,9 @@ async function renderLibrary(
       });
     },
     retry: async () => {
-      const button = dom.window.document.querySelector("button");
+      const button = [...dom.window.document.querySelectorAll("button")].find(
+        (item) => item.textContent === "retry_hidden_games"
+      );
       assert.ok(button, "the local hidden-library error offers a retry");
       await act(async () => button.click());
     },

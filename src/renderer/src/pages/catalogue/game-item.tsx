@@ -64,6 +64,10 @@ export function GameItem({ game }: GameItemProps) {
 
   const genres = useMemo(() => {
     return game.genres?.map((genre) => {
+      if (language === "pl") {
+        return t(`browse_labels.${genre}`, { ns: "home", defaultValue: genre });
+      }
+
       const index = steamGenres["en"]?.findIndex(
         (steamGenre) => steamGenre === genre
       );
@@ -78,7 +82,7 @@ export function GameItem({ game }: GameItemProps) {
 
       return genre;
     });
-  }, [game.genres, language, steamGenres]);
+  }, [game.genres, language, steamGenres, t]);
 
   const libraryImage = useMemo(() => {
     if (game.libraryImageUrl) {
@@ -86,7 +90,7 @@ export function GameItem({ game }: GameItemProps) {
         <img
           className="game-item__cover"
           src={game.libraryImageUrl}
-          alt={game.title}
+          alt=""
           width={200}
           height={103}
           loading="lazy"
@@ -99,7 +103,7 @@ export function GameItem({ game }: GameItemProps) {
         <QuestionIcon size={28} />
       </div>
     );
-  }, [game.libraryImageUrl, game.title]);
+  }, [game.libraryImageUrl]);
 
   const rawProtonValue =
     game.tier ??
@@ -145,6 +149,14 @@ export function GameItem({ game }: GameItemProps) {
             ))}
           </div>
         </div>
+        {game.releaseYear != null && (
+          <span
+            className="game-item__year"
+            title={t("store_release_year", { ns: "catalogue" })}
+          >
+            {game.releaseYear}
+          </span>
+        )}
       </Link>
       <CatalogueWishlistButton game={game} />
       <button

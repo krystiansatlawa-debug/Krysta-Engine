@@ -37,6 +37,69 @@
     }
   }
 
+  &__collections {
+    flex: 1;
+    min-height: 0;
+  }
+
+  &__collections-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 globals.$spacing-unit;
+
+    h2 {
+      font-size: globals.$body-font-size;
+      font-weight: 600;
+    }
+
+    button {
+      display: grid;
+      place-items: center;
+      width: 26px;
+      min-height: 26px;
+      border-radius: 4px;
+      color: globals.$body-color;
+      cursor: pointer;
+
+      &:hover {
+        background: #ffffff1a;
+      }
+    }
+  }
+
+  &__collections > &__collections-list {
+    overflow-y: auto;
+
+    .sidebar__menu-item--active {
+      color: globals.$platinum-cyan;
+      background: #16b19520;
+    }
+
+    svg {
+      flex-shrink: 0;
+    }
+  }
+
+  &__collection-count {
+    color: globals.$subtle-color;
+    font-size: globals.$small-font-size;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__collections-empty,
+  &__collections-retry {
+    padding: 0 globals.$spacing-unit;
+    font-size: globals.$small-font-size;
+    color: globals.$subtle-color;
+    text-align: start;
+  }
+
+  &__collections-retry {
+    color: globals.$platinum-cyan;
+    cursor: pointer;
+  }
+
   &__game-list {
     flex: 1;
     min-height: 0;

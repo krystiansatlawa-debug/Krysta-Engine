@@ -44,6 +44,7 @@ import {
   SIDEBAR_PLAYABLE_ONLY_STORAGE_KEY,
   SIDEBAR_SOURCES_STORAGE_KEY,
 } from "@renderer/session-state";
+import { SidebarLibraryCollections } from "./sidebar-library-collections";
 import { SidebarGameList } from "./sidebar-game-list";
 import { SidebarProfile } from "./sidebar-profile";
 
@@ -94,14 +95,13 @@ export function Sidebar() {
   const [showDeckyConfirmModal, setShowDeckyConfirmModal] = useState(false);
   const navigate = useNavigate();
 
-  const filterRef = useRef<HTMLInputElement>(null);
-
   const [isResizing, setIsResizing] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(
     initialSidebarWidth ? Number(initialSidebarWidth) : SIDEBAR_INITIAL_WIDTH
   );
 
   const location = useLocation();
+  const isLibraryPage = location.pathname === "/library";
 
   const [storedSidebarFilters] = useState(() =>
     readStoredLibraryFilters(
@@ -215,10 +215,6 @@ export function Sidebar() {
 
   useEffect(() => {
     setFilterQuery("");
-
-    if (filterRef.current) {
-      filterRef.current.value = "";
-    }
   }, [sortedLibrary]);
 
   const isSearching = filterQuery.trim().length > 0;
@@ -560,67 +556,71 @@ export function Sidebar() {
             </ul>
           </section>
 
-          <section className="sidebar__section sidebar__section--games">
-            <div className="sidebar__search-row">
-              <TextField
-                ref={filterRef}
-                placeholder={t("filter")}
-                onChange={handleFilter}
-                theme="dark"
+          {isLibraryPage ? (
+            <SidebarLibraryCollections />
+          ) : (
+            <section className="sidebar__section sidebar__section--games">
+              <div className="sidebar__search-row">
+                <TextField
+                  value={filterQuery}
+                  placeholder={t("filter")}
+                  onChange={handleFilter}
+                  theme="dark"
+                />
+
+                <button
+                  type="button"
+                  className={cn("sidebar__play-button", {
+                    "sidebar__play-button--active": showPlayableOnly,
+                  })}
+                  onClick={handleTogglePlayableOnly}
+                  data-tooltip-id="sidebar-show-playable-only-tooltip"
+                  data-tooltip-content={t("show_installed_only", {
+                    ns: "library",
+                  })}
+                  data-tooltip-place="top"
+                >
+                  {showPlayableOnly ? (
+                    <CheckCircleFillIcon size={16} />
+                  ) : (
+                    <CheckCircleIcon size={16} />
+                  )}
+                </button>
+
+                <Tooltip id="sidebar-show-playable-only-tooltip" place="top" />
+
+                <SidebarFilterMenu
+                  category={sidebarCategory}
+                  onCategoryChange={handleSidebarCategoryChange}
+                  sortBy={sidebarSortBy}
+                  onSortChange={handleSidebarSortChange}
+                  showFavoritesFirst={showFavoritesFirst}
+                  onToggleFavoritesFirst={handleToggleFavoritesFirst}
+                  showSources={
+                    categoryShowsSources(sidebarCategory) && hasImportedGames
+                  }
+                  sources={availableSources}
+                  selectedSources={effectiveSources}
+                  onSourcesChange={handleSelectedSourcesChange}
+                  showPlatforms={
+                    categoryShowsPlatforms(sidebarCategory) && hasPlatforms
+                  }
+                  platforms={uniquePlatforms}
+                  selectedPlatforms={selectedPlatforms}
+                  onPlatformsChange={handleSelectedPlatformsChange}
+                />
+              </div>
+
+              <SidebarGameList
+                games={visibleGames}
+                isLoading={isLibraryLoading}
+                hasActiveFilter={hasActiveFilter}
+                emptyLabel={t("library:no_results")}
+                onGameClick={handleSidebarGameClick}
+                getGameTitle={getGameTitle}
               />
-
-              <button
-                type="button"
-                className={cn("sidebar__play-button", {
-                  "sidebar__play-button--active": showPlayableOnly,
-                })}
-                onClick={handleTogglePlayableOnly}
-                data-tooltip-id="sidebar-show-playable-only-tooltip"
-                data-tooltip-content={t("show_installed_only", {
-                  ns: "library",
-                })}
-                data-tooltip-place="top"
-              >
-                {showPlayableOnly ? (
-                  <CheckCircleFillIcon size={16} />
-                ) : (
-                  <CheckCircleIcon size={16} />
-                )}
-              </button>
-
-              <Tooltip id="sidebar-show-playable-only-tooltip" place="top" />
-
-              <SidebarFilterMenu
-                category={sidebarCategory}
-                onCategoryChange={handleSidebarCategoryChange}
-                sortBy={sidebarSortBy}
-                onSortChange={handleSidebarSortChange}
-                showFavoritesFirst={showFavoritesFirst}
-                onToggleFavoritesFirst={handleToggleFavoritesFirst}
-                showSources={
-                  categoryShowsSources(sidebarCategory) && hasImportedGames
-                }
-                sources={availableSources}
-                selectedSources={effectiveSources}
-                onSourcesChange={handleSelectedSourcesChange}
-                showPlatforms={
-                  categoryShowsPlatforms(sidebarCategory) && hasPlatforms
-                }
-                platforms={uniquePlatforms}
-                selectedPlatforms={selectedPlatforms}
-                onPlatformsChange={handleSelectedPlatformsChange}
-              />
-            </div>
-
-            <SidebarGameList
-              games={visibleGames}
-              isLoading={isLibraryLoading}
-              hasActiveFilter={hasActiveFilter}
-              emptyLabel={t("library:no_results")}
-              onGameClick={handleSidebarGameClick}
-              getGameTitle={getGameTitle}
-            />
-          </section>
+            </section>
+          )}
         </div>
       </div>
 

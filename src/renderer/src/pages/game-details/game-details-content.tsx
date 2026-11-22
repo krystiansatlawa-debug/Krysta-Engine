@@ -14,6 +14,7 @@ import { HeroPanel } from "./hero";
 import { KrystaGameUpdates } from "./krysta-game-updates";
 import { GameJournal } from "./game-journal";
 import { GameStoryProgress } from "./game-story-progress";
+import { getStoryAchievementMilestone } from "./story-achievement-milestones";
 import { KrystaUbisoftAchievements } from "./krysta-ubisoft-achievements";
 import { KrystaRockstarAchievements } from "./krysta-rockstar-achievements";
 import { KrystaGameCloud } from "./krysta-game-cloud";
@@ -88,6 +89,7 @@ export function GameDetailsContent() {
   const {
     objectId,
     shopDetails,
+    achievements,
     game,
     presentation,
     catalogueGame,
@@ -641,6 +643,10 @@ export function GameDetailsContent() {
                 key={`${storyGame.shop}:${storyGame.objectId}`}
                 shop={storyGame.shop}
                 objectId={storyGame.objectId}
+                milestone={getStoryAchievementMilestone(
+                  storyGame,
+                  achievements
+                )}
               />
             )}
             <DescriptionHeader />

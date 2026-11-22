@@ -133,6 +133,15 @@ test("captures unknown saves after a session and serializes scans across the lib
     AbortController,
   });
 
+  const legacyGame = game("legacy");
+  saved.set("steam:legacy", { automatic: null, status: "save-found" });
+  assert.equal(
+    (await exported.getAutomaticStoryProgress(legacyGame, false))
+      .shouldRefreshSave,
+    true
+  );
+  saved.clear();
+
   // No game card has been opened. The session close hooks schedule both games.
   runningState.setEmulatorGameRunning(activityKey);
   exported.queueAutomaticStoryProgress(linked);
@@ -168,6 +177,7 @@ test("captures unknown saves after a session and serializes scans across the lib
   assert.equal(view.automatic, null);
   assert.equal(view.automaticStatus, "save-found");
   assert.equal(view.lastSaveAt, 123456);
+  assert.equal(view.shouldRefreshSave, undefined);
   assert.equal(
     (await exported.getAutomaticStoryProgress(emulator, false)).lastSaveAt,
     123456

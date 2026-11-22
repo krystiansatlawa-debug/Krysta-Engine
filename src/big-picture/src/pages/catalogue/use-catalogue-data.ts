@@ -1,3 +1,5 @@
+import { getCatalogueSteamTags } from "@shared";
+import { useTranslation } from "react-i18next";
 import type {
   CatalogueSearchPayload,
   CatalogueSearchResult,
@@ -250,6 +252,7 @@ function normalizeLaunchboxFilters(
 }
 
 export function useCatalogueData() {
+  const { t, i18n } = useTranslation("catalogue");
   const [searchParams, setSearchParams] = useSearchParams();
   const deferredTitle = useDeferredValue(searchParams.get("title") ?? "");
   const [pageSize, setPageSize] = useState(getCataloguePageSize);
@@ -645,8 +648,12 @@ export function useCatalogueData() {
         color: "magenta",
       },
       [FilterType.Tags]: {
-        data: steamTags,
-        label: "Tags",
+        data: Object.fromEntries(
+          getCatalogueSteamTags({ en: steamTags }, i18n.language).map(
+            ({ id, label }) => [label, id]
+          )
+        ),
+        label: t("tags"),
         color: "yellow",
       },
       [FilterType.DownloadSourceFingerprints]: {
@@ -672,6 +679,8 @@ export function useCatalogueData() {
     steamGenres,
     steamPublishers,
     steamTags,
+    i18n.language,
+    t,
     values.mode,
   ]);
 
