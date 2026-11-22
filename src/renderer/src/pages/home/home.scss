@@ -128,3 +128,36 @@
 .home__header {
   padding-block: 4px;
 }
+
+.home__browse {
+  display: grid;
+  gap: 12px;
+  margin-inline: calc(globals.$spacing-unit * 3);
+  padding: 16px;
+  border: 1px solid globals.$border-color;
+  border-radius: 12px;
+}
+
+.home__browse-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.home__browse-details {
+  summary {
+    width: fit-content;
+    padding: 4px 0;
+    cursor: pointer;
+  }
+
+  h3 {
+    margin: 12px 0 8px;
+    font-size: 1em;
+  }
+}
+
+.home__browse :is(button, summary):focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}

@@ -652,6 +652,16 @@ export function App() {
   }, [location.pathname, location.search]);
 
   useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const transition = contentRef.current?.animate(
+      [{ opacity: 0.85 }, { opacity: 1 }],
+      { duration: 150, easing: "ease-out" }
+    );
+    return () => transition?.cancel();
+  }, [location.pathname]);
+
+  useEffect(() => {
     new MutationObserver(() => {
       const modal = document.body.querySelector("[data-hydra-dialog]");
 

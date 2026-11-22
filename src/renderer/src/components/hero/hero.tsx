@@ -6,8 +6,10 @@ import Skeleton from "react-loading-skeleton";
 import { ensureArray } from "@renderer/helpers";
 import "./hero.scss";
 
-// Featured game per language, kept for the session so returning to Home
-// paints the hero at once instead of a skeleton.
+const rotationInterval = 8_000;
+const reducedMotionQuery = "(prefers-reduced-motion: reduce)";
+
+// Keep successful results per language so returning to Home can render immediately.
 const featuredCache = new Map<string, TrendingGame[]>();
 
 export function Hero() {
@@ -16,19 +18,31 @@ export function Hero() {
   const polish = i18n.language.startsWith("pl");
   const language = i18n.language.split("-")[0];
 
-  const [featuredGameDetails, setFeaturedGameDetails] = useState<
-    TrendingGame[] | null
-  >(() => featuredCache.get(language) ?? null);
-  // Start in the loading state: rendering nothing first and the skeleton a
-  // tick later pushed the whole page down.
-  const [isLoading, setIsLoading] = useState(
-    () => !featuredCache.has(language)
+  const [loadResult, setLoadResult] = useState<{
+    language: string;
+    games: TrendingGame[];
+  } | null>(null);
+  const [playbackOverride, setPlaybackOverride] = useState<boolean | null>(
+    null
   );
+  const [reducedMotion, setReducedMotion] = useState(
+    () => window.matchMedia(reducedMotionQuery).matches
+  );
+  const [windowHidden, setWindowHidden] = useState(() => document.hidden);
+  const [hovering, setHovering] = useState(false);
+  const [slideFocused, setSlideFocused] = useState(false);
+
+  const featuredGames =
+    loadResult?.language === language
+      ? loadResult.games
+      : featuredCache.get(language);
+  const slideCount = featuredGames?.length ?? 0;
+  const playing = playbackOverride ?? !reducedMotion;
 
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!featuredCache.has(language)) setIsLoading(true);
+    let cancelled = false;
 
     window.electron.hydraApi
       .get<TrendingGame[]>("/catalogue/featured", {
@@ -39,33 +53,98 @@ export function Hero() {
         const featured = ensureArray<TrendingGame>(
           result,
           "/catalogue/featured"
-        ).slice(0, 5);
-        featuredCache.set(language, featured);
-        setFeaturedGameDetails(featured);
+        );
+        const games = Array.from(
+          new Map(featured.map((game) => [game.uri, game])).values()
+        );
+        if (cancelled) return;
+        featuredCache.set(language, games);
+        setLoadResult({ language, games });
       })
       .catch(() => {
-        setFeaturedGameDetails([]);
-      })
-      .finally(() => {
-        setIsLoading(false);
+        if (!cancelled && !featuredCache.has(language)) {
+          setLoadResult({ language, games: [] });
+        }
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [language]);
 
-  if (isLoading) {
+  useEffect(() => {
+    const motionPreference = window.matchMedia(reducedMotionQuery);
+    const updateMotionPreference = () =>
+      setReducedMotion(motionPreference.matches);
+    const updateVisibility = () => setWindowHidden(document.hidden);
+
+    motionPreference.addEventListener("change", updateMotionPreference);
+    document.addEventListener("visibilitychange", updateVisibility);
+
+    return () => {
+      motionPreference.removeEventListener("change", updateMotionPreference);
+      document.removeEventListener("visibilitychange", updateVisibility);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      slideCount < 2 ||
+      !playing ||
+      windowHidden ||
+      hovering ||
+      slideFocused
+    ) {
+      return;
+    }
+
+    const timer = window.setTimeout(
+      () => setActive((index) => (index + 1) % slideCount),
+      rotationInterval
+    );
+    return () => window.clearTimeout(timer);
+  }, [
+    active,
+    featuredGames,
+    hovering,
+    playing,
+    slideCount,
+    slideFocused,
+    windowHidden,
+  ]);
+
+  if (!featuredGames) {
     return <Skeleton className="hero" />;
   }
 
-  if (featuredGameDetails?.length) {
-    const game = featuredGameDetails[active % featuredGameDetails.length];
+  if (slideCount) {
+    const currentIndex = active % slideCount;
+    const game = featuredGames[currentIndex];
     return (
-      <section className="krysta-featured">
+      <section
+        className="krysta-featured"
+        onPointerEnter={(event) => {
+          if (event.pointerType === "mouse") setHovering(true);
+        }}
+        onPointerLeave={() => setHovering(false)}
+        onFocus={(event) =>
+          setSlideFocused(
+            event.target.matches(":focus-visible") &&
+              !event.target.closest(".krysta-featured__playback")
+          )
+        }
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) {
+            setSlideFocused(false);
+          }
+        }}
+      >
         <button
           type="button"
           onClick={() => navigate(game.uri)}
           className="hero"
-          key={game.uri}
         >
-          <div className="hero__backdrop">
+          <div className="hero__backdrop" key={game.uri}>
             <img
               src={game.libraryHeroImageUrl ?? undefined}
               alt={game.description ?? ""}
@@ -90,17 +169,36 @@ export function Hero() {
             </div>
           </div>
         </button>
-        {featuredGameDetails.length > 1 && (
-          <div className="krysta-featured__dots">
-            {featuredGameDetails.map((item, index) => (
-              <button
-                type="button"
-                key={item.uri}
-                aria-label={`Featured game ${index + 1}`}
-                aria-current={index === active % featuredGameDetails.length}
-                onClick={() => setActive(index)}
-              />
-            ))}
+        {slideCount > 1 && (
+          <div className="krysta-featured__controls">
+            <div className="krysta-featured__dots">
+              {featuredGames.map((item, index) => (
+                <button
+                  type="button"
+                  key={item.uri}
+                  aria-label={
+                    polish
+                      ? `Polecana gra ${index + 1} z ${slideCount}`
+                      : `Featured game ${index + 1} of ${slideCount}`
+                  }
+                  aria-current={index === currentIndex}
+                  onClick={() => setActive(index)}
+                />
+              ))}
+            </div>
+            <button
+              type="button"
+              className="krysta-featured__playback"
+              onClick={() => setPlaybackOverride(!playing)}
+            >
+              {playing
+                ? polish
+                  ? "Wstrzymaj rotację"
+                  : "Pause rotation"
+                : polish
+                  ? "Wznów rotację"
+                  : "Resume rotation"}
+            </button>
           </div>
         )}
       </section>

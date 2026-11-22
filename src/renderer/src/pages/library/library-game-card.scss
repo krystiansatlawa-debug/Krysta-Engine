@@ -38,10 +38,6 @@
       z-index: 1;
     }
 
-    &:hover {
-      transform: scale(1.02);
-    }
-
     &:hover::before {
       opacity: 1;
       transform: translateY(-20%);
@@ -49,6 +45,14 @@
 
     @media (prefers-reduced-motion: reduce) {
       transition: none;
+
+      &::before {
+        transition: none;
+      }
+
+      &:hover::before {
+        transform: translateY(-36%);
+      }
     }
   }
 

@@ -101,6 +101,7 @@ export function HeroPanelActions() {
 
   const navigate = useNavigate();
   const location = useLocation();
+  const handledQuickPlay = useRef<string | null>(null);
 
   const [showDiscSelectionModal, setShowDiscSelectionModal] = useState(false);
 
@@ -489,6 +490,47 @@ export function HeroPanelActions() {
   };
 
   const deleting = game ? isGameDeleting(game?.id) : false;
+  const canPlayClassics =
+    game?.shop === "launchbox" && (game.discs?.length ?? 0) > 0;
+
+  useEffect(() => {
+    const state = location.state as { quickPlayGameId?: string } | null;
+    if (
+      !game ||
+      !state?.quickPlayGameId ||
+      state.quickPlayGameId !== game.id ||
+      handledQuickPlay.current === location.key
+    ) {
+      return;
+    }
+
+    handledQuickPlay.current = location.key;
+    navigate(location.pathname + location.search, {
+      replace: true,
+      state: null,
+      preventScrollReset: true,
+    });
+
+    if (
+      !deleting &&
+      !isGameRunning &&
+      !isTransferring &&
+      !isPs4PkgJobRunning &&
+      (game.executablePath || canPlayClassics)
+    ) {
+      void openGame();
+    }
+  }, [
+    canPlayClassics,
+    deleting,
+    game,
+    isGameRunning,
+    isPs4PkgJobRunning,
+    isTransferring,
+    location,
+    navigate,
+    openGame,
+  ]);
 
   const addGameToLibraryButton = (
     <Button
@@ -645,9 +687,6 @@ export function HeroPanelActions() {
       );
     }
 
-    const isPlayableClassics =
-      game?.shop === "launchbox" && (game?.discs?.length ?? 0) > 0;
-
     if (game?.executablePath && epicDownload?.epic?.update) {
       if (
         isLibraryGameDownloading({ download: epicDownload }) ||
@@ -711,13 +750,13 @@ export function HeroPanelActions() {
       );
     }
 
-    if (game?.executablePath || isPlayableClassics) {
+    if (game?.executablePath || canPlayClassics) {
       return (
         <Button
           onClick={openGame}
-          theme="outline"
+          theme="primary"
           disabled={deleting || isGameRunning || isPs4PkgJobRunning}
-          className="hero-panel-actions__action"
+          className="hero-panel-actions__action hero-panel-actions__play"
         >
           <PlayIcon />
           {t("play")}

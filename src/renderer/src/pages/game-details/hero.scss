@@ -1,6 +1,6 @@
 @use "../../scss/globals.scss";
 
-$hero-height: 350px;
+$hero-height: clamp(360px, 46vh, 470px);
 
 @keyframes slide-in {
   0% {
@@ -336,12 +336,12 @@ $hero-height: 350px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    background: linear-gradient(0deg, #0b0d12e6 0%, transparent 58%);
   }
 
   &__hero-image {
     width: 100%;
-    height: $hero-height;
-    min-height: $hero-height;
+    height: 100%;
     object-fit: cover;
     object-position: top;
     transition: all ease 0.2s;

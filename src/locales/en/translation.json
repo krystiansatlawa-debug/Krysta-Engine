@@ -17,6 +17,12 @@
   },
   "home": {
     "surprise_me": "Surprise me",
+    "browse_games": "Explore games",
+    "browse_genres": "Genres",
+    "browse_tags": "Play styles and themes",
+    "browse_more": "More categories",
+    "browse_load_error": "Couldn't load games.",
+    "browse_retry": "Try again",
     "no_results": "No results found",
     "start_typing": "Start typing to search...",
     "hot": "Hot now",

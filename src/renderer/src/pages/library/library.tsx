@@ -32,6 +32,7 @@ import {
   TelescopeIcon,
   FileDirectoryIcon,
   PlusIcon,
+  PlayIcon,
   SearchIcon,
   SyncIcon,
 } from "@primer/octicons-react";
@@ -47,11 +48,12 @@ import {
 import { SidebarAddingCustomGameModal } from "@renderer/components/sidebar/sidebar-adding-custom-game-modal";
 import { useCollectionContextMenu, useScanGames } from "@renderer/context";
 import {
+  buildGameDetailsPath,
   getGameCollectionIds,
   isGameInstalled,
   sortLibraryGames,
 } from "@renderer/helpers";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { LibraryGameCard } from "./library-game-card";
 import { LibraryGameCardLarge } from "./library-game-card-large";
 import {
@@ -410,7 +412,9 @@ export default function Library() {
   );
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const dispatch = useAppDispatch();
-  const { t } = useTranslation(["library", "sidebar"]);
+  const { t } = useTranslation(["library", "sidebar", "game_details"]);
+  const playLabel = t("play", { ns: "game_details" });
+  const navigate = useNavigate();
 
   const selectedCollectionId = searchParams.get("collection");
   const pendingPatches = useKrystaPendingPatches();
@@ -1483,6 +1487,11 @@ export default function Library() {
                 if (!game) return null;
 
                 const box = getLibraryPlacementBox(placement, gridMetrics);
+                const canPlay =
+                  runningGameId !== game.id &&
+                  (Boolean(game.executablePath) ||
+                    (game.shop === "launchbox" &&
+                      (game.discs?.length ?? 0) > 0));
 
                 return (
                   <LibrarySortableGame
@@ -1507,6 +1516,22 @@ export default function Library() {
                         game={game}
                         onContextMenu={handleOpenContextMenu}
                       />
+                    )}
+                    {canPlay && (
+                      <Button
+                        size="small"
+                        className="library-sortable-game__play"
+                        draggable={false}
+                        aria-label={`${playLabel}: ${game.title}`}
+                        onClick={() =>
+                          navigate(buildGameDetailsPath(game), {
+                            state: { quickPlayGameId: game.id },
+                          })
+                        }
+                      >
+                        <PlayIcon size={14} />
+                        {playLabel}
+                      </Button>
                     )}
                   </LibrarySortableGame>
                 );

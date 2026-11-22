@@ -36,6 +36,46 @@
       filter ease 0.2s;
   }
 
+  &:not(&--drag-source):is(:hover, :focus-within) {
+    z-index: 1;
+  }
+
+  & &__play {
+    position: absolute;
+    z-index: 2;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -40%);
+    opacity: 0;
+    pointer-events: none;
+    min-width: 88px;
+    white-space: nowrap;
+    box-shadow: 0 2px 12px #0009;
+    transition:
+      transform 160ms ease-out,
+      opacity 160ms ease-out;
+  }
+
+  &:not(&--drag-source):is(:hover, :focus-within) &__play {
+    transform: translate(-50%, -50%);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  @media (hover: none) {
+    &:not(&--drag-source) &__play {
+      transform: translate(-50%, -50%);
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    &:not(&--drag-source):is(:hover, :focus-within) > :first-child {
+      transform: translateY(-3px);
+    }
+  }
+
   &--drag-source > :first-child {
     opacity: 0.2;
     transform: scale(0.94);
@@ -81,7 +121,8 @@
   @media (prefers-reduced-motion: reduce) {
     transition: none;
 
-    > :first-child {
+    > :first-child,
+    & &__play {
       transition: none;
     }
 

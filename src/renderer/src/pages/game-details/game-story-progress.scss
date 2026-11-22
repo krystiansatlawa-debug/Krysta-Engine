@@ -2,12 +2,16 @@
 
 .game-story-progress {
   display: grid;
-  gap: 12px;
+  gap: 16px;
   width: 100%;
   min-width: 0;
   margin-bottom: globals.$spacing-unit;
-  padding: 12px 16px;
-  background: globals.$dark-background-color;
+  padding: 16px;
+  background: linear-gradient(
+    140deg,
+    #20312f,
+    globals.$dark-background-color 58%
+  );
   border: 1px solid globals.$border-color;
   border-radius: 8px;
 
@@ -29,8 +33,8 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    color: globals.$muted-color;
-    font-size: 16px;
+    color: #f3f5f6;
+    font-size: 18px;
   }
 
   &__icon {
@@ -79,12 +83,12 @@
 
   &__meter-heading strong {
     color: globals.$platinum-cyan;
-    font-size: 18px;
+    font-size: 24px;
     font-variant-numeric: tabular-nums;
   }
 
   &__track {
-    height: 6px;
+    height: 9px;
     overflow: hidden;
     background: rgba(255, 255, 255, 0.12);
     border-radius: 999px;
@@ -92,8 +96,16 @@
 
   &__bar {
     height: 100%;
-    background: globals.$brand-teal;
+    background: linear-gradient(
+      90deg,
+      globals.$brand-teal,
+      globals.$platinum-cyan
+    );
     border-radius: inherit;
+
+    @media (prefers-reduced-motion: no-preference) {
+      transition: width 180ms ease-out;
+    }
   }
 
   &__mission {
