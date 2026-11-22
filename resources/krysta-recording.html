@@ -188,6 +188,10 @@
           buffered = null;
         }
         finish();
+        if (manual) {
+          stopSegment(manual);
+          manual = null;
+        }
         stream?.getTracks().forEach((t) => t.stop());
         stopPreview();
       };
@@ -229,6 +233,49 @@
         started = true;
         startRotation();
         return true;
+      };
+      // Manual recording starts immediately and finishes only on the next hotkey.
+      // Keep it separate from achievement clips and the replay buffer.
+      let manual = null;
+      globalThis.krystaManualStart = async () => {
+        if (!started || ended || saving || manual) throw Error("Capture not ready");
+        saving = true;
+        stopRotation();
+        try {
+          if (rotating) await rotating;
+          if (buffered) {
+            await discard(buffered);
+            buffered = null;
+          }
+          manual = segment();
+          // Start the recorder before reporting success to the caller.
+          return true;
+        } catch (error) {
+          saving = false;
+          if (!ended) startRotation();
+          throw error;
+        }
+      };
+      globalThis.krystaManualFinish = async () => {
+        if (!manual) throw Error("Manual recording not active");
+        const selectedManual = manual;
+        manual = null;
+        try {
+          stopSegment(selectedManual);
+          const duration = await selectedManual.done;
+          if (selectedManual.error) throw selectedManual.error;
+          const blob = new Blob(selectedManual.chunks, { type: "video/webm" });
+          const data = await new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(String(r.result).split(",")[1]);
+            r.onerror = () => reject(r.error);
+            r.readAsDataURL(blob);
+          });
+          return { data, duration, audio: stream.getAudioTracks().length > 0, before: 0 };
+        } finally {
+          saving = false;
+          if (!ended) startRotation();
+        }
       };
       globalThis.krystaSave = async () => {
         if (!started || ended || saving) throw Error("Capture not ready");
