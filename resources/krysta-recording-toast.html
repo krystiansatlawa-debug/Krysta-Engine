@@ -11,6 +11,13 @@
     .saved .dot{background:#4ad69a;box-shadow:0 0 0 4px #4ad69a2e}
     .failed .dot{background:#ffb454;box-shadow:0 0 0 4px #ffb4542e}
     strong{font-size:15px;display:block} small{display:block;color:#d5d5dc;font-size:12px;margin-top:3px}
+    @media (prefers-reduced-motion: no-preference) {
+      #notice { animation: notice-enter 180ms ease-out both; }
+      @keyframes notice-enter {
+        from { opacity: 0; transform: translateY(-6px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+    }
   </style>
 </head>
 <body>

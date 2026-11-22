@@ -15,6 +15,18 @@
     }
   }
 
+  &__play.button {
+    min-width: 112px;
+    background: globals.$platinum-cyan;
+    border-color: transparent;
+    color: #10251e;
+    font-weight: 700;
+
+    &:hover:enabled {
+      background: #76f4d9;
+    }
+  }
+
   &__container {
     display: flex;
     gap: calc(globals.$spacing-unit * 2);
