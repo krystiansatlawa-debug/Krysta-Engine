@@ -196,6 +196,18 @@ declare global {
     games: { id: string; title: string }[];
   }
   interface Electron {
+    connectRockstarAccount: () => Promise<void>;
+    getRockstarAccount: () => Promise<{
+      connected: boolean;
+      username: string | null;
+    }>;
+    disconnectRockstarAccount: () => Promise<void>;
+    getRockstarAccountAwards: (gameId: string) => Promise<{
+      title: string;
+      username: string;
+      awards: { id: string; unlockTime: number | null }[];
+      updatedAt: string;
+    }>;
     scanRockstar: () => Promise<{
       supported: boolean;
       installed: boolean;
@@ -208,6 +220,11 @@ declare global {
         steamId: string;
         aliases: string[];
       }[];
+      achievements: {
+        profileCount: number;
+        titleDirectories: number;
+        unlockSyncAvailable: boolean;
+      };
       lastSync: string | null;
     }>;
     selectRockstarLauncherFolder: () => Promise<Awaited<ReturnType<Electron["scanRockstar"]>> | null>;
