@@ -211,7 +211,7 @@ const recordingServiceSource = ts.transpileModule(
 async function serviceFixture(
   t,
   savedSettings,
-  { shortcutAvailable = true } = {}
+  { shortcutAvailable = true, displayPermission = "media" } = {}
 ) {
   const directory = await fs.mkdtemp(path.join(tmpdir(), "krysta-f9-test-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
@@ -226,11 +226,22 @@ async function serviceFixture(
   let foreground = { windowHandle: "123", processId: 42 };
   let sourceList = [{ id: "window:123:0" }];
   let onReconcile;
+  let permissionRequest;
+  let displayMediaRequest;
+  let workerContents;
   const captureSession = {
-    setPermissionRequestHandler() {},
+    setPermissionRequestHandler(handler) {
+      permissionRequest = handler;
+    },
     setPermissionCheckHandler() {},
-    setDisplayMediaRequestHandler() {},
+    setDisplayMediaRequestHandler(handler) {
+      displayMediaRequest = handler;
+    },
   };
+  const requestPermission = (contents, permission, details) =>
+    new Promise((resolve) =>
+      permissionRequest(contents, permission, resolve, details)
+    );
   const deps = {
     electron: {
       app: {
@@ -252,8 +263,25 @@ async function serviceFixture(
       BrowserWindow: class {
         destroyed = false;
         webContents = {
+          mainFrame: {},
           executeJavaScript: async (script) => {
             calls.push(script);
+            if (script.includes("krystaStart")) {
+              const details = { isMainFrame: true, mediaTypes: [] };
+              const allowed = await requestPermission(
+                this.webContents,
+                displayPermission,
+                details
+              );
+              if (!allowed) throw Error("NotAllowedError: Permission denied");
+              const streams = await new Promise((resolve) =>
+                displayMediaRequest(
+                  { frame: this.webContents.mainFrame, videoRequested: true },
+                  resolve
+                )
+              );
+              assert.equal(streams.video?.id, "window:123:0");
+            }
             return script.includes("krystaManualFinish")
               ? { data: "GkXfow==", duration: 4, before: 0, audio: false }
               : true;
@@ -262,6 +290,9 @@ async function serviceFixture(
           on() {},
           once() {},
         };
+        constructor() {
+          workerContents = this.webContents;
+        }
         isDestroyed = () => this.destroyed;
         destroy = () => {
           this.destroyed = true;
@@ -331,6 +362,10 @@ async function serviceFixture(
     },
     restoreFocus: () => (foreground = { windowHandle: "123", processId: 42 }),
     hideCaptureSource: () => (sourceList = []),
+    workerPermission: (permission, details) =>
+      requestPermission(workerContents, permission, details),
+    otherWindowPermission: (permission, details) =>
+      requestPermission({}, permission, details),
   };
 }
 
@@ -384,4 +419,50 @@ test("F9 explains when the recognized game window cannot be captured", async (t)
   await waitFor(() => f.notices.includes("failed"));
   assert.match((await f.recordingState()).lastError, /trybu bez ramek/);
   assert.equal(f.calls.length, 0);
+});
+
+test("allows Electron 41 display capture but denies cameras, microphones and other frames", async (t) => {
+  const f = await serviceFixture(t, {});
+  await f.toggleManualRecording();
+  assert.deepEqual(f.notices, ["started"]);
+  assert.equal(
+    await f.workerPermission("media", {
+      isMainFrame: true,
+      mediaTypes: ["video"],
+    }),
+    false
+  );
+  assert.equal(
+    await f.workerPermission("media", {
+      isMainFrame: true,
+      mediaTypes: ["audio"],
+    }),
+    false
+  );
+  assert.equal(await f.workerPermission("media", { isMainFrame: true }), false);
+  assert.equal(
+    await f.workerPermission("media", { isMainFrame: false, mediaTypes: [] }),
+    false
+  );
+  assert.equal(
+    await f.otherWindowPermission("media", {
+      isMainFrame: true,
+      mediaTypes: [],
+    }),
+    false
+  );
+  await f.toggleManualRecording();
+  assert.deepEqual(f.notices, ["started", "saved"]);
+});
+
+test("allows display-capture requests from newer Electron on the recorder main frame", async (t) => {
+  const f = await serviceFixture(
+    t,
+    {},
+    { displayPermission: "display-capture" }
+  );
+  await f.toggleManualRecording();
+  assert.deepEqual(f.notices, ["started"]);
+  await f.toggleManualRecording();
+  assert.deepEqual(f.notices, ["started", "saved"]);
 });
