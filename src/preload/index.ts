@@ -9,6 +9,7 @@ import type {
   DownloadProgress,
   UserPreferences,
   ScreenshotInputStatus,
+  ScreenshotGamepadButton,
   AppUpdaterEvent,
   StartGameDownloadPayload,
   GameRunning,
@@ -188,6 +189,7 @@ contextBridge.exposeInMainWorld("electron", {
     fps: number;
     limitGb: number;
     hotkey: string;
+    controllerButton: ScreenshotGamepadButton | "";
     folder?: string;
   }) => ipcRenderer.invoke("krysta:recordings-settings", value),
   krystaRecordingTrimSave: (

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, CheckboxField, SelectField } from "@renderer/components";
+import { SCREENSHOT_GAMEPAD_BUTTONS, recordingControllerLabel } from "@shared";
 
 type State = Awaited<ReturnType<typeof window.electron.krystaRecordingsState>>;
 type Settings = State["settings"];
@@ -165,6 +166,35 @@ export function SettingsAchievementRecordings() {
             : "Hotkey unavailable. Choose another."}
         </small>
       )}
+      <SelectField
+        className="settings-screenshots__select"
+        label={
+          pl
+            ? "Przycisk pada do rozpoczęcia i zakończenia nagrywania"
+            : "Controller button to start and stop recording"
+        }
+        value={state?.settings.controllerButton ?? ""}
+        options={[
+          { key: "disabled", value: "", label: pl ? "Wyłączony" : "Disabled" },
+          ...SCREENSHOT_GAMEPAD_BUTTONS.map((button) => ({
+            key: button,
+            value: button,
+            label: recordingControllerLabel(button),
+          })),
+        ]}
+        disabled={disabled || !state?.settings.enabled}
+        onChange={(event) => {
+          const button = SCREENSHOT_GAMEPAD_BUTTONS.find(
+            (value) => value === event.target.value
+          );
+          void update({ controllerButton: button ?? "" });
+        }}
+      />
+      <small>
+        {pl
+          ? "W grze naciśnij wybrany przycisk pada, aby rozpocząć nagranie. Naciśnij go ponownie, aby zapisać klip. Przycisk nadal działa w samej grze."
+          : "Press the chosen controller button in a game to start recording. Press it again to save the clip. The button continues to work in the game."}
+      </small>
       <CheckboxField
         label={pl ? "Nagrywaj dźwięk systemowy" : "Record system audio"}
         checked={state?.settings.audio ?? false}

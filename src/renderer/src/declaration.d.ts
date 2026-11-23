@@ -12,6 +12,7 @@ import type {
   SeedingStatus,
   UserPreferences,
   ScreenshotInputStatus,
+  ScreenshotGamepadButton,
   StartGameDownloadPayload,
   RealDebridUser,
   PremiumizeUser,
@@ -270,6 +271,7 @@ declare global {
         fps: number;
         limitGb: number;
         hotkey: string;
+        controllerButton: ScreenshotGamepadButton | "";
         folder?: string;
       };
       folder: string;
@@ -299,6 +301,7 @@ declare global {
       fps: number;
       limitGb: number;
       hotkey: string;
+      controllerButton: ScreenshotGamepadButton | "";
       folder?: string;
     }) => Promise<void>;
     krystaRecordingRead: (id: string) => Promise<Uint8Array>;

@@ -10,7 +10,8 @@ import {
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { Game } from "@types";
+import type { Game, ScreenshotGamepadButton } from "@types";
+import { SCREENSHOT_GAMEPAD_BUTTONS, recordingControllerLabel } from "@shared";
 import { levelKeys } from "@main/level";
 import {
   hasTrackedGamesRunning,
@@ -20,6 +21,7 @@ import {
   resolveForegroundGame,
   resolveForegroundWindow,
 } from "./screenshots/foreground-game";
+import { NativeAddon } from "./native-addon";
 import { isWindowsWindowSource } from "./windows-game-window-match";
 import capturePage from "@resources/krysta-recording.html?asset";
 import { showRecordingNotice } from "./recording-notice";
@@ -34,6 +36,7 @@ type Settings = {
   limitGb: number;
   hotkey: string;
   hotkeyVersion: 1;
+  controllerButton: ScreenshotGamepadButton | "";
   folder?: string;
 };
 type Clip = {
@@ -76,6 +79,7 @@ const defaults: Settings = {
   limitGb: 10,
   hotkey: "F9",
   hotkeyVersion: 1,
+  controllerButton: "",
 };
 const durations = [5, 10, 15, 30, 45, 60],
   preDurations = [0, 5, 10, 15, 30],
@@ -108,6 +112,7 @@ function normalize(value: unknown, migrateLegacy = false): Settings | null {
     ...raw,
     hotkey,
     hotkeyVersion: defaults.hotkeyVersion,
+    controllerButton: raw.controllerButton ?? defaults.controllerButton,
   };
   if (
     typeof s.enabled !== "boolean" ||
@@ -117,7 +122,9 @@ function normalize(value: unknown, migrateLegacy = false): Settings | null {
     !qualities.includes(s.quality) ||
     !frameRates.includes(s.fps) ||
     !limits.includes(s.limitGb) ||
-    !hotkeys.includes(s.hotkey)
+    !hotkeys.includes(s.hotkey) ||
+    (s.controllerButton !== "" &&
+      !SCREENSHOT_GAMEPAD_BUTTONS.includes(s.controllerButton))
   )
     return null;
   return {
@@ -155,6 +162,8 @@ let current: Active | null = null,
   pausedWindow = "",
   retryAt = 0;
 let timer: ReturnType<typeof setInterval> | undefined;
+let controllerTimer: ReturnType<typeof setInterval> | undefined;
+let controllerButton: Settings["controllerButton"] = "";
 let storageQueue: Promise<unknown> = Promise.resolve();
 let spaceCache: {
   dir: string;
@@ -671,7 +680,7 @@ async function ensure(expected: string | null = null): Promise<Active | null> {
 // A manual session uses the same recorder as achievement clips but has no
 // preset duration. The second hotkey ends and persists the active session.
 let manualTransition: Promise<void> | null = null;
-async function startManualRecording() {
+async function startManualRecording(source: "keyboard" | "controller") {
   lastError = "";
   let a: Active | null = null;
   try {
@@ -688,11 +697,13 @@ async function startManualRecording() {
     // An explicit hotkey press can restart capture after stopping the replay buffer.
     pausedWindow = "";
     a = await ensure();
-    if (!a || a.stopped || !(await sameForeground(a)))
+    if (!a || a.stopped || !(await sameForeground(a))) {
+      if (source === "controller" && !lastError) return;
       throw Error(
         lastError ||
           "Nie rozpoznano aktywnego okna gry / Active game window not found"
       );
+    }
     if (!(await enoughSpace(a.prefs, 8 * 1024 ** 2, true)))
       throw Error("Limit nagrań lub brak miejsca / Recording storage limit");
 
@@ -706,7 +717,13 @@ async function startManualRecording() {
       );
     a.manual = "recording";
     a.saving = true;
-    void showRecordingNotice("started");
+    const keyboardHint = a.prefs.hotkey.replace("Control", "Ctrl");
+    void showRecordingNotice(
+      "started",
+      source === "controller"
+        ? recordingControllerLabel(a.prefs.controllerButton)
+        : keyboardHint
+    );
   } catch (error) {
     lastError = (error instanceof Error ? error.message : String(error)).slice(
       0,
@@ -745,12 +762,12 @@ async function finishManualRecording(a: Active) {
     if (current === a) dispose(a);
   }
 }
-function toggleManualRecording() {
+function toggleManualRecording(source: "keyboard" | "controller" = "keyboard") {
   // Serialize rapid double-presses so they cannot start two parallel captures.
   if (manualTransition) return manualTransition;
   manualTransition = (async () => {
     if (current?.manual === "recording") await finishManualRecording(current);
-    else if (!current?.manual) await startManualRecording();
+    else if (!current?.manual) await startManualRecording(source);
   })().finally(() => {
     manualTransition = null;
   });
@@ -912,10 +929,30 @@ export async function openRecordingsFolder() {
   if (error) throw Error(error);
 }
 export { stopRecording, toggleManualRecording };
+
+function syncRecordingController(button: Settings["controllerButton"]) {
+  if (button === controllerButton) return;
+  if (controllerTimer) clearInterval(controllerTimer);
+  controllerTimer = undefined;
+  controllerButton = button;
+  if (!button) return;
+
+  let wasPressed: boolean | null = null;
+  controllerTimer = setInterval(() => {
+    const pressed = NativeAddon.getWindowsGamepadButtonPressed(button);
+    const justPressed = wasPressed === false && pressed === true;
+    wasPressed = pressed;
+    if (justPressed) void toggleManualRecording("controller");
+  }, 24);
+  controllerTimer.unref();
+}
+
 function syncRecordingMonitor() {
   if (process.platform !== "win32" || !app.isReady() || quitting) return;
   const running = hasTrackedGamesRunning();
-  if (preferences?.enabled && running) {
+  const active = preferences?.enabled && running ? preferences : null;
+  syncRecordingController(active?.controllerButton ?? "");
+  if (active) {
     if (!timer) {
       timer = setInterval(() => void reconcile(), 500);
       timer.unref?.();
@@ -947,6 +984,7 @@ void app
 app.on("before-quit", () => {
   quitting = true;
   unsubscribe?.();
+  syncRecordingController("");
   epoch++;
   if (timer) clearInterval(timer);
   if (registered) globalShortcut.unregister(registered);

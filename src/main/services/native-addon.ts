@@ -176,6 +176,7 @@ type HydraNativeModule = {
   ) => ScreenshotInputNativeStatus;
   getWindowsForegroundWindow?: () => NativeForegroundWindowResponse | null;
   getWindowsXboxGuidePressed?: () => boolean | null;
+  getWindowsGamepadButtonPressed?: (button: string) => boolean | null;
   minimizeWindowsGameWindow?: (windowHandle: string, processId: number) => boolean;
   restoreWindowsGameWindow?: (windowHandle: string, processId: number) => boolean;
   getLinuxWindowClientPid?: (windowId: string) => number | null;
@@ -590,6 +591,15 @@ export class NativeAddon {
     } catch (error) {
       logger.error("Failed to identify the Windows foreground window", error);
       return undefined;
+    }
+  }
+
+  public static getWindowsGamepadButtonPressed(button: string) {
+    if (process.platform !== "win32") return null;
+    try {
+      return this.load().getWindowsGamepadButtonPressed?.(button) ?? null;
+    } catch {
+      return null;
     }
   }
 

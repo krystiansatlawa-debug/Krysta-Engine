@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Film, FolderOpen, Play, Trash2, Square } from "lucide-react";
 import "./krysta-recordings.scss";
 import { RecordingTrimPanel } from "./recording-trim-panel";
+import { recordingControllerLabel } from "@shared";
 type State = Awaited<ReturnType<typeof window.electron.krystaRecordingsState>>;
 export default function KrystaRecordings() {
   const { i18n } = useTranslation();
@@ -138,8 +139,12 @@ export default function KrystaRecordings() {
           <small>
             {(state.usedBytes / 1024 ** 3).toFixed(2)} /{" "}
             {state.settings.limitGb} GB ·{" "}
-            {state.settings.hotkey.replace("Control", "Ctrl") ||
-              (pl ? "Skrót wyłączony" : "Hotkey disabled")}
+            {[
+              state.settings.hotkey.replace("Control", "Ctrl"),
+              recordingControllerLabel(state.settings.controllerButton),
+            ]
+              .filter(Boolean)
+              .join(" / ") || (pl ? "Skrót wyłączony" : "Hotkey disabled")}
           </small>
         )}
         {state?.recording && (
