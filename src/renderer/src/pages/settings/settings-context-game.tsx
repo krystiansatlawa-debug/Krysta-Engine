@@ -98,6 +98,19 @@ export function SettingsContextGame() {
       setError(true);
     }
   };
+  const useRtss = capture?.output === "rtss";
+  const changeFpsOutput = async () => {
+    setBusy(true);
+    setError(false);
+    try {
+      await window.electron.krystaSetFpsOutput(useRtss ? "window" : "rtss");
+      setCapture(await window.electron.krystaFpsStatus());
+    } catch {
+      setError(true);
+    } finally {
+      setBusy(false);
+    }
+  };
   useEffect(() => {
     let active = true;
     void window.electron
@@ -171,7 +184,41 @@ export function SettingsContextGame() {
           disabled={!ready || busy || window.electron.platform !== "win32"}
           onChange={() => void toggle()}
         />
-        <p>{t("krysta_fps_visibility_hint")}</p>
+        <p hidden={useRtss}>{t("krysta_fps_visibility_hint")}</p>
+        {window.electron.platform === "win32" && (
+          <CheckboxField
+            label={t("krysta_fps_rtss_label")}
+            checked={useRtss}
+            disabled={!capture || busy}
+            onChange={() => void changeFpsOutput()}
+          />
+        )}
+        {useRtss && (
+          <>
+            <p>{t("krysta_fps_rtss_hint")}</p>
+            <p role="status">
+              {t(
+                !capture?.rtssAvailable
+                  ? "krysta_fps_rtss_missing"
+                  : capture.rtssReceiving
+                    ? "krysta_fps_rtss_sending"
+                    : "krysta_fps_rtss_waiting"
+              )}
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                void window.electron.openExternal(
+                  pl
+                    ? "https://pl.msi.com/blog/msi-afterburner-on-screen-display"
+                    : "https://uk.msi.com/blog/msi-afterburner-on-screen-display"
+                )
+              }
+            >
+              {t("krysta_fps_rtss_guide")}
+            </button>
+          </>
+        )}
         <h3>{pl ? "Skrót klawiszowy licznika FPS" : "FPS counter shortcut"}</h3>
         <label htmlFor="krysta-fps-hotkey-select">
           {pl ? "Wybierz skrót z listy" : "Choose a shortcut"}
@@ -245,11 +292,12 @@ export function SettingsContextGame() {
               : "Shortcut unavailable. Choose another."}
           </p>
         )}
-        <label htmlFor="krysta-fps-position">
+        <label htmlFor="krysta-fps-position" hidden={useRtss}>
           {pl ? "Położenie licznika FPS" : "FPS counter position"}
         </label>
         <select
           id="krysta-fps-position"
+          hidden={useRtss}
           value={position}
           disabled={
             !positionReady || busy || window.electron.platform !== "win32"
@@ -271,6 +319,7 @@ export function SettingsContextGame() {
           ))}
         </select>
         <div
+          hidden={useRtss}
           aria-label={
             pl ? "Podgląd położenia licznika" : "Counter position preview"
           }
@@ -302,7 +351,7 @@ export function SettingsContextGame() {
             FPS: 124
           </span>
         </div>
-        <p>
+        <p hidden={useRtss}>
           {capture?.available
             ? pl
               ? "PresentMon: dostępny"
@@ -341,17 +390,18 @@ export function SettingsContextGame() {
             {capture.lastError}
           </p>
         )}
-        {capture?.status === "capture-error" && (
+        {!useRtss && capture?.status === "capture-error" && (
           <p role="alert">
             {pl
               ? "Pomiar nie został uruchomiony. Sprawdź uprawnienia i wersję PresentMon."
               : "Capture failed. Check PresentMon version and permissions."}
           </p>
         )}
-        <button type="button" onClick={() => void selectTool()}>
+        <button hidden={useRtss} type="button" onClick={() => void selectTool()}>
           {pl ? "Wskaż PresentMon.exe" : "Select PresentMon.exe"}
         </button>
         <button
+          hidden={useRtss}
           type="button"
           onClick={() =>
             void window.electron.openExternal(

@@ -16,13 +16,19 @@ test("settings recovery never modifies unrelated application data", async (t) =>
   const library = path.join(root, "library");
   await fs.writeFile(library, "untouched");
   await writeKrystaSettings(root, "fps", { enabled: true, position: "tr" });
+  await writeKrystaSettings(root, "fps", {
+    enabled: true,
+    position: "tr",
+    output: "rtss",
+  });
   await fs.writeFile(file, "{broken");
   const results = await repairKrystaSettings(root);
   assert.equal(results.find((x) => x.name === "fps")?.state, "restored");
-  assert.equal(
-    (await readKrystaSettings<{ enabled: boolean }>(root, "fps")).enabled,
-    true
-  );
+  assert.deepEqual(await readKrystaSettings(root, "fps"), {
+    enabled: true,
+    position: "tr",
+    output: "rtss",
+  });
   assert.equal(await fs.readFile(library, "utf8"), "untouched");
   const copies = (await fs.readdir(root)).filter((n) =>
     n.startsWith("krysta-fps.json.corrupt-")

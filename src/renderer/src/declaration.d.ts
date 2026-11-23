@@ -631,11 +631,15 @@ declare global {
     krystaCloudBackup: (shop: string, id: string) => Promise<boolean>;
     krystaFpsStatus: () => Promise<{
       available: boolean;
+      output: "window" | "rtss";
+      rtssAvailable: boolean;
+      rtssReceiving: boolean;
       status: string;
       shortcutError: boolean;
       lastError: string;
       hidden: boolean;
     }>;
+    krystaSetFpsOutput: (output: "window" | "rtss") => Promise<"window" | "rtss">;
     krystaFpsSelectTool: () => Promise<boolean>;
     krystaFpsPreference: () => Promise<boolean>;
     krystaSetFpsPreference: (enabled: boolean) => Promise<boolean>;

@@ -1,5 +1,3 @@
-import { setTimeout as delay } from "node:timers/promises";
-
 export type TrackedGameWindow = {
   gameKey: string;
   handle: string;
@@ -11,7 +9,6 @@ type GameWindowActions = {
   isTrackedGame: (gameKey: string) => Promise<boolean>;
   minimize: (window: TrackedGameWindow) => boolean;
   restore: (window: TrackedGameWindow) => boolean;
-  fullscreen: (window: TrackedGameWindow) => boolean;
 };
 
 export class XboxGuideWindowToggle {
@@ -41,15 +38,7 @@ export class XboxGuideWindowToggle {
         const tracked = await this.windows.isTrackedGame(minimized.gameKey);
         if (this.generation !== generation) return;
         this.minimized = null;
-        if (tracked && this.windows.restore(minimized)) {
-          // Windows restores and resizes the game on its own window thread.
-          for (let attempt = 0; attempt < 8; attempt++) {
-            await delay(75);
-            if (this.generation !== generation) return;
-            if (this.windows.fullscreen(minimized)) return;
-          }
-          return;
-        }
+        if (tracked && this.windows.restore(minimized)) return;
       }
       const active = await this.windows.findForegroundGame();
       if (

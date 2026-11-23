@@ -6,6 +6,7 @@ mod in_place_extraction;
 mod kde_focus;
 mod linux_process;
 mod ps4_xts;
+mod rtss_osd;
 mod screenshot_input;
 mod torrent;
 mod window_bounds;
@@ -115,8 +116,13 @@ pub fn restore_windows_game_window(window_handle: String, process_id: u32) -> bo
 }
 
 #[napi]
-pub fn fullscreen_windows_game_window(window_handle: String, process_id: u32) -> bool {
-    window_order::fullscreen_game_window(&window_handle, process_id)
+pub fn is_rtss_osd_available() -> bool {
+    rtss_osd::available()
+}
+
+#[napi]
+pub fn update_rtss_osd(process_id: u32) -> bool {
+    rtss_osd::update(process_id)
 }
 
 #[napi(object)]

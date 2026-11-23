@@ -24,10 +24,12 @@ import {
 import { PresentMonFps } from "@main/services/presentmon-fps";
 
 type Position = "tl" | "tr" | "bl" | "br";
+type Output = "window" | "rtss";
 type Preference = {
   enabled: boolean;
   tool?: string;
   position?: Position;
+  output?: Output;
   hotkey?: string;
 };
 function normalizePosition(value: unknown): Position {
@@ -45,7 +47,12 @@ function placement(bounds: Electron.Rectangle, position: Position) {
 }
 
 type GameWindow = { windowHandle: string; processId: number };
-type CaptureTarget = { key: string; processId: number; tool: string };
+type CaptureTarget = {
+  key: string;
+  processId: number;
+  tool: string | null;
+  output: Output;
+};
 
 function overlayPosition({ windowHandle }: GameWindow, position: Position) {
   const client = NativeAddon.getWindowsWindowBounds(windowHandle)?.client;
@@ -109,6 +116,8 @@ let reconciling = false,
   quitting = false;
 let failedCapture: { target: CaptureTarget; time: number } | null = null;
 let ignoredWindow: { window: GameWindow; time: number } | null = null;
+let rtssPublished = false;
+let rtssReceiving = false;
 
 const isSameWindow = (
   current: GameWindow | null | undefined,
@@ -120,7 +129,17 @@ const isSameWindow = (
 const sameCapture = (running: CaptureTarget | null, next: CaptureTarget) =>
   running?.key === next.key &&
   running?.processId === next.processId &&
-  running?.tool === next.tool;
+  running?.tool === next.tool &&
+  running?.output === next.output;
+
+function clearRtss() {
+  if (rtssPublished && NativeAddon.updateRtssOsd(0)) rtssPublished = false;
+}
+
+function hideOverlay() {
+  overlay?.hide();
+  clearRtss();
+}
 
 const defaultHotkey = "Control+Shift+F10";
 function registerHotkey(value: string) {
@@ -134,7 +153,7 @@ function registerHotkey(value: string) {
     if (
       !globalShortcut.register(value, () => {
         hidden = !hidden;
-        if (hidden) overlay?.hide();
+        if (hidden) hideOverlay();
         refresh();
       })
     )
@@ -147,6 +166,8 @@ function registerHotkey(value: string) {
   }
 }
 function stop() {
+  clearRtss();
+  rtssReceiving = false;
   if (timer) {
     clearInterval(timer);
     timer = null;
@@ -179,6 +200,48 @@ function show(value: string) {
         lastOverlayValue = "";
     });
 }
+
+async function createOverlay(
+  point: Electron.Point,
+  foreground: GameWindow,
+  generation: number
+) {
+  const window = new BrowserWindow({
+    ...point,
+    width: 100,
+    height: 26,
+    transparent: true,
+    frame: false,
+    focusable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    resizable: false,
+    show: false,
+    webPreferences: {
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+    },
+  });
+  overlay = window;
+  window.setIgnoreMouseEvents(true);
+  window.setAlwaysOnTop(true, "screen-saver");
+  const html =
+    '<html><body style="margin:0;background:transparent"><div id="fps" style="display:inline-block;color:#fff;background:rgba(16,18,22,.90);border:1px solid rgba(255,255,255,.3);border-radius:5px;padding:4px 8px;font:bold 13px Arial,sans-serif">FPS: --</div></body></html>';
+  await window.loadURL(
+    "data:text/html;charset=utf-8," + encodeURIComponent(html)
+  );
+  if (generation !== revision || overlay !== window || window.isDestroyed()) {
+    if (overlay === window) stop();
+    return false;
+  }
+  const current = NativeAddon.getWindowsForegroundWindow();
+  if (!hidden && (current === undefined || isSameWindow(current, foreground))) {
+    window.showInactive();
+  }
+  return true;
+}
 async function reconcile() {
   const generation = ++revision;
   const p = await readPreference();
@@ -201,9 +264,10 @@ async function reconcile() {
   }
 
   if (activeTarget && !isTrackedGameKeyRunning(activeTarget.key)) stop();
-  const tool = await findTool(p);
+  const output = p.output ?? "window";
+  const tool = output === "window" ? await findTool(p) : null;
   if (generation !== revision) return;
-  if (!tool) {
+  if (output === "window" && !tool) {
     stop();
     status = "missing-tool";
     return;
@@ -215,7 +279,7 @@ async function reconcile() {
       ? activeTarget?.key
       : undefined;
   if (!key) {
-    overlay?.hide();
+    hideOverlay();
     if (
       ignoredWindow &&
       isSameWindow(foreground, ignoredWindow.window) &&
@@ -243,26 +307,36 @@ async function reconcile() {
     }
   }
 
-  const point =
-    key &&
-    foreground &&
-    overlayPosition(foreground, normalizePosition(p.position));
-  if (!point || !key || !foreground) {
-    overlay?.hide();
+  if (!key || !foreground) {
+    hideOverlay();
     if (!child && status !== "capture-error") status = "waiting-game";
     return;
   }
-  const target = { key, processId: foreground.processId, tool };
-  if (
-    sameCapture(activeTarget, target) &&
-    child &&
-    overlay &&
-    !overlay.isDestroyed()
-  ) {
-    const [x, y] = overlay.getPosition();
-    if (x !== point.x || y !== point.y) overlay.setPosition(point.x, point.y);
-    if (!overlay.isVisible()) overlay.showInactive();
+  const target = { key, processId: foreground.processId, tool, output };
+  if (output === "rtss") {
+    if (!sameCapture(activeTarget, target)) {
+      stop();
+      activeTarget = target;
+    }
+    rtssReceiving = NativeAddon.updateRtssOsd(target.processId);
+    if (rtssReceiving) rtssPublished = true;
+    else clearRtss();
+    status = rtssReceiving ? "measuring" : "waiting-frames";
     return;
+  }
+
+  const point = overlayPosition(foreground, normalizePosition(p.position));
+  if (!point || !tool) {
+    hideOverlay();
+    return;
+  }
+  if (sameCapture(activeTarget, target) && child) {
+    if (overlay && !overlay.isDestroyed()) {
+      const [x, y] = overlay.getPosition();
+      if (x !== point.x || y !== point.y) overlay.setPosition(point.x, point.y);
+      if (!overlay.isVisible()) overlay.showInactive();
+      return;
+    }
   }
   if (
     failedCapture &&
@@ -275,38 +349,7 @@ async function reconcile() {
   activeTarget = target;
   status = "starting";
   lastError = "";
-  const w = new BrowserWindow({
-    ...point,
-    width: 100,
-    height: 26,
-    transparent: true,
-    frame: false,
-    focusable: false,
-    skipTaskbar: true,
-    alwaysOnTop: true,
-    resizable: false,
-    show: false,
-    webPreferences: {
-      sandbox: true,
-      contextIsolation: true,
-      nodeIntegration: false,
-      backgroundThrottling: false,
-    },
-  });
-  overlay = w;
-  w.setIgnoreMouseEvents(true);
-  w.setAlwaysOnTop(true, "screen-saver");
-  const html =
-    '<html><body style="margin:0;background:transparent"><div id="fps" style="display:inline-block;color:#fff;background:rgba(16,18,22,.90);border:1px solid rgba(255,255,255,.3);border-radius:5px;padding:4px 8px;font:bold 13px Arial,sans-serif">FPS: --</div></body></html>';
-  await w.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html));
-  if (generation !== revision || overlay !== w || w.isDestroyed()) {
-    if (overlay === w) stop();
-    return;
-  }
-  const current = NativeAddon.getWindowsForegroundWindow();
-  if (!hidden && (current === undefined || isSameWindow(current, foreground))) {
-    w.showInactive();
-  }
+  if (!(await createOverlay(point, foreground, generation))) return;
   const proc = spawn(
     tool,
     [
@@ -402,13 +445,30 @@ ipcMain.handle("krysta:fps-set-position", async (_event, position: unknown) => {
   refresh();
   return position;
 });
-ipcMain.handle("krysta:fps-status", async () => ({
-  available: !!(await findTool(await readPreference())),
-  status,
-  shortcutError,
-  lastError,
-  hidden,
-}));
+ipcMain.handle("krysta:fps-status", async () => {
+  const preference = await readPreference();
+  const output = preference.output ?? "window";
+  return {
+    available: !!(await findTool(preference)),
+    output,
+    rtssAvailable: output === "rtss" && NativeAddon.isRtssOsdAvailable(),
+    rtssReceiving,
+    status,
+    shortcutError,
+    lastError,
+    hidden,
+  };
+});
+ipcMain.handle("krysta:fps-set-output", async (_event, output: unknown) => {
+  if (
+    process.platform !== "win32" ||
+    (output !== "window" && output !== "rtss")
+  )
+    throw new Error("Invalid FPS output");
+  await savePreference({ ...(await readPreference()), output });
+  refresh();
+  return output;
+});
 ipcMain.handle("krysta:fps-select-tool", async () => {
   if (process.platform !== "win32") return false;
   const result = await dialog.showOpenDialog({

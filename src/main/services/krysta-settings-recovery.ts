@@ -43,6 +43,7 @@ const schemas: Record<
       bool(o.enabled) &&
       opt(o, "tool", abs) &&
       opt(o, "position", (x) => ["tl", "tr", "bl", "br"].includes(String(x))) &&
+      opt(o, "output", (x) => x === "window" || x === "rtss") &&
       opt(o, "hotkey", hotkey),
   },
   updates: {

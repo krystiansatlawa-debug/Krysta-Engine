@@ -334,6 +334,8 @@ contextBridge.exposeInMainWorld("electron", {
   krystaCloudBackup: (shop: string, id: string) =>
     ipcRenderer.invoke("krysta:cloud-backup", shop, id),
   krystaFpsStatus: () => ipcRenderer.invoke("krysta:fps-status"),
+  krystaSetFpsOutput: (output: "window" | "rtss") =>
+    ipcRenderer.invoke("krysta:fps-set-output", output),
   krystaFpsSelectTool: () => ipcRenderer.invoke("krysta:fps-select-tool"),
   krystaFpsPreference: () => ipcRenderer.invoke("krysta:fps-preference"),
   krystaSetFpsPreference: (enabled: boolean) =>

@@ -1,15 +1,9 @@
 #[cfg(windows)]
-use windows_sys::Win32::Foundation::{GetLastError, SetLastError, HWND, RECT};
-#[cfg(windows)]
-use windows_sys::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
-};
+use windows_sys::Win32::Foundation::HWND;
 #[cfg(windows)]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    GetForegroundWindow, GetWindowLongW, GetWindowThreadProcessId, IsIconic, IsZoomed,
-    SetForegroundWindow, SetWindowLongW, SetWindowPos, ShowWindowAsync, GWL_STYLE,
-    SWP_ASYNCWINDOWPOS, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOZORDER, SW_MINIMIZE, SW_RESTORE,
-    WS_CAPTION, WS_THICKFRAME,
+    GetForegroundWindow, GetWindowThreadProcessId, IsIconic, SetForegroundWindow, ShowWindowAsync,
+    SW_MINIMIZE, SW_RESTORE,
 };
 
 #[cfg(windows)]
@@ -66,70 +60,6 @@ pub fn restore_game_window(handle: &str, process_id: u32) -> bool {
     })
 }
 
-#[cfg(windows)]
-pub fn fullscreen_game_window(handle: &str, process_id: u32) -> bool {
-    let Some(hwnd) = owned_window(handle, process_id) else {
-        return false;
-    };
-    unsafe {
-        if IsIconic(hwnd) != 0 || GetForegroundWindow() != hwnd {
-            return false;
-        }
-
-        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-        let mut info = MONITORINFO {
-            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
-            ..std::mem::zeroed()
-        };
-        if monitor.is_null() || GetMonitorInfoW(monitor, &mut info) == 0 {
-            return false;
-        }
-        let RECT {
-            left,
-            top,
-            right,
-            bottom,
-        } = info.rcMonitor;
-        if crate::window_bounds::get_window_bounds(handle).is_some_and(|bounds| {
-            let client = bounds.client;
-            client.left == left
-                && client.top == top
-                && client.right == right
-                && client.bottom == bottom
-        }) {
-            return true;
-        }
-
-        if IsZoomed(hwnd) != 0 {
-            ShowWindowAsync(hwnd, SW_RESTORE);
-            return false;
-        }
-
-        let style = GetWindowLongW(hwnd, GWL_STYLE);
-        let borderless = style & !((WS_CAPTION | WS_THICKFRAME) as i32);
-        if borderless != style {
-            SetLastError(0);
-            if SetWindowLongW(hwnd, GWL_STYLE, borderless) == 0 && GetLastError() != 0 {
-                return false;
-            }
-        }
-        let queued = SetWindowPos(
-            hwnd,
-            std::ptr::null_mut(),
-            left,
-            top,
-            right - left,
-            bottom - top,
-            SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_ASYNCWINDOWPOS,
-        ) != 0;
-        if !queued && borderless != style {
-            SetWindowLongW(hwnd, GWL_STYLE, style);
-        }
-        // Confirm the new client bounds after the game handles the resize.
-        false
-    }
-}
-
 #[cfg(not(windows))]
 pub fn minimize_game_window(_handle: &str, _process_id: u32) -> bool {
     false
@@ -137,10 +67,5 @@ pub fn minimize_game_window(_handle: &str, _process_id: u32) -> bool {
 
 #[cfg(not(windows))]
 pub fn restore_game_window(_handle: &str, _process_id: u32) -> bool {
-    false
-}
-
-#[cfg(not(windows))]
-pub fn fullscreen_game_window(_handle: &str, _process_id: u32) -> bool {
     false
 }

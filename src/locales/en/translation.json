@@ -1430,8 +1430,14 @@
     "extraction_pkg_keys_unavailable_description": "Connect to the internet to extract a PKG for the first time."
   },
   "settings": {
-    "krysta_xbox_fullscreen_hint": "Press the lit Xbox button to minimize the active game. Press it again to return to borderless fullscreen on the game's monitor.",
+    "krysta_xbox_fullscreen_hint": "Press the lit Xbox button to minimize the active game. Press it again to restore the game window.",
     "krysta_fps_visibility_hint": "The counter shows the game's measured FPS in windowed and borderless fullscreen modes.",
+    "krysta_fps_rtss_label": "Use RTSS for FPS in exclusive fullscreen",
+    "krysta_fps_rtss_hint": "Run RivaTuner Statistics Server (RTSS) with On-Screen Display enabled for the game. Set the counter position in RTSS.",
+    "krysta_fps_rtss_missing": "Waiting for RTSS to start",
+    "krysta_fps_rtss_waiting": "Waiting for a game supported by RTSS",
+    "krysta_fps_rtss_sending": "Krysta has published the game's FPS in RTSS",
+    "krysta_fps_rtss_guide": "Open the RTSS setup guide",
     "krysta_game_category": "Game",
     "rpcs3_config_title": "RPCS3 configuration folder",
     "rpcs3_config_description": "Krysta Launcher found more than one RPCS3 configuration folder. Choose the one this RPCS3 installation uses.",

@@ -175,14 +175,12 @@ type HydraNativeModule = {
     config: ScreenshotInputNativeConfig
   ) => ScreenshotInputNativeStatus;
   getWindowsForegroundWindow?: () => NativeForegroundWindowResponse | null;
+  isRtssOsdAvailable?: () => boolean;
+  updateRtssOsd?: (processId: number) => boolean;
   getWindowsXboxGuidePressed?: () => boolean | null;
   getWindowsGamepadButtonPressed?: (button: string) => boolean | null;
   minimizeWindowsGameWindow?: (windowHandle: string, processId: number) => boolean;
   restoreWindowsGameWindow?: (windowHandle: string, processId: number) => boolean;
-  fullscreenWindowsGameWindow?: (
-    windowHandle: string,
-    processId: number
-  ) => boolean;
   getLinuxWindowClientPid?: (windowId: string) => number | null;
   getKdeFocusedProcessId?: () => number | null;
   startKdeFocusWatch?: () => void;
@@ -643,15 +641,14 @@ export class NativeAddon {
     }
   }
 
-  public static fullscreenWindowsGameWindow(
-    windowHandle: string,
-    processId: number
-  ) {
+  public static isRtssOsdAvailable() {
     if (process.platform !== "win32") return false;
+    return this.load().isRtssOsdAvailable?.() ?? false;
+  }
 
-    return (
-      this.load().fullscreenWindowsGameWindow?.(windowHandle, processId) ?? false
-    );
+  public static updateRtssOsd(processId: number) {
+    if (process.platform !== "win32") return false;
+    return this.load().updateRtssOsd?.(processId) ?? false;
   }
 
   public static prepareWindowsDesktopCapture() {

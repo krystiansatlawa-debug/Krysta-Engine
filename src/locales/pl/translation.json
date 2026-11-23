@@ -1148,8 +1148,14 @@
     "move_down": "Przenieś w dół"
   },
   "settings": {
-    "krysta_xbox_fullscreen_hint": "Naciśnij podświetlany przycisk Xbox, aby zminimalizować aktywną grę. Naciśnij ponownie, aby wrócić do pełnego ekranu bez ramek na monitorze gry.",
+    "krysta_xbox_fullscreen_hint": "Naciśnij podświetlany przycisk Xbox, aby zminimalizować aktywną grę. Naciśnij ponownie, aby przywrócić jej okno.",
     "krysta_fps_visibility_hint": "Licznik pokazuje zmierzone FPS gry w trybie okna i pełnego ekranu bez ramek.",
+    "krysta_fps_rtss_label": "Używaj RTSS do wyświetlania FPS na ekskluzywnym pełnym ekranie",
+    "krysta_fps_rtss_hint": "Uruchom RivaTuner Statistics Server (RTSS) z włączoną nakładką dla gry. Położenie licznika ustawisz w RTSS.",
+    "krysta_fps_rtss_missing": "Oczekiwanie na uruchomienie RTSS",
+    "krysta_fps_rtss_waiting": "Oczekiwanie na grę obsługiwaną przez RTSS",
+    "krysta_fps_rtss_sending": "Krysta opublikowała FPS gry w nakładce RTSS",
+    "krysta_fps_rtss_guide": "Otwórz instrukcję ustawienia RTSS",
     "krysta_game_category": "Gra",
     "epic_sync_partial": "Gry i czas gry zostały zsynchronizowane; synchronizacja osiągnięć dla {{count}} gier zostanie ponowiona.",
     "hide_library_steam_badges": "Ukryj odznaki połączenia z biblioteką Steam",
