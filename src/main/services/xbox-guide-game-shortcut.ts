@@ -35,10 +35,8 @@ const shortcut = new XboxGuideWindowToggle({
     NativeAddon.setWindowsGameWindowMinimized(handle, processId, false),
   getDisplayMode: ({ handle, processId }) =>
     NativeAddon.getWindowsGameDisplayMode(handle, processId),
-  requestFullscreen: ({ handle, processId }) =>
-    NativeAddon.requestWindowsGameFullscreen(handle, processId),
-  fillScreen: ({ handle, processId }) =>
-    NativeAddon.fillWindowsGameScreen(handle, processId),
+  requestFullscreen: ({ handle, processId }, currentMode) =>
+    NativeAddon.requestWindowsGameFullscreen(handle, processId, currentMode),
 });
 
 let enabled = false;

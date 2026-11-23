@@ -181,9 +181,9 @@ type HydraNativeModule = {
   ) => string | null;
   requestWindowsGameFullscreen?: (
     windowHandle: string,
-    processId: number
+    processId: number,
+    expectedMode: string
   ) => boolean;
-  fillWindowsGameScreen?: (windowHandle: string, processId: number) => void;
   isRtssOsdAvailable?: () => boolean;
   updateRtssOsd?: (processId: number) => boolean;
   getWindowsXboxGuidePressed?: () => boolean | null;
@@ -663,17 +663,17 @@ export class NativeAddon {
 
   public static requestWindowsGameFullscreen(
     windowHandle: string,
-    processId: number
+    processId: number,
+    expectedMode: "windowed" | "fullscreen"
   ) {
     if (process.platform !== "win32") return false;
     return (
-      this.load().requestWindowsGameFullscreen?.(windowHandle, processId) ?? false
+      this.load().requestWindowsGameFullscreen?.(
+        windowHandle,
+        processId,
+        expectedMode
+      ) ?? false
     );
-  }
-
-  public static fillWindowsGameScreen(windowHandle: string, processId: number) {
-    if (process.platform !== "win32") return;
-    this.load().fillWindowsGameScreen?.(windowHandle, processId);
   }
 
   public static isRtssOsdAvailable() {

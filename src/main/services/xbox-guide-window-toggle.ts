@@ -14,12 +14,17 @@ type GameWindowActions = {
   minimize: (window: TrackedGameWindow) => boolean;
   restore: (window: TrackedGameWindow) => boolean;
   getDisplayMode: (window: TrackedGameWindow) => GameDisplayMode | null;
-  requestFullscreen: (window: TrackedGameWindow) => boolean;
-  fillScreen: (window: TrackedGameWindow) => void;
+  requestFullscreen: (
+    window: TrackedGameWindow,
+    currentMode: Exclude<GameDisplayMode, "exclusive">
+  ) => boolean;
 };
 
 export class XboxGuideWindowToggle {
-  private minimized: TrackedGameWindow | null = null;
+  private minimized: {
+    window: TrackedGameWindow;
+    mode: GameDisplayMode | null;
+  } | null = null;
   private wasPressed: boolean | undefined;
   private busy = false;
   private generation = 0;
@@ -32,32 +37,29 @@ export class XboxGuideWindowToggle {
     this.minimized = null;
   }
 
-  private async restoreFullscreen(
+  private async restoreDisplayMode(
     window: TrackedGameWindow,
+    before: GameDisplayMode | null,
     generation: number
   ) {
-    let focused = false;
-    let fallbackAfter: number | null = null;
-    for (let attempt = 0; attempt < 20; attempt++) {
-      await delay(75);
+    // Let the game reacquire its output after the asynchronous Win32 restore.
+    await delay(250);
+    let observed: GameDisplayMode | null = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
       if (this.generation !== generation) return;
       const mode = this.windows.getDisplayMode(window);
-      if (!mode) {
-        if (focused) return;
-        continue;
+      if (
+        mode === "exclusive" ||
+        (mode === "fullscreen" && before !== "exclusive")
+      )
+        return;
+      if (!mode && observed) return;
+      if (mode && mode === observed) {
+        this.windows.requestFullscreen(window, mode);
+        return;
       }
-      if (mode !== "windowed") return;
-      if (!focused) {
-        focused = true;
-        continue;
-      }
-      if (fallbackAfter === null) {
-        // Give the game a moment to apply its own fullscreen shortcut.
-        fallbackAfter = this.windows.requestFullscreen(window)
-          ? attempt + 5
-          : attempt;
-      }
-      if (attempt >= fallbackAfter) this.windows.fillScreen(window);
+      observed = mode;
+      await delay(100);
     }
   }
 
@@ -71,17 +73,25 @@ export class XboxGuideWindowToggle {
     try {
       const minimized = this.minimized;
       if (minimized) {
-        const tracked = await this.windows.isTrackedGame(minimized.gameKey);
+        const tracked = await this.windows.isTrackedGame(
+          minimized.window.gameKey
+        );
         if (this.generation !== generation) return;
         this.minimized = null;
-        if (tracked && this.windows.restore(minimized)) {
-          await this.restoreFullscreen(minimized, generation);
+        if (tracked && this.windows.restore(minimized.window)) {
+          await this.restoreDisplayMode(
+            minimized.window,
+            minimized.mode,
+            generation
+          );
           return;
         }
       }
       const active = await this.windows.findForegroundGame();
       if (this.generation !== generation || !active) return;
-      if (this.windows.minimize(active)) this.minimized = active;
+      const mode = this.windows.getDisplayMode(active);
+      if (this.windows.minimize(active))
+        this.minimized = { window: active, mode };
     } finally {
       this.busy = false;
     }

@@ -1,5 +1,5 @@
 #[cfg(windows)]
-use windows_sys::Win32::Foundation::{GetLastError, SetLastError, HWND, RECT};
+use windows_sys::Win32::Foundation::HWND;
 #[cfg(windows)]
 use windows_sys::Win32::Graphics::Gdi::{
     GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
@@ -13,10 +13,8 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
 use windows_sys::Win32::UI::Shell::{SHQueryUserNotificationState, QUNS_RUNNING_D3D_FULL_SCREEN};
 #[cfg(windows)]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    GetForegroundWindow, GetWindowLongW, GetWindowThreadProcessId, IsIconic, IsZoomed,
-    SetForegroundWindow, SetWindowLongW, SetWindowPos, ShowWindowAsync, GWL_STYLE,
-    SWP_ASYNCWINDOWPOS, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOZORDER, SW_MINIMIZE, SW_RESTORE,
-    WS_CAPTION, WS_THICKFRAME,
+    GetForegroundWindow, GetWindowThreadProcessId, IsIconic, SetForegroundWindow, ShowWindowAsync,
+    SW_MINIMIZE, SW_RESTORE,
 };
 
 #[cfg(windows)]
@@ -74,18 +72,6 @@ pub fn restore_game_window(handle: &str, process_id: u32) -> bool {
 }
 
 #[cfg(windows)]
-fn monitor_bounds(hwnd: HWND) -> Option<RECT> {
-    unsafe {
-        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-        let mut info = MONITORINFO {
-            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
-            ..std::mem::zeroed()
-        };
-        (!monitor.is_null() && GetMonitorInfoW(monitor, &mut info) != 0).then_some(info.rcMonitor)
-    }
-}
-
-#[cfg(windows)]
 pub fn get_game_display_mode(handle: &str, process_id: u32) -> Option<&'static str> {
     let hwnd = owned_window(handle, process_id)?;
     unsafe {
@@ -96,7 +82,15 @@ pub fn get_game_display_mode(handle: &str, process_id: u32) -> Option<&'static s
         if client.right <= client.left || client.bottom <= client.top {
             return None;
         }
-        let bounds = monitor_bounds(hwnd)?;
+        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        let mut info = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            ..std::mem::zeroed()
+        };
+        if monitor.is_null() || GetMonitorInfoW(monitor, &mut info) == 0 {
+            return None;
+        }
+        let bounds = info.rcMonitor;
         if client.left > bounds.left
             || client.top > bounds.top
             || client.right < bounds.right
@@ -106,17 +100,19 @@ pub fn get_game_display_mode(handle: &str, process_id: u32) -> Option<&'static s
         }
 
         let mut state = 0;
-        if SHQueryUserNotificationState(&mut state) == 0 && state == QUNS_RUNNING_D3D_FULL_SCREEN {
-            Some("exclusive")
-        } else {
-            Some("fullscreen")
+        match SHQueryUserNotificationState(&mut state) {
+            0 if state == QUNS_RUNNING_D3D_FULL_SCREEN => Some("exclusive"),
+            0 => Some("fullscreen"),
+            _ => None,
         }
     }
 }
 
 #[cfg(windows)]
-pub fn request_fullscreen(handle: &str, process_id: u32) -> bool {
-    if get_game_display_mode(handle, process_id) != Some("windowed") {
+pub fn request_fullscreen(handle: &str, process_id: u32, expected_mode: &str) -> bool {
+    if !matches!(expected_mode, "windowed" | "fullscreen")
+        || get_game_display_mode(handle, process_id) != Some(expected_mode)
+    {
         return false;
     }
 
@@ -160,53 +156,6 @@ pub fn request_fullscreen(handle: &str, process_id: u32) -> bool {
     }
 }
 
-#[cfg(windows)]
-pub fn fill_game_screen(handle: &str, process_id: u32) {
-    if get_game_display_mode(handle, process_id) != Some("windowed") {
-        return;
-    }
-    let Some(hwnd) = owned_window(handle, process_id) else {
-        return;
-    };
-    let Some(bounds) = monitor_bounds(hwnd) else {
-        return;
-    };
-    unsafe {
-        if GetForegroundWindow() != hwnd || IsIconic(hwnd) != 0 {
-            return;
-        }
-        if IsZoomed(hwnd) != 0 {
-            ShowWindowAsync(hwnd, SW_RESTORE);
-            return;
-        }
-
-        SetLastError(0);
-        let style = GetWindowLongW(hwnd, GWL_STYLE);
-        if style == 0 && GetLastError() != 0 {
-            return;
-        }
-        let borderless = style & !((WS_CAPTION | WS_THICKFRAME) as i32);
-        if borderless != style {
-            SetLastError(0);
-            if SetWindowLongW(hwnd, GWL_STYLE, borderless) == 0 && GetLastError() != 0 {
-                return;
-            }
-        }
-        let queued = SetWindowPos(
-            hwnd,
-            std::ptr::null_mut(),
-            bounds.left,
-            bounds.top,
-            bounds.right - bounds.left,
-            bounds.bottom - bounds.top,
-            SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_ASYNCWINDOWPOS,
-        ) != 0;
-        if !queued && borderless != style {
-            SetWindowLongW(hwnd, GWL_STYLE, style);
-        }
-    }
-}
-
 #[cfg(not(windows))]
 pub fn minimize_game_window(_handle: &str, _process_id: u32) -> bool {
     false
@@ -223,9 +172,6 @@ pub fn get_game_display_mode(_handle: &str, _process_id: u32) -> Option<&'static
 }
 
 #[cfg(not(windows))]
-pub fn request_fullscreen(_handle: &str, _process_id: u32) -> bool {
+pub fn request_fullscreen(_handle: &str, _process_id: u32, _expected_mode: &str) -> bool {
     false
 }
-
-#[cfg(not(windows))]
-pub fn fill_game_screen(_handle: &str, _process_id: u32) {}
