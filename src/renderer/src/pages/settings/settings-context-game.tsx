@@ -1,11 +1,18 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KrystaGameUpdateSettings } from "./krysta-game-update-settings";
 import { CheckboxField } from "@renderer/components";
+import { settingsContext } from "@renderer/context";
+import { useAppSelector } from "@renderer/hooks";
 
 export function SettingsContextGame() {
   const { i18n } = useTranslation();
   const pl = i18n.language.startsWith("pl");
+  const { updateUserPreferences } = useContext(settingsContext);
+  const guideShortcutEnabled = useAppSelector(
+    (state) => state.userPreferences.value?.xboxGuideGameShortcutEnabled === true
+  );
+  const [guideShortcutError, setGuideShortcutError] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -122,6 +129,42 @@ export function SettingsContextGame() {
   return (
     <div className="settings-context-panel">
       <KrystaGameUpdateSettings />
+      {window.electron.platform === "win32" && (
+        <div className="settings-context-panel__group">
+          <h3>{pl ? "Kontroler Xbox" : "Xbox controller"}</h3>
+          <CheckboxField
+            label={
+              pl
+                ? "Przycisk Xbox minimalizuje i przywraca grę"
+                : "Use the Xbox button to minimize and restore the game"
+            }
+            checked={guideShortcutEnabled}
+            onChange={() => {
+              setGuideShortcutError(false);
+              void updateUserPreferences({
+                xboxGuideGameShortcutEnabled: !guideShortcutEnabled,
+              }).catch(() => setGuideShortcutError(true));
+            }}
+          />
+          <p>
+            {pl
+              ? "Naciśnij podświetlany przycisk Xbox, aby schować aktywne okno gry wykrytej przez Krystę. Naciśnij go ponownie, aby przywrócić okno."
+              : "Press the lit Xbox button to minimize the active game window tracked by Krysta. Press it again to restore the window."}
+          </p>
+          <small>
+            {pl
+              ? "Jeśli przycisk otwiera Xbox Game Bar, wyłącz otwieranie paska za pomocą kontrolera w ustawieniach Windows."
+              : "If the button opens Xbox Game Bar, turn off opening Game Bar with a controller in Windows settings."}
+          </small>
+          {guideShortcutError && (
+            <p role="alert">
+              {pl
+                ? "Nie udało się zapisać ustawienia kontrolera."
+                : "Could not save the controller setting."}
+            </p>
+          )}
+        </div>
+      )}
       <div className="settings-context-panel__group">
         <h3>{pl ? "Monitor wydajności" : "Performance monitor"}</h3>
         <CheckboxField

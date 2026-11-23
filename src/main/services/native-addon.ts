@@ -175,6 +175,9 @@ type HydraNativeModule = {
     config: ScreenshotInputNativeConfig
   ) => ScreenshotInputNativeStatus;
   getWindowsForegroundWindow?: () => NativeForegroundWindowResponse | null;
+  getWindowsXboxGuidePressed?: () => boolean | null;
+  minimizeWindowsGameWindow?: (windowHandle: string, processId: number) => boolean;
+  restoreWindowsGameWindow?: (windowHandle: string, processId: number) => boolean;
   getLinuxWindowClientPid?: (windowId: string) => number | null;
   getKdeFocusedProcessId?: () => number | null;
   startKdeFocusWatch?: () => void;
@@ -588,6 +591,31 @@ export class NativeAddon {
       logger.error("Failed to identify the Windows foreground window", error);
       return undefined;
     }
+  }
+
+  public static getWindowsXboxGuidePressed() {
+    if (process.platform !== "win32") return null;
+
+    try {
+      return this.load().getWindowsXboxGuidePressed?.() ?? null;
+    } catch (error) {
+      logger.warn("Failed to read the Xbox Guide button", error);
+      return null;
+    }
+  }
+
+  public static setWindowsGameWindowMinimized(
+    windowHandle: string,
+    processId: number,
+    minimized: boolean
+  ) {
+    if (process.platform !== "win32") return false;
+
+    const addon = this.load();
+    const changeWindow = minimized
+      ? addon.minimizeWindowsGameWindow
+      : addon.restoreWindowsGameWindow;
+    return changeWindow?.(windowHandle, processId) ?? false;
   }
 
   public static getWindowsWindowBounds(windowHandle: string) {

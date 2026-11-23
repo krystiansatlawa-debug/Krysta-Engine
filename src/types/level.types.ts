@@ -270,6 +270,7 @@ export interface UserPreferences {
   screenshotsFolderPath?: string;
   screenshotHotkey?: ScreenshotHotkeyBinding;
   screenshotGamepadEnabled?: boolean;
+  xboxGuideGameShortcutEnabled?: boolean;
   screenshotGamepadCombo?: ScreenshotGamepadButton[];
   screenshotCaptureSoundEnabled?: boolean;
   screenshotToastEnabled?: boolean;
