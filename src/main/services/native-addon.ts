@@ -175,6 +175,15 @@ type HydraNativeModule = {
     config: ScreenshotInputNativeConfig
   ) => ScreenshotInputNativeStatus;
   getWindowsForegroundWindow?: () => NativeForegroundWindowResponse | null;
+  getWindowsGameDisplayMode?: (
+    windowHandle: string,
+    processId: number
+  ) => string | null;
+  requestWindowsGameFullscreen?: (
+    windowHandle: string,
+    processId: number,
+    expectedMode: string
+  ) => boolean;
   isRtssOsdAvailable?: () => boolean;
   updateRtssOsd?: (processId: number) => boolean;
   getWindowsXboxGuidePressed?: () => boolean | null;
@@ -639,6 +648,32 @@ export class NativeAddon {
       logger.error("Failed to read the Windows window bounds", error);
       return null;
     }
+  }
+
+  public static getWindowsGameDisplayMode(
+    windowHandle: string,
+    processId: number
+  ) {
+    if (process.platform !== "win32") return null;
+    const mode = this.load().getWindowsGameDisplayMode?.(windowHandle, processId);
+    return mode === "windowed" || mode === "fullscreen" || mode === "exclusive"
+      ? mode
+      : null;
+  }
+
+  public static requestWindowsGameFullscreen(
+    windowHandle: string,
+    processId: number,
+    expectedMode: "windowed" | "fullscreen"
+  ) {
+    if (process.platform !== "win32") return false;
+    return (
+      this.load().requestWindowsGameFullscreen?.(
+        windowHandle,
+        processId,
+        expectedMode
+      ) ?? false
+    );
   }
 
   public static isRtssOsdAvailable() {

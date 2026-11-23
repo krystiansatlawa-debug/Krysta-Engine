@@ -11,12 +11,34 @@ pub struct WindowBounds {
 }
 
 #[cfg(windows)]
+pub fn get_window_client_bounds(
+    window: windows_sys::Win32::Foundation::HWND,
+) -> Option<ScreenRect> {
+    use windows_sys::Win32::Foundation::{POINT, RECT};
+    use windows_sys::Win32::Graphics::Gdi::ClientToScreen;
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetClientRect;
+
+    unsafe {
+        let mut client = RECT::default();
+        let mut origin = POINT::default();
+        if GetClientRect(window, &mut client) == 0 || ClientToScreen(window, &mut origin) == 0 {
+            return None;
+        }
+        Some(ScreenRect {
+            left: origin.x,
+            top: origin.y,
+            right: origin.x + client.right,
+            bottom: origin.y + client.bottom,
+        })
+    }
+}
+
+#[cfg(windows)]
 pub fn get_window_bounds(window_handle: &str) -> Option<WindowBounds> {
     use std::ffi::c_void;
-    use windows_sys::Win32::Foundation::{HWND, POINT, RECT};
+    use windows_sys::Win32::Foundation::{HWND, RECT};
     use windows_sys::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
-    use windows_sys::Win32::Graphics::Gdi::ClientToScreen;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{GetClientRect, IsIconic, IsWindow};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{IsIconic, IsWindow};
 
     let handle = window_handle
         .trim()
@@ -46,17 +68,6 @@ pub fn get_window_bounds(window_handle: &str) -> Option<WindowBounds> {
             return None;
         }
 
-        let mut client = RECT {
-            left: 0,
-            top: 0,
-            right: 0,
-            bottom: 0,
-        };
-        let mut origin = POINT { x: 0, y: 0 };
-        if GetClientRect(window, &mut client) == 0 || ClientToScreen(window, &mut origin) == 0 {
-            return None;
-        }
-
         Some(WindowBounds {
             frame: ScreenRect {
                 left: frame.left,
@@ -64,12 +75,7 @@ pub fn get_window_bounds(window_handle: &str) -> Option<WindowBounds> {
                 right: frame.right,
                 bottom: frame.bottom,
             },
-            client: ScreenRect {
-                left: origin.x,
-                top: origin.y,
-                right: origin.x + client.right,
-                bottom: origin.y + client.bottom,
-            },
+            client: get_window_client_bounds(window)?,
         })
     }
 }

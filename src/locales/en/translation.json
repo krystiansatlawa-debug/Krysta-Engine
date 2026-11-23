@@ -1430,7 +1430,7 @@
     "extraction_pkg_keys_unavailable_description": "Connect to the internet to extract a PKG for the first time."
   },
   "settings": {
-    "krysta_xbox_fullscreen_hint": "Press the lit Xbox button to minimize the active game. Press it again to restore the game window.",
+    "krysta_xbox_fullscreen_hint": "Press the lit Xbox button to minimize the active game. Press it again to resume. If the game leaves fullscreen, Krysta can send Alt+Enter to games that support the shortcut.",
     "krysta_fps_visibility_hint": "The counter shows the game's measured FPS in windowed and borderless fullscreen modes.",
     "krysta_fps_rtss_label": "Use RTSS for FPS in exclusive fullscreen",
     "krysta_fps_rtss_hint": "Run RivaTuner Statistics Server (RTSS) with On-Screen Display enabled for the game. Set the counter position in RTSS.",

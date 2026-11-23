@@ -116,6 +116,20 @@ pub fn restore_windows_game_window(window_handle: String, process_id: u32) -> bo
 }
 
 #[napi]
+pub fn get_windows_game_display_mode(window_handle: String, process_id: u32) -> Option<String> {
+    window_order::get_game_display_mode(&window_handle, process_id).map(str::to_owned)
+}
+
+#[napi]
+pub fn request_windows_game_fullscreen(
+    window_handle: String,
+    process_id: u32,
+    expected_mode: String,
+) -> bool {
+    window_order::request_fullscreen(&window_handle, process_id, &expected_mode)
+}
+
+#[napi]
 pub fn is_rtss_osd_available() -> bool {
     rtss_osd::available()
 }
