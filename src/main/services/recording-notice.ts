@@ -6,7 +6,10 @@ let overlay: BrowserWindow | null = null;
 let dismiss: ReturnType<typeof setTimeout> | null = null;
 
 /** Temporary, click-through Windows toast. It never activates or focuses. */
-export async function showRecordingNotice(state: RecordingNotice) {
+export async function showRecordingNotice(
+  state: RecordingNotice,
+  shortcut = ""
+) {
   if (process.platform !== "win32" || !app.isReady()) return;
   if (dismiss) clearTimeout(dismiss);
   dismiss = null;
@@ -40,7 +43,7 @@ export async function showRecordingNotice(state: RecordingNotice) {
   try {
     win.setIgnoreMouseEvents(true, { forward: true });
     win.setAlwaysOnTop(true, "screen-saver");
-    await win.loadFile(toastHtml, { query: { state } });
+    await win.loadFile(toastHtml, { query: { state, shortcut } });
     if (win.isDestroyed() || overlay !== win) return;
     win.showInactive();
     dismiss = setTimeout(() => {

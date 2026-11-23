@@ -194,19 +194,30 @@ test("a stopped capture keeps its manual frames until the main process saves the
   assert.equal(result.data, "Y2xpcA==");
 });
 
-const recordingServiceSource = ts.transpileModule(
-  readFileSync(
-    new URL("../src/main/services/krysta-recordings.ts", import.meta.url),
-    "utf8"
-  ),
-  {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2022,
-      esModuleInterop: true,
-    },
-  }
-).outputText;
+function transpile(sourcePath) {
+  return ts.transpileModule(
+    readFileSync(new URL(sourcePath, import.meta.url), "utf8"),
+    {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        esModuleInterop: true,
+      },
+    }
+  ).outputText;
+}
+
+const recordingServiceSource = transpile(
+  "../src/main/services/krysta-recordings.ts"
+);
+const screenshotInput = {};
+const recordingController = {};
+runInNewContext(transpile("../src/shared/screenshot-input.ts"), {
+  exports: screenshotInput,
+});
+runInNewContext(transpile("../src/shared/recording-controller.ts"), {
+  exports: recordingController,
+});
 
 async function serviceFixture(
   t,
@@ -225,7 +236,11 @@ async function serviceFixture(
   const calls = [];
   let foreground = { windowHandle: "123", processId: 42 };
   let sourceList = [{ id: "window:123:0" }];
-  let onReconcile;
+  const intervals = new Map();
+  const controllerReads = [];
+  const pressedButtons = new Set();
+  let controllerConnected = true;
+  let intervalId = 0;
   let permissionRequest;
   let displayMediaRequest;
   let workerContents;
@@ -304,6 +319,15 @@ async function serviceFixture(
     "node:fs/promises": fs,
     "node:crypto": await import("node:crypto"),
     "@main/level": {},
+    "@shared": { ...screenshotInput, ...recordingController },
+    "./native-addon": {
+      NativeAddon: {
+        getWindowsGamepadButtonPressed(button) {
+          controllerReads.push(button);
+          return controllerConnected ? pressedButtons.has(button) : null;
+        },
+      },
+    },
     "./game-running-state": {
       hasTrackedGamesRunning: () => true,
       onTrackedGamesRunningChange: () => () => undefined,
@@ -338,11 +362,14 @@ async function serviceFixture(
     process: { platform: "win32" },
     setTimeout,
     clearTimeout,
-    setInterval(callback) {
-      onReconcile = callback;
-      return {};
+    setInterval(callback, delay) {
+      const handle = { id: ++intervalId, unref() {} };
+      intervals.set(handle, { callback, delay });
+      return handle;
     },
-    clearInterval() {},
+    clearInterval(handle) {
+      intervals.delete(handle);
+    },
     Buffer,
   });
   await exports.recordingState();
@@ -358,9 +385,20 @@ async function serviceFixture(
     },
     loseFocus() {
       foreground = null;
-      onReconcile();
+      for (const { callback, delay } of intervals.values()) {
+        if (delay === 500) callback();
+      }
     },
     restoreFocus: () => (foreground = { windowHandle: "123", processId: 42 }),
+    controllerReads,
+    sampleController(buttons, connected = true) {
+      controllerConnected = connected;
+      pressedButtons.clear();
+      for (const button of buttons) pressedButtons.add(button);
+      for (const { callback, delay } of intervals.values()) {
+        if (delay === 24) callback();
+      }
+    },
     hideCaptureSource: () => (sourceList = []),
     workerPermission: (permission, details) =>
       requestPermission(workerContents, permission, details),
@@ -465,4 +503,66 @@ test("allows display-capture requests from newer Electron on the recorder main f
   assert.deepEqual(f.notices, ["started"]);
   await f.toggleManualRecording();
   assert.deepEqual(f.notices, ["started", "saved"]);
+});
+
+test("an assigned controller button starts recording once per press and saves on the next press", async (t) => {
+  const f = await serviceFixture(t, { controllerButton: "back" });
+  f.sampleController(["back"]);
+  f.sampleController(["back"]);
+  await flush();
+  assert.deepEqual(f.notices, [], "A held button cannot start a recording");
+
+  f.sampleController(["menu"]);
+  assert.deepEqual(f.notices, [], "Unassigned buttons are ignored");
+  f.sampleController(["back"]);
+  await waitFor(() => f.notices.includes("started"));
+  f.sampleController(["back"]);
+  await flush();
+  assert.deepEqual(f.notices, ["started"]);
+
+  f.sampleController([], false);
+  f.sampleController(["back"]);
+  await flush();
+  assert.deepEqual(
+    f.notices,
+    ["started"],
+    "Reconnect with a held button does not stop"
+  );
+
+  f.sampleController([]);
+  f.sampleController(["back"]);
+  await waitFor(() => f.notices.includes("saved"));
+  assert.equal((await f.recordingState()).clips.length, 1);
+  assert.ok(f.hotkeys.has("F9"), "The keyboard shortcut is also registered");
+});
+
+test("controller input is opt-in and its supported binding can be saved or removed", async (t) => {
+  const f = await serviceFixture(t, {});
+  const settings = (await f.recordingState()).settings;
+  assert.equal(settings.controllerButton, "");
+  f.sampleController(["back"]);
+  assert.deepEqual(f.controllerReads, []);
+
+  await assert.rejects(
+    f.setRecordingSettings({ ...settings, controllerButton: "guide" }),
+    /Invalid recording settings/
+  );
+  await f.setRecordingSettings({ ...settings, controllerButton: "rb" });
+  assert.equal((await f.recordingState()).settings.controllerButton, "rb");
+  f.sampleController([]);
+  assert.deepEqual(f.controllerReads, ["rb"]);
+
+  await f.setRecordingSettings({ ...settings, controllerButton: "" });
+  f.sampleController(["rb"]);
+  assert.deepEqual(f.controllerReads, ["rb"]);
+});
+
+test("a controller press outside the foreground game stays quiet", async (t) => {
+  const f = await serviceFixture(t, { controllerButton: "rb" });
+  f.loseFocus();
+  f.sampleController([]);
+  f.sampleController(["rb"]);
+  await flush();
+  assert.deepEqual(f.notices, []);
+  assert.equal((await f.recordingState()).recording, false);
 });

@@ -400,6 +400,30 @@ fn handle_raw_input(context: &Context, state: &mut KeyboardState, lparam: LPARAM
     }
 }
 
+fn xinput_buttons(user: u32) -> Option<u32> {
+    let mut state = XINPUT_STATE::default();
+    (unsafe { XInputGetState(user, &mut state) } == 0).then(|| {
+        gamepad::xinput_mask(
+            state.Gamepad.wButtons,
+            state.Gamepad.bLeftTrigger,
+            state.Gamepad.bRightTrigger,
+        )
+    })
+}
+
+pub(super) fn gamepad_button_pressed(button_mask: u32) -> Option<bool> {
+    let mut connected = false;
+    for user in 0..XINPUT_USER_COUNT {
+        if let Some(buttons) = xinput_buttons(user as u32) {
+            if buttons & button_mask != 0 {
+                return Some(true);
+            }
+            connected = true;
+        }
+    }
+    connected.then_some(false)
+}
+
 fn run_xinput(context: &Context) {
     let mut combos: [ComboMatcher; XINPUT_USER_COUNT] = Default::default();
     let mut next_probe: [Option<Instant>; XINPUT_USER_COUNT] = [None; XINPUT_USER_COUNT];
@@ -411,18 +435,12 @@ fn run_xinput(context: &Context) {
             if next_probe[user].is_some_and(|deadline| now < deadline) {
                 continue;
             }
-            let mut state: XINPUT_STATE = unsafe { zeroed() };
-            if unsafe { XInputGetState(user as u32, &mut state) } != 0 {
+            let Some(buttons) = xinput_buttons(user as u32) else {
                 next_probe[user] = Some(now + XINPUT_RECONNECT_INTERVAL);
                 combos[user] = ComboMatcher::default();
                 continue;
-            }
+            };
             next_probe[user] = None;
-            let buttons = gamepad::xinput_mask(
-                state.Gamepad.wButtons,
-                state.Gamepad.bLeftTrigger,
-                state.Gamepad.bRightTrigger,
-            );
             if combos[user].update(buttons, combo) {
                 context.emit(TriggerSource::Gamepad, Backend::XInput);
             }

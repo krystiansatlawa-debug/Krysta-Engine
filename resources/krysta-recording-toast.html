@@ -25,9 +25,14 @@
     <span class="dot"></span><div><strong id="title"></strong><small id="subtitle"></small></div>
   </div>
   <script>
-    const status = new URLSearchParams(location.search).get("state");
+    const params = new URLSearchParams(location.search);
+    const status = params.get("state");
+    const shortcut = params.get("shortcut");
     const messages = {
-      started: ["Nagrywanie rozpoczęte", "F9 — zakończ i zapisz"],
+      started: [
+        "Nagrywanie rozpoczęte",
+        shortcut ? shortcut + " — zakończ i zapisz" : "Zakończ w zakładce Nagrania"
+      ],
       saved: ["Nagranie zapisane", "Film znajdziesz w zakładce Nagrania"],
       failed: ["Nie udało się nagrać", "Sprawdź zakładkę Nagrania i błąd nagrywania"]
     };

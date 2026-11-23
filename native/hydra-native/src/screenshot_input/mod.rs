@@ -277,6 +277,19 @@ pub fn stop_screenshot_input() {
 }
 
 #[napi]
+pub fn get_windows_gamepad_button_pressed(button: String) -> Option<bool> {
+    #[cfg(target_os = "windows")]
+    {
+        windows::gamepad_button_pressed(gamepad::button_mask(&button)?)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = button;
+        None
+    }
+}
+
+#[napi]
 pub fn probe_screenshot_input(config: ScreenshotInputConfig) -> ScreenshotInputNativeStatus {
     let parsed = parse_config(&config);
     to_native_status(platform::probe(parsed.options), &parsed)
