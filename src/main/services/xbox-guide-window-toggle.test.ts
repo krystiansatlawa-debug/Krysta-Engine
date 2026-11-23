@@ -11,9 +11,10 @@ const game: TrackedGameWindow = {
   processId: 9012,
 };
 
-test("the first press minimizes the active game and the next restores that exact window", async () => {
+test("the next press restores the same window and waits for it to go fullscreen", async () => {
   let active: TrackedGameWindow | null = game;
   const actions: Array<[string, TrackedGameWindow]> = [];
+  let fullscreenCalls = 0;
   const shortcut = new XboxGuideWindowToggle({
     findForegroundGame: async () => active,
     isTrackedGame: async (key) => key === game.gameKey,
@@ -26,6 +27,10 @@ test("the first press minimizes the active game and the next restores that exact
       actions.push(["restore", target]);
       return true;
     },
+    fullscreen: (target) => {
+      actions.push(["fullscreen", target]);
+      return ++fullscreenCalls === 2;
+    },
   });
 
   await shortcut.sample(false);
@@ -37,6 +42,8 @@ test("the first press minimizes the active game and the next restores that exact
   assert.deepEqual(actions, [
     ["minimize", game],
     ["restore", game],
+    ["fullscreen", game],
+    ["fullscreen", game],
   ]);
 });
 
@@ -47,6 +54,7 @@ test("an already held button does not trigger when the listener starts", async (
     isTrackedGame: async () => true,
     minimize: () => (++minimized, true),
     restore: () => assert.fail("unexpected restore"),
+    fullscreen: () => assert.fail("unexpected fullscreen"),
   });
   await shortcut.sample(true);
   await shortcut.sample(true);
@@ -64,6 +72,7 @@ test("a remembered window is discarded when its game closes", async () => {
     isTrackedGame: async () => false,
     minimize: () => true,
     restore: () => (++restoreCalls, true),
+    fullscreen: () => assert.fail("unexpected fullscreen"),
   });
   await shortcut.sample(false);
   await shortcut.sample(true);
@@ -83,6 +92,7 @@ test("a reset invalidates pending lookups before they can affect a window", asyn
     isTrackedGame: async () => true,
     minimize: () => assert.fail("stale minimize"),
     restore: () => assert.fail("unexpected restore"),
+    fullscreen: () => assert.fail("unexpected fullscreen"),
   });
 
   await shortcut.sample(false);
@@ -92,6 +102,23 @@ test("a reset invalidates pending lookups before they can affect a window", asyn
   await processing;
 });
 
+test("disabling the shortcut during restoration cancels fullscreen", async () => {
+  const shortcut = new XboxGuideWindowToggle({
+    findForegroundGame: async () => game,
+    isTrackedGame: async () => true,
+    minimize: () => true,
+    restore: () => {
+      shortcut.reset();
+      return true;
+    },
+    fullscreen: () => assert.fail("stale fullscreen"),
+  });
+  await shortcut.sample(false);
+  await shortcut.sample(true);
+  await shortcut.sample(false);
+  await shortcut.sample(true);
+});
+
 test("a window that was not minimized is never stored for restoration", async () => {
   let minimizeCalls = 0;
   const shortcut = new XboxGuideWindowToggle({
@@ -99,6 +126,7 @@ test("a window that was not minimized is never stored for restoration", async ()
     isTrackedGame: async () => assert.fail("unexpected tracked game check"),
     minimize: () => (++minimizeCalls, false),
     restore: () => assert.fail("unexpected restore"),
+    fullscreen: () => assert.fail("unexpected fullscreen"),
   });
 
   for (let press = 0; press < 2; press++) {

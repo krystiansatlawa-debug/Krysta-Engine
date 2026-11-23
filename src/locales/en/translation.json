@@ -1430,6 +1430,8 @@
     "extraction_pkg_keys_unavailable_description": "Connect to the internet to extract a PKG for the first time."
   },
   "settings": {
+    "krysta_xbox_fullscreen_hint": "Press the lit Xbox button to minimize the active game. Press it again to return to borderless fullscreen on the game's monitor.",
+    "krysta_fps_visibility_hint": "The counter shows the game's measured FPS in windowed and borderless fullscreen modes.",
     "krysta_game_category": "Game",
     "rpcs3_config_title": "RPCS3 configuration folder",
     "rpcs3_config_description": "Krysta Launcher found more than one RPCS3 configuration folder. Choose the one this RPCS3 installation uses.",

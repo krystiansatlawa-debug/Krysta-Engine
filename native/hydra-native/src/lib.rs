@@ -114,6 +114,11 @@ pub fn restore_windows_game_window(window_handle: String, process_id: u32) -> bo
     window_order::restore_game_window(&window_handle, process_id)
 }
 
+#[napi]
+pub fn fullscreen_windows_game_window(window_handle: String, process_id: u32) -> bool {
+    window_order::fullscreen_game_window(&window_handle, process_id)
+}
+
 #[napi(object)]
 pub struct NativeScreenRect {
     pub left: i32,

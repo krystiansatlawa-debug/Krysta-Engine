@@ -11,16 +11,17 @@ import {
   globalShortcut,
 } from "electron";
 import { promises as fs } from "node:fs";
-import { join, basename, extname } from "node:path";
+import { join, basename } from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
-import { gamesSublevel } from "@main/level";
 import { resolveForegroundGame } from "@main/services/screenshots/foreground-game";
 import { NativeAddon } from "@main/services/native-addon";
 import {
-  gamesPlaytime,
+  hasTrackedGamesRunning,
+  isTrackedGameKeyRunning,
   onTrackedGamesRunningChange,
 } from "@main/services/game-running-state";
+import { PresentMonFps } from "@main/services/presentmon-fps";
 
 type Position = "tl" | "tr" | "bl" | "br";
 type Preference = {
@@ -34,9 +35,36 @@ function normalizePosition(value: unknown): Position {
 }
 function placement(bounds: Electron.Rectangle, position: Position) {
   return {
-    x: bounds.x + (position.endsWith("r") ? bounds.width - 116 : 16),
-    y: bounds.y + (position.startsWith("b") ? bounds.height - 42 : 16),
+    x:
+      bounds.x +
+      (position.endsWith("r") ? Math.max(0, bounds.width - 116) : 16),
+    y:
+      bounds.y +
+      (position.startsWith("b") ? Math.max(0, bounds.height - 42) : 16),
   };
+}
+
+type GameWindow = { windowHandle: string; processId: number };
+type CaptureTarget = { key: string; processId: number; tool: string };
+
+function overlayPosition({ windowHandle }: GameWindow, position: Position) {
+  const client = NativeAddon.getWindowsWindowBounds(windowHandle)?.client;
+  if (!client || client.right <= client.left || client.bottom <= client.top) {
+    return null;
+  }
+  const window = screen.screenToDipRect(null, {
+    x: client.left,
+    y: client.top,
+    width: client.right - client.left,
+    height: client.bottom - client.top,
+  });
+  const display = screen.getDisplayMatching(window).bounds;
+  const x = Math.max(window.x, display.x);
+  const y = Math.max(window.y, display.y);
+  const right = Math.min(window.x + window.width, display.x + display.width);
+  const bottom = Math.min(window.y + window.height, display.y + display.height);
+  if (right <= x || bottom <= y) return null;
+  return placement({ x, y, width: right - x, height: bottom - y }, position);
 }
 async function readPreference(): Promise<Preference> {
   return readKrystaSettings<Preference>(app.getPath("userData"), "fps");
@@ -67,7 +95,7 @@ async function findTool(p: Preference) {
 let overlay: BrowserWindow | null = null,
   child: ChildProcess | null = null,
   timer: ReturnType<typeof setInterval> | null = null,
-  activeKey = "",
+  activeTarget: CaptureTarget | null = null,
   lastOverlayValue = "FPS: --",
   revision = 0,
   status = "idle";
@@ -79,6 +107,21 @@ let hidden = false,
 let reconciling = false,
   refreshPending = false,
   quitting = false;
+let failedCapture: { target: CaptureTarget; time: number } | null = null;
+let ignoredWindow: { window: GameWindow; time: number } | null = null;
+
+const isSameWindow = (
+  current: GameWindow | null | undefined,
+  window: GameWindow
+) =>
+  current?.processId === window.processId &&
+  current.windowHandle === window.windowHandle;
+
+const sameCapture = (running: CaptureTarget | null, next: CaptureTarget) =>
+  running?.key === next.key &&
+  running?.processId === next.processId &&
+  running?.tool === next.tool;
+
 const defaultHotkey = "Control+Shift+F10";
 function registerHotkey(value: string) {
   if (registered === value) return true;
@@ -91,10 +134,7 @@ function registerHotkey(value: string) {
     if (
       !globalShortcut.register(value, () => {
         hidden = !hidden;
-        if (overlay && !overlay.isDestroyed()) {
-          if (hidden) overlay.hide();
-          else overlay.showInactive();
-        }
+        if (hidden) overlay?.hide();
         refresh();
       })
     )
@@ -121,7 +161,7 @@ function stop() {
     overlay = null;
     if (!old.isDestroyed()) old.destroy();
   }
-  activeKey = "";
+  activeTarget = null;
   lastOverlayValue = "FPS: --";
 }
 function show(value: string) {
@@ -142,6 +182,7 @@ function show(value: string) {
 async function reconcile() {
   const generation = ++revision;
   const p = await readPreference();
+  if (generation !== revision) return;
   shortcutError = !registerHotkey(p.enabled ? (p.hotkey ?? defaultHotkey) : "");
   if (!p.enabled) {
     stop();
@@ -153,55 +194,89 @@ async function reconcile() {
     status = "hidden";
     return;
   }
-  const tool = await findTool(p);
-  const keys = Array.from(gamesPlaytime.keys());
-  let target: { key: string; exe: string } | null = null;
-  // Prefer the real foreground game process, not a launcher/bootstrap EXE.
-  // Rockstar, Ubisoft and many modded games launch a different process.
-  const foreground = await resolveForegroundGame("deeplink").catch(() => null);
-  if (foreground?.status === "resolved" && foreground.foreground?.processId) {
-    const pid = foreground.foreground.processId;
-    const processes = await NativeAddon.listProcesses().catch(() => []);
-    const process = processes.find((item) => item.pid === pid);
-    const executable = process?.exe;
-    if (executable && extname(executable).toLowerCase() === ".exe") {
-      target = { key: foreground.target.gameKey, exe: basename(executable) };
-    }
-  }
-  for (const key of keys.reverse()) {
-    if (target) break;
-    const game = await gamesSublevel.get(key).catch(() => null);
-    if (
-      game?.executablePath &&
-      extname(game.executablePath).toLowerCase() === ".exe"
-    ) {
-      target = { key, exe: basename(game.executablePath) };
-      break;
-    }
-  }
-  if (generation !== revision) return;
-  if (!p.enabled || !tool || !target) {
+  if (!hasTrackedGamesRunning()) {
     stop();
-    status = !p.enabled ? "disabled" : !tool ? "missing-tool" : "waiting-game";
+    status = "waiting-game";
     return;
   }
-  const captureKey = JSON.stringify([target.key, target.exe, tool]);
-  if (activeKey === captureKey && child) {
-    if (overlay && !overlay.isDestroyed()) {
-      const display = screen.getDisplayMatching(overlay.getBounds());
-      const point = placement(display.bounds, normalizePosition(p.position));
-      overlay.setPosition(point.x, point.y);
-      if (!hidden && !overlay.isVisible()) overlay.showInactive();
+
+  if (activeTarget && !isTrackedGameKeyRunning(activeTarget.key)) stop();
+  const tool = await findTool(p);
+  if (generation !== revision) return;
+  if (!tool) {
+    stop();
+    status = "missing-tool";
+    return;
+  }
+
+  let foreground = NativeAddon.getWindowsForegroundWindow();
+  let key =
+    activeTarget?.processId === foreground?.processId
+      ? activeTarget?.key
+      : undefined;
+  if (!key) {
+    overlay?.hide();
+    if (
+      ignoredWindow &&
+      isSameWindow(foreground, ignoredWindow.window) &&
+      Date.now() - ignoredWindow.time < 3000
+    )
+      return;
+    const resolved = await resolveForegroundGame("deeplink");
+    if (generation !== revision || hidden) return;
+    if (
+      resolved.status === "resolved" &&
+      resolved.foreground?.windowHandle &&
+      resolved.foreground.processId
+    ) {
+      const { windowHandle, processId } = resolved.foreground;
+      const current = NativeAddon.getWindowsForegroundWindow();
+      if (
+        current === undefined ||
+        isSameWindow(current, { windowHandle, processId })
+      ) {
+        foreground = { windowHandle, processId };
+        key = resolved.target.gameKey;
+      }
+    } else if (foreground) {
+      ignoredWindow = { window: foreground, time: Date.now() };
     }
+  }
+
+  const point =
+    key &&
+    foreground &&
+    overlayPosition(foreground, normalizePosition(p.position));
+  if (!point || !key || !foreground) {
+    overlay?.hide();
+    if (!child && status !== "capture-error") status = "waiting-game";
     return;
   }
+  const target = { key, processId: foreground.processId, tool };
+  if (
+    sameCapture(activeTarget, target) &&
+    child &&
+    overlay &&
+    !overlay.isDestroyed()
+  ) {
+    const [x, y] = overlay.getPosition();
+    if (x !== point.x || y !== point.y) overlay.setPosition(point.x, point.y);
+    if (!overlay.isVisible()) overlay.showInactive();
+    return;
+  }
+  if (
+    failedCapture &&
+    sameCapture(failedCapture.target, target) &&
+    Date.now() - failedCapture.time < 3000
+  )
+    return;
+  failedCapture = null;
   stop();
-  activeKey = captureKey;
+  activeTarget = target;
   status = "starting";
   lastError = "";
-  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const w = new BrowserWindow({
-    ...placement(display.bounds, normalizePosition(p.position)),
+    ...point,
     width: 100,
     height: 26,
     transparent: true,
@@ -223,91 +298,58 @@ async function reconcile() {
   w.setAlwaysOnTop(true, "screen-saver");
   const html =
     '<html><body style="margin:0;background:transparent"><div id="fps" style="display:inline-block;color:#fff;background:rgba(16,18,22,.90);border:1px solid rgba(255,255,255,.3);border-radius:5px;padding:4px 8px;font:bold 13px Arial,sans-serif">FPS: --</div></body></html>';
-  await w
-    .loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html))
-    .catch(() => {});
+  await w.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html));
   if (generation !== revision || overlay !== w || w.isDestroyed()) {
     if (overlay === w) stop();
     return;
   }
-  if (!hidden) w.showInactive();
+  const current = NativeAddon.getWindowsForegroundWindow();
+  if (!hidden && (current === undefined || isSameWindow(current, foreground))) {
+    w.showInactive();
+  }
   const proc = spawn(
     tool,
     [
-      "--process_name",
-      target.exe,
+      "--process_id",
+      String(target.processId),
       "--output_stdout",
       "--no_console_stats",
       "--v1_metrics",
+      "--no_track_display",
+      "--session_name",
+      "KrystaFPS",
+      "--stop_existing_session",
+      "--terminate_on_proc_exit",
     ],
     { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }
   );
   child = proc;
   status = "waiting-frames";
-  let receivedCsvHeader = false;
-  let timeColumn = -1,
-    chainColumn = -1,
-    pidColumn = -1,
-    applicationColumn = -1;
-  const samples = new Map<string, { sum: number; count: number }>();
+  const frames = new PresentMonFps(target.processId);
   const reader = createInterface({ input: proc.stdout! });
-  const targetName = target.exe.toLowerCase().replace(/\.exe$/, "");
-  reader.on("line", (line) => {
-    const row = line
-      .trim()
-      .replace(/^\uFEFF/, "")
-      .split(",");
-    if (row.includes("MsBetweenPresents")) {
-      receivedCsvHeader = true;
-      timeColumn = row.indexOf("MsBetweenPresents");
-      chainColumn = row.indexOf("SwapChainAddress");
-      pidColumn = row.indexOf("ProcessID");
-      applicationColumn = row.indexOf("Application");
-      return;
-    }
-    if (
-      timeColumn < 0 ||
-      applicationColumn < 0 ||
-      basename((row[applicationColumn] ?? "").replace(/^"|"$/g, ""))
-        .toLowerCase()
-        .replace(/\.exe$/, "") !== targetName
-    )
-      return;
-    const ms = Number(row[timeColumn]);
-    if (!Number.isFinite(ms) || ms <= 0 || ms > 10000) return;
-    const key = row[pidColumn] + ":" + row[chainColumn];
-    const s = samples.get(key) ?? { sum: 0, count: 0 };
-    s.sum += ms;
-    s.count++;
-    samples.set(key, s);
-  });
+  reader.on("line", (line) => frames.addLine(line));
   proc.stderr?.on("data", (chunk) => {
+    if (child !== proc) return;
     lastError = (lastError + String(chunk)).slice(-2000);
   });
   timer = setInterval(() => {
-    let best: { sum: number; count: number } | undefined;
-    for (const sample of samples.values()) {
-      if (!best || sample.count > best.count) best = sample;
-    }
-    samples.clear();
-    status = best ? "measuring" : "waiting-frames";
-    if (!receivedCsvHeader && proc.exitCode !== null) status = "capture-error";
-    show(
-      best ? "FPS: " + Math.round((1000 * best.count) / best.sum) : "FPS: --"
-    );
+    const fps = frames.takeFps();
+    status = fps === null ? "waiting-frames" : "measuring";
+    show(fps === null ? "FPS: --" : `FPS: ${fps}`);
   }, 1000);
   const ended = () => {
     if (child === proc) {
       stop();
       status = "capture-error";
+      failedCapture = { target, time: Date.now() };
       if (!lastError) lastError = "PresentMon stopped before FPS data arrived";
     }
   };
   proc.once("error", (e) => {
-    lastError = String(e);
+    if (child === proc) lastError = String(e);
     ended();
   });
-  proc.once("exit", ended);
+  proc.once("close", ended);
 }
 function refresh() {
   if (process.platform !== "win32" || !app.isReady() || quitting) return;
@@ -407,22 +449,26 @@ ipcMain.handle("krysta:fps-set-hotkey", async (_e, value: unknown) => {
   return value;
 });
 function refreshOverlayPlacement() {
-  if (activeKey) refresh();
+  if (activeTarget) refresh();
 }
 
 if (process.platform === "win32") {
-  const unsubscribe = onTrackedGamesRunningChange(refresh);
+  const unsubscribe = onTrackedGamesRunningChange(() => {
+    ignoredWindow = null;
+    refresh();
+  });
   void app.whenReady().then(() => {
     if (quitting) return;
     screen.on("display-metrics-changed", refreshOverlayPlacement);
     refresh();
     poll = setInterval(() => {
       if (
-        gamesPlaytime.size > 0 &&
-        (status === "missing-tool" || status === "waiting-game" || status === "waiting-frames" || status === "capture-error")
+        status !== "disabled" &&
+        status !== "hidden" &&
+        hasTrackedGamesRunning()
       )
         refresh();
-    }, 3000);
+    }, 500);
     poll.unref?.();
   });
   app.on("before-quit", () => {

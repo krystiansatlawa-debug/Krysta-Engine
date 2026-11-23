@@ -6,7 +6,7 @@ import { settingsContext } from "@renderer/context";
 import { useAppSelector } from "@renderer/hooks";
 
 export function SettingsContextGame() {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation("settings");
   const pl = i18n.language.startsWith("pl");
   const { updateUserPreferences } = useContext(settingsContext);
   const guideShortcutEnabled = useAppSelector(
@@ -146,11 +146,7 @@ export function SettingsContextGame() {
               }).catch(() => setGuideShortcutError(true));
             }}
           />
-          <p>
-            {pl
-              ? "Naciśnij podświetlany przycisk Xbox, aby schować aktywne okno gry wykrytej przez Krystę. Naciśnij go ponownie, aby przywrócić okno."
-              : "Press the lit Xbox button to minimize the active game window tracked by Krysta. Press it again to restore the window."}
-          </p>
+          <p>{t("krysta_xbox_fullscreen_hint")}</p>
           <small>
             {pl
               ? "Jeśli przycisk otwiera Xbox Game Bar, wyłącz otwieranie paska za pomocą kontrolera w ustawieniach Windows."
@@ -175,11 +171,7 @@ export function SettingsContextGame() {
           disabled={!ready || busy || window.electron.platform !== "win32"}
           onChange={() => void toggle()}
         />
-        <p>
-          {pl
-            ? "Licznik pokazuje rzeczywistą częstotliwość prezentowania klatek w wykrytej grze. Zalecany tryb okna bez ramek."
-            : "Shows measured presentation FPS in the detected game. Borderless mode is recommended."}
-        </p>
+        <p>{t("krysta_fps_visibility_hint")}</p>
         <h3>{pl ? "Skrót klawiszowy licznika FPS" : "FPS counter shortcut"}</h3>
         <label htmlFor="krysta-fps-hotkey-select">
           {pl ? "Wybierz skrót z listy" : "Choose a shortcut"}

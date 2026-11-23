@@ -179,6 +179,10 @@ type HydraNativeModule = {
   getWindowsGamepadButtonPressed?: (button: string) => boolean | null;
   minimizeWindowsGameWindow?: (windowHandle: string, processId: number) => boolean;
   restoreWindowsGameWindow?: (windowHandle: string, processId: number) => boolean;
+  fullscreenWindowsGameWindow?: (
+    windowHandle: string,
+    processId: number
+  ) => boolean;
   getLinuxWindowClientPid?: (windowId: string) => number | null;
   getKdeFocusedProcessId?: () => number | null;
   startKdeFocusWatch?: () => void;
@@ -637,6 +641,17 @@ export class NativeAddon {
       logger.error("Failed to read the Windows window bounds", error);
       return null;
     }
+  }
+
+  public static fullscreenWindowsGameWindow(
+    windowHandle: string,
+    processId: number
+  ) {
+    if (process.platform !== "win32") return false;
+
+    return (
+      this.load().fullscreenWindowsGameWindow?.(windowHandle, processId) ?? false
+    );
   }
 
   public static prepareWindowsDesktopCapture() {

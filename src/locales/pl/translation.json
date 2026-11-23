@@ -1148,6 +1148,8 @@
     "move_down": "Przenieś w dół"
   },
   "settings": {
+    "krysta_xbox_fullscreen_hint": "Naciśnij podświetlany przycisk Xbox, aby zminimalizować aktywną grę. Naciśnij ponownie, aby wrócić do pełnego ekranu bez ramek na monitorze gry.",
+    "krysta_fps_visibility_hint": "Licznik pokazuje zmierzone FPS gry w trybie okna i pełnego ekranu bez ramek.",
     "krysta_game_category": "Gra",
     "epic_sync_partial": "Gry i czas gry zostały zsynchronizowane; synchronizacja osiągnięć dla {{count}} gier zostanie ponowiona.",
     "hide_library_steam_badges": "Ukryj odznaki połączenia z biblioteką Steam",
