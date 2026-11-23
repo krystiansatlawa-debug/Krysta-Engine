@@ -9,6 +9,7 @@ import { db, gamesSublevel, levelKeys } from "@main/level";
 import { patchUserProfile } from "../profile/update-profile";
 import { DownloadManager, ScreenshotInputService, Wine } from "@main/services";
 import { WindowManager } from "@main/services/window-manager";
+import { syncXboxGuideGameShortcut } from "@main/services/xbox-guide-game-shortcut";
 import { getDownloadDirectoryPreferences } from "@shared";
 import {
   restoreDuckStationFileLogging,
@@ -226,6 +227,7 @@ const updateUserPreferences = async (
 
   Wine.syncUserPreferences(updatedPreferences);
   ScreenshotInputService.syncUserPreferences(updatedPreferences);
+  syncXboxGuideGameShortcut(updatedPreferences);
 
   await updateEmulatorAchievementTracking(preferences, updatedPreferences);
   await unlinkRetroAchievementsEmulatorAccount(preferences);

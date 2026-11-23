@@ -11,6 +11,7 @@ mod torrent;
 mod window_bounds;
 mod window_client;
 mod window_order;
+mod xbox_guide;
 
 pub use cloud_save::hashing::{build_snapshot_aggregate_hash, hash_local_save_file};
 pub use cloud_save::local_snapshot::build_local_game_snapshot;
@@ -96,6 +97,21 @@ pub fn get_windows_foreground_window() -> Option<NativeForegroundWindow> {
             process_id,
         }
     })
+}
+
+#[napi]
+pub fn get_windows_xbox_guide_pressed() -> Option<bool> {
+    xbox_guide::is_pressed()
+}
+
+#[napi]
+pub fn minimize_windows_game_window(window_handle: String, process_id: u32) -> bool {
+    window_order::minimize_game_window(&window_handle, process_id)
+}
+
+#[napi]
+pub fn restore_windows_game_window(window_handle: String, process_id: u32) -> bool {
+    window_order::restore_game_window(&window_handle, process_id)
 }
 
 #[napi(object)]

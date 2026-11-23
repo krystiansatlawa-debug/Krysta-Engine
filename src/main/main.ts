@@ -49,6 +49,7 @@ import { migrateGameVisibilityFields } from "./services/library-sync/game-visibi
 import { UmuUpdater } from "./services/umu-updater";
 import { initializeScreenshots } from "./services/screenshots";
 import { setTrackedGamesRunningListenerErrorReporter } from "./services/game-running-state";
+import { syncXboxGuideGameShortcut } from "./services/xbox-guide-game-shortcut";
 
 const hasMissingSeedFiles = async (download: Download): Promise<boolean> => {
   if (!download.folderName) return false;
@@ -91,6 +92,7 @@ export const loadState = async () => {
     logger.error("Tracked games running listener failed", error)
   );
   ScreenshotInputService.syncUserPreferences(userPreferences);
+  syncXboxGuideGameShortcut(userPreferences);
 
   await import("./events");
 
