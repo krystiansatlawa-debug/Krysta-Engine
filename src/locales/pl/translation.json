@@ -1148,7 +1148,7 @@
     "move_down": "Przenieś w dół"
   },
   "settings": {
-    "krysta_xbox_fullscreen_hint": "Naciśnij podświetlany przycisk Xbox, aby zminimalizować aktywną grę. Naciśnij ponownie, aby do niej wrócić. Jeśli gra utraci pełny ekran, Krysta może użyć Alt+Enter w grach obsługujących ten skrót.",
+    "krysta_xbox_fullscreen_hint": "Naciśnij podświetlany przycisk Xbox, aby zminimalizować aktywną grę. Naciśnij ponownie, aby wrócić do gry na pełnym ekranie.",
     "krysta_fps_visibility_hint": "Licznik pokazuje zmierzone FPS gry w trybie okna i pełnego ekranu bez ramek.",
     "krysta_fps_rtss_label": "Używaj RTSS do wyświetlania FPS na ekskluzywnym pełnym ekranie",
     "krysta_fps_rtss_hint": "Uruchom RivaTuner Statistics Server (RTSS) z włączoną nakładką dla gry. Położenie licznika ustawisz w RTSS.",
