@@ -555,12 +555,21 @@ async function openCapture(
   current = a;
   const allowed = () =>
     current === a && !a.stopped && !win.isDestroyed() && generation === epoch;
-  captureSession.setPermissionRequestHandler((contents, permission, callback) =>
-    callback(
-      allowed() &&
-        contents === win.webContents &&
-        String(permission) === "display-capture"
-    )
+  captureSession.setPermissionRequestHandler(
+    (contents, permission, callback, details) => {
+      // Electron 41 reports display capture as "media" with no camera/mic types.
+      const legacyDisplayCapture =
+        permission === "media" &&
+        "mediaTypes" in details &&
+        Array.isArray(details.mediaTypes) &&
+        details.mediaTypes.length === 0;
+      callback(
+        allowed() &&
+          contents === win.webContents &&
+          details.isMainFrame &&
+          (permission === "display-capture" || legacyDisplayCapture)
+      );
+    }
   );
   captureSession.setPermissionCheckHandler(
     (contents, permission) =>
