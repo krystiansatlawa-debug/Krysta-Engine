@@ -1,5 +1,5 @@
 name: Krysta Release
-# Build and publish Krysta 1.0.18 after the Windows regression checks.
+# Build and publish Krysta 1.0.18 for Windows x64 after the release checks.
 on:
   workflow_dispatch:
   push:
