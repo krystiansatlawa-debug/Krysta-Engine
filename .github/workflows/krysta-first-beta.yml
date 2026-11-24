@@ -1,5 +1,5 @@
 name: Krysta Release
-# Build and publish combined Game Boost 2.0 and Story Progress 2.0 as 1.0.23.
+# Rebuild and publish combined Game Boost 2.0 and Story Progress 2.0 as 1.0.23.
 on:
   workflow_dispatch:
   push:
