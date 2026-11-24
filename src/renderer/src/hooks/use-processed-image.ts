@@ -7,7 +7,24 @@ export interface ProcessedImageSize {
 
 const MAX_CONCURRENT_REQUESTS = 4;
 
+const MAX_CACHED_IMAGES = 96;
+const MAX_CACHE_CHARS = 4 * 1024 * 1024;
 const processedImageCache = new Map<string, string>();
+let cacheChars = 0;
+const cacheImage = (key: string, value: string) => {
+  if (key.length + value.length > MAX_CACHE_CHARS) return;
+  const existing = processedImageCache.get(key);
+  if (existing !== undefined) cacheChars -= key.length + existing.length;
+  processedImageCache.delete(key);
+  processedImageCache.set(key, value);
+  cacheChars += key.length + value.length;
+  while (processedImageCache.size > MAX_CACHED_IMAGES || cacheChars > MAX_CACHE_CHARS) {
+    const oldest = processedImageCache.entries().next().value;
+    if (!oldest) break;
+    cacheChars -= oldest[0].length + oldest[1].length;
+    processedImageCache.delete(oldest[0]);
+  }
+};
 const inFlightRequests = new Map<string, Promise<string>>();
 const pendingQueue: (() => void)[] = [];
 
@@ -44,7 +61,7 @@ const requestProcessedImage = (imageUrl: string, size: ProcessedImageSize) => {
   const cacheKey = getCacheKey(imageUrl, size);
 
   const cached = processedImageCache.get(cacheKey);
-  if (cached) return Promise.resolve(cached);
+  if (cached) { cacheImage(cacheKey, cached); return Promise.resolve(cached); }
 
   const inFlight = inFlightRequests.get(cacheKey);
   if (inFlight !== undefined) return inFlight;
@@ -62,10 +79,9 @@ const requestProcessedImage = (imageUrl: string, size: ProcessedImageSize) => {
     )
     .then((processedImageUrl) => {
       const resolved = processedImageUrl ?? imageUrl;
-      processedImageCache.set(cacheKey, resolved);
-      inFlightRequests.delete(cacheKey);
+      cacheImage(cacheKey, resolved);
       return resolved;
-    });
+    }).finally(() => { inFlightRequests.delete(cacheKey); });
 
   inFlightRequests.set(cacheKey, request);
   return request;

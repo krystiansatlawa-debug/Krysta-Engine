@@ -63,6 +63,7 @@ import {
   removeCustomCss,
 } from "./helpers";
 import { levelDBService } from "./services/leveldb.service";
+import { leaderboardsCache } from "./services/leaderboards-cache";
 
 export interface AppProps {
   children: React.ReactNode;
@@ -76,6 +77,18 @@ type WorkWondersWithKnowledge = WorkWonders & {
 };
 
 export function App() {
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const update = () => {
+      clearTimeout(timer);
+      if (document.hidden) timer = setTimeout(() => {
+        if (document.hidden) leaderboardsCache.clear();
+      }, 60_000);
+    };
+    document.addEventListener("visibilitychange", update);
+    update();
+    return () => { clearTimeout(timer); document.removeEventListener("visibilitychange", update); };
+  }, []);
   const contentRef = useRef<HTMLDivElement>(null);
   const { updateLibrary, library, downloadLibrary } = useLibrary();
 

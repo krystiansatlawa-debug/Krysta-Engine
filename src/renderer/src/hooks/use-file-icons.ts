@@ -6,7 +6,8 @@ export function useFileIcons(filePaths: string[]) {
 
   useEffect(() => {
     const paths = pathsKey ? pathsKey.split("\n") : [];
-    if (paths.length === 0) return undefined;
+    if (paths.length === 0) { setIcons({}); return undefined; }
+    setIcons(current => Object.fromEntries(paths.filter(path => path in current).map(path => [path, current[path]])));
 
     let cancelled = false;
 
@@ -19,7 +20,7 @@ export function useFileIcons(filePaths: string[]) {
       })
     ).then((entries) => {
       if (cancelled) return;
-      setIcons((current) => ({ ...current, ...Object.fromEntries(entries) }));
+      setIcons(Object.fromEntries(entries));
     });
 
     return () => {

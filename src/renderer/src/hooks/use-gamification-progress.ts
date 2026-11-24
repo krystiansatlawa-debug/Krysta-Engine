@@ -86,12 +86,16 @@ export function useGamificationProgressSync() {
     }
 
     void refreshProgress();
-    const interval = setInterval(
-      () => void refreshProgress(),
-      PROGRESS_REFRESH_INTERVAL_MS
-    );
-
-    return () => clearInterval(interval);
+    let deferred = false;
+    const refreshIfVisible = () => {
+      if (document.hidden) { deferred = true; return; }
+      deferred = false;
+      void refreshProgress();
+    };
+    const onVisibility = () => { if (!document.hidden && deferred) refreshIfVisible(); };
+    const interval = setInterval(refreshIfVisible, PROGRESS_REFRESH_INTERVAL_MS);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", onVisibility); };
   }, [userId, isEnabled, refreshProgress, dispatch]);
 
   useEffect(() => {

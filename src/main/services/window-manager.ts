@@ -405,7 +405,7 @@ export class WindowManager {
         if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
         const contents = mainWindow.webContents;
         contents.setBackgroundThrottling(true);
-        const reduce = isGameBoostBackgroundSyncPaused() && !mainWindow.isFocused();
+        const reduce = mainWindow.isMinimized() || !mainWindow.isVisible() || (isGameBoostBackgroundSyncPaused() && !mainWindow.isFocused());
         if (reduce && !reducedMotionCss) {
           reducedMotionCss = await contents.insertCSS(
             "*, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }"
@@ -428,6 +428,10 @@ export class WindowManager {
     });
     mainWindow.on("blur", () => { sleepLauncher(); updateLauncherMotion(); });
     mainWindow.on("focus", updateLauncherMotion);
+    mainWindow.on("minimize", updateLauncherMotion);
+    mainWindow.on("restore", updateLauncherMotion);
+    mainWindow.on("hide", updateLauncherMotion);
+    mainWindow.on("show", updateLauncherMotion);
     mainWindow.once("closed", unsubscribeSleep);
     sleepLauncher();
 

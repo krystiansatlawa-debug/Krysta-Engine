@@ -1,5 +1,5 @@
 export const RESPONSE_CACHE_TTL_MS = 60_000;
-export const MAX_CACHED_RESPONSES = 200;
+export const MAX_CACHED_RESPONSES = 48;
 
 export interface ApiRequestOptions {
   params: Record<string, string | number>;
@@ -42,7 +42,11 @@ export const createResponseCache = (
     const key = getRequestKey(path, options, accountId);
     const cached = cache.get(key);
     if (!cached) return undefined;
-    if (now() - cached.at < ttl) return cached.response;
+    if (now() - cached.at < ttl) {
+      cache.delete(key);
+      cache.set(key, cached);
+      return cached.response;
+    }
 
     cache.delete(key);
     return undefined;
@@ -50,6 +54,7 @@ export const createResponseCache = (
 
   const store = (key: string, response: unknown) => {
     cache.delete(key);
+    for (const [oldKey, entry] of cache) if (now() - entry.at >= ttl) cache.delete(oldKey);
     cache.set(key, { at: now(), response });
 
     while (cache.size > maxEntries) {
