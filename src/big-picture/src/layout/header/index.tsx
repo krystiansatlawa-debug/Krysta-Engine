@@ -43,6 +43,7 @@ function Header() {
   const navigate = useNavigate();
   const connectedPads = useGamepadStore((state) => state.connectedGamepads);
   const [battery, setBattery] = useState<string | null>(null);
+  const padIdentity = connectedPads.map((pad) => `${pad.index}:${pad.name}:${pad.layout}`).join("|");
   const singleXbox = connectedPads.length === 1 && /xbox|xinput/i.test(connectedPads[0].layout);
   useEffect(() => {
     setBattery(null);
@@ -59,7 +60,7 @@ function Header() {
     void refresh();
     const timer = window.setInterval(() => void refresh(), 15000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [singleXbox]);
+  }, [singleXbox, padIdentity]);
   const batteryLabel = ({ wired: "Przewodowy", empty: "Rozładowana", low: "Niska", medium: "Średnia", full: "Pełna" } as Record<string, string>)[battery ?? ""] ?? "Niedostępna";
   const { pathname } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
