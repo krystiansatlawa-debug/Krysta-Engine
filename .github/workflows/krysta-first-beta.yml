@@ -1,5 +1,5 @@
 name: Krysta Release
-# Performance and catalogue release.
+# Performance and catalogue release; idle catalogue memory cleanup.
 on:
   workflow_dispatch:
   push:

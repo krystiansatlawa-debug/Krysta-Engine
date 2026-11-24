@@ -9,10 +9,11 @@ import { useAppSelector } from "@renderer/hooks";
 import { selectFeatured } from "./featured-selection";
 import "./hero.scss";
 
-const rotationInterval = 8_000;
+const rotationInterval = 15_000;
 const motionPreference = "(prefers-reduced-motion: reduce)";
 const featuredCache = new Map<string, TrendingGame[]>();
-const detailsCache = new Map<string, ShopDetailsWithAssets>();
+type PreviewDetails = Pick<ShopDetailsWithAssets, "screenshots" | "movies">;
+const detailsCache = new Map<string, PreviewDetails>();
 
 export function Hero({
   alternatives,
@@ -38,7 +39,7 @@ export function Hero({
   const [visible, setVisible] = useState(() => !document.hidden);
   const [details, setDetails] = useState<{
     key: string;
-    value: ShopDetailsWithAssets;
+    value: PreviewDetails;
   }>();
 
   const campaignGames = Array.from(new Map(
@@ -120,10 +121,11 @@ export function Hero({
     window.electron
       .getGameShopDetails(selectedId, selectedShop, language)
       .then((value: ShopDetailsWithAssets | null) => {
-        if (!value) return;
-        detailsCache.set(detailKey, value);
-        if (detailsCache.size > 12) { const oldest = detailsCache.keys().next().value; if (oldest !== undefined) detailsCache.delete(oldest); }
-        if (current) setDetails({ key: detailKey, value });
+        if (!value || !current) return;
+        const compact = {screenshots: value.screenshots?.slice(0,4), movies: value.movies?.slice(0,4)};
+        detailsCache.set(detailKey, compact);
+        if (detailsCache.size > 4) { const oldest = detailsCache.keys().next().value; if (oldest !== undefined) detailsCache.delete(oldest); }
+        if (current) setDetails({ key: detailKey, value: compact });
       })
       .catch(() => {});
     return () => {
@@ -141,9 +143,9 @@ export function Hero({
   }, [active, games.length, interacting, play, visible]);
 
   useEffect(() => {
-    const onVisibility = () => setVisible(!document.hidden);
+    const onVisibility = () => { setVisible(!document.hidden); if (document.hidden) { setTrailerKey(null); setPreview(undefined); setDetails(undefined); detailsCache.clear(); } };
     document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
+    return () => { document.removeEventListener("visibilitychange", onVisibility); detailsCache.clear(); };
   }, []);
 
   const move = (index: number) => {

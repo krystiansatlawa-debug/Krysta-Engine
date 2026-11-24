@@ -57,6 +57,9 @@ export default function CatalogueDiscover() {
   const [attempt, setAttempt] = useState(0);
   const [visible, setVisible] = useState(() => !document.hidden);
   const [recentLimit, setRecentLimit] = useState(6);
+  const [sleeping, setSleeping] = useState(false);
+  useEffect(() => { if (visible) { setSleeping(false); return; } const timer = window.setTimeout(() => setSleeping(true), 30000); return () => window.clearTimeout(timer); }, [visible]);
+  useEffect(() => { if (sleeping) { setResults({}); setHoveredGame(undefined); } }, [sleeping]);
   useEffect(() => { const change = () => setVisible(!document.hidden); document.addEventListener("visibilitychange",change); return () => document.removeEventListener("visibilitychange",change); }, []);
   useEffect(() => { if (!visible) return; const timer = window.setInterval(() => setAttempt(value=>value+1), 5*60*1000); return () => window.clearInterval(timer); }, [visible]);
   const [activeShelf, setActiveShelf] = useState<ShelfId>(
@@ -171,7 +174,8 @@ export default function CatalogueDiscover() {
   const preview =
     games?.find((game) => gameKey(game) === hoveredGame) ?? games?.[0];
 
-  const [previewDetails, setPreviewDetails] = useState<{key: string; data: ShopDetailsWithAssets}>();
+  const [previewDetails, setPreviewDetails] = useState<{key: string; screens: ShopDetailsWithAssets["screenshots"]}>();
+  useEffect(() => { if (!visible) setPreviewDetails(undefined); }, [visible]);
   const previewShop = preview?.shop;
   const previewId = preview?.objectId;
   const previewKey = preview ? gameKey(preview) : "";
@@ -181,12 +185,13 @@ export default function CatalogueDiscover() {
     const timer = window.setTimeout(() => {
       if (document.hidden) return;
       window.electron.getGameShopDetails(previewId, previewShop, i18n.language.split("-")[0]).then(data => {
-        if (active && data) setPreviewDetails({key: previewKey, data});
+        if (active && data) setPreviewDetails({key: previewKey, screens: data.screenshots?.slice(0,3)});
       }).catch(() => {});
     }, 350);
     return () => { active = false; window.clearTimeout(timer); };
   }, [previewShop, previewId, previewKey, hoveredGame, i18n.language, visible]);
-  const screenshots = previewDetails?.key === previewKey ? previewDetails.data.screenshots?.slice(0, 3) : undefined;
+  const screenshots = previewDetails?.key === previewKey ? previewDetails.screens : undefined;
+  if (sleeping && !visible) return <section className="catalogue-discover" aria-hidden="true" />;
   return (
     <section className="catalogue-discover">
       <Hero alternatives={alternatives} onView={remember} />
