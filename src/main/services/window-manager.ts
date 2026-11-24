@@ -394,7 +394,35 @@ export class WindowManager {
       sleptDuringGame = true;
       mainWindow.minimize();
     };
-    const unsubscribeSleep = onGameBoostBackgroundSyncChange(sleepLauncher);
+    // Limit visual work only in the launcher renderer, not capture windows.
+    let reducedMotionCss: string | undefined;
+    let motionUpdate = Promise.resolve();
+    const updateLauncherMotion = () => {
+      motionUpdate = motionUpdate.then(async () => {
+        if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+        const contents = mainWindow.webContents;
+        contents.setBackgroundThrottling(true);
+        const reduce = isGameBoostBackgroundSyncPaused();
+        if (reduce && !reducedMotionCss) {
+          reducedMotionCss = await contents.insertCSS(
+            "*, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }"
+          );
+        } else if (!reduce && reducedMotionCss) {
+          await contents.removeInsertedCSS(reducedMotionCss);
+          reducedMotionCss = undefined;
+        }
+      }).catch((error) => {
+        logger.warn("[Game Boost] Could not update launcher motion", error);
+      });
+    };
+    const unsubscribeSleep = onGameBoostBackgroundSyncChange(() => {
+      sleepLauncher();
+      updateLauncherMotion();
+    });
+    mainWindow.webContents.on("did-finish-load", () => {
+      reducedMotionCss = undefined;
+      updateLauncherMotion();
+    });
     mainWindow.on("blur", sleepLauncher);
     mainWindow.once("closed", unsubscribeSleep);
     sleepLauncher();
