@@ -529,13 +529,24 @@ async function restoreGame(shop: GameShop, id: string, version: unknown) {
       if (total > 5 * 1024 ** 3) throw Error("Backup exceeds 5 GB");
       files.push({ src, dst, size: st.size });
     }
+    const restoreBaseline = new Map<string, {size:number; mtimeMs:number; hash:string}>();
+    for (const f of files) {
+      const st = await fs.lstat(f.dst);
+      if (!st.isFile() || st.isSymbolicLink()) throw Error("Unsafe save destination");
+      const hash = await fileHash(f.dst);
+      const after = await fs.lstat(f.dst);
+      if (st.size !== after.size || st.mtimeMs !== after.mtimeMs) throw Error("Save changed during verification");
+      restoreBaseline.set(f.dst,{size:st.size,mtimeMs:st.mtimeMs,hash});
+    }
+    const backupDate = typeof m.createdAt === "string" ? Date.parse(m.createdAt) : NaN;
+    const possiblyNewer = !Number.isFinite(backupDate) || [...restoreBaseline.values()].some(st => st.mtimeMs > backupDate);
     const answer = await dialog.showMessageBox({
       type: "warning",
       buttons: ["Cancel / Anuluj", "Restore / Przywróć"],
       defaultId: 0,
       cancelId: 0,
       message:
-        "Restore selected save version? / Przywrócić wybraną wersję zapisów?",
+        possiblyNewer ? "Lokalne zapisy mogą być nowsze. Przywrócić starszą kopię? / Local saves may be newer. Restore anyway?" : "Restore selected save version? / Przywrócić wybraną wersję zapisów?",
       detail:
         "Existing save files will be backed up before replacement. Close the game first. / Aktualne pliki zostaną skopiowane przed nadpisaniem. Zamknij grę.",
     });
@@ -557,6 +568,9 @@ async function restoreGame(shop: GameShop, id: string, version: unknown) {
           throw Error("Save destination changed");
         const name = String(i);
         await copyVerified(f.dst, path.join(pending, name));
+        const baseline = restoreBaseline.get(f.dst)!;
+        if (st.size !== baseline.size || st.mtimeMs !== baseline.mtimeMs || await fileHash(path.join(pending,name)) !== baseline.hash)
+          throw Error("SAVE_CONFLICT: Lokalny zapis zmienił się po potwierdzeniu.");
         entries.push({ name, original: f.dst, size: st.size });
       }
       await fs.writeFile(
@@ -594,6 +608,9 @@ async function restoreGame(shop: GameShop, id: string, version: unknown) {
       for (const [i, f] of files.entries()) {
         if (isTrackedGameKeyRunning(key))
           throw Error("Game started during restore");
+        const baseline = restoreBaseline.get(f.dst)!;
+        const st = await fs.lstat(f.dst);
+        if (st.size !== baseline.size || st.mtimeMs !== baseline.mtimeMs || await fileHash(f.dst) !== baseline.hash) throw Error("SAVE_CONFLICT: Lokalny zapis zmienił się przed przywróceniem.");
         await replace(f.src, f.dst);
         changed.push(i);
       }
