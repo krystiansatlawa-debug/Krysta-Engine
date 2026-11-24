@@ -53,3 +53,40 @@ export function desktopActions(
   if (pressed(12)) actions.push({ type: "maximize" });
   return actions;
 }
+
+/** Keeps injected input separate from physical input and requires neutral buttons
+ * after a game, disconnect or controller change before desktop input resumes. */
+export class DesktopControllerSession {
+  private previous: DesktopPadFrame | null = null;
+  private controllerId: string | null = null;
+  private armed = false;
+
+  update(id: string | null, frame: DesktopPadFrame | null, settings: DesktopControllerSettings, gameRunning: boolean): DesktopAction[] {
+    if (!settings.enabled || gameRunning || !frame || id === null || id !== this.controllerId) {
+      const release = desktopActions(null, this.previous, settings, true);
+      this.previous = null;
+      this.armed = false;
+      this.controllerId = id;
+      return release;
+    }
+    if (!this.armed) {
+      if (frame.buttons.some(Boolean) || frame.axes.some((axis) => Math.abs(axis) > 0.18)) return [];
+      this.armed = true;
+    }
+    const actions = desktopActions(frame, this.previous, settings, false);
+    this.previous = { axes: [...frame.axes], buttons: [...frame.buttons] };
+    return actions;
+  }
+
+  reset(): DesktopAction[] {
+    return this.update(null, null, defaultDesktopControllerSettings, true);
+  }
+}
+
+export function normalizeDesktopControllerSettings(value: Partial<DesktopControllerSettings>): DesktopControllerSettings {
+  return {
+    enabled: value.enabled === true,
+    cursorSpeed: typeof value.cursorSpeed === "number" && Number.isFinite(value.cursorSpeed) ? Math.max(1, Math.min(40, value.cursorSpeed)) : 12,
+    deadZone: typeof value.deadZone === "number" && Number.isFinite(value.deadZone) ? Math.max(0, Math.min(0.9, value.deadZone)) : 0.18,
+  };
+}
