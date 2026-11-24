@@ -37,6 +37,9 @@ async function inspectDownloadTree(base: string, target: string) {
   let files = 0;
   let entries = 0;
   let bytes = 0;
+  const executableExtensions = new Set([".exe", ".dll", ".msi", ".msp", ".sys", ".scr", ".com", ".cpl", ".ocx", ".bat", ".cmd", ".ps1", ".psm1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".hta", ".lnk", ".reg", ".py", ".sh"]);
+  const executableTypes: Record<string, number> = {};
+  let disguisedExecutables = 0;
   while (pending.length) {
     const current = pending.pop()!;
     if (++entries > 500000) throw new Error("Download tree exceeds inspection limit");
@@ -54,12 +57,26 @@ async function inspectDownloadTree(base: string, target: string) {
     } else if (stat.isFile()) {
       files++;
       bytes += stat.size;
+      const ext = path.extname(current).toLowerCase();
+      const handle = await fs.open(current, "r");
+      try {
+        const header = Buffer.alloc(2);
+        const { bytesRead } = await handle.read(header, 0, header.length, 0);
+        const mz = bytesRead === 2 && header[0] === 0x4d && header[1] === 0x5a;
+        if (executableExtensions.has(ext)) {
+          executableTypes[ext] = (executableTypes[ext] ?? 0) + 1;
+        } else if (mz) {
+          disguisedExecutables++;
+        }
+      } finally {
+        await handle.close();
+      }
     } else {
       throw new Error("Unsupported download entry");
     }
   }
   if (!files) throw new Error("No files to scan");
-  return { files, bytes };
+  return { files, bytes, executableTypes, disguisedExecutables };
 }
 
 export async function scanCompletedDownload(download: Download): Promise<boolean> {
