@@ -212,9 +212,17 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       if (reputationLevels.includes("ambiguous")) reasons.push("Niejednoznaczny raport reputacji.");
       if (signatureSummary.HashMismatch || signatureSummary.NotTrusted) reasons.push("Nieprawidłowy lub niezaufany podpis.");
       if (inventory.disguisedExecutables || inventory.suspiciousProperties.misleadingExtensions || inventory.suspiciousProperties.bidiNames) reasons.push("Podejrzane właściwości plików.");
+      if (report.enabled !== true || report.realtime !== true) reasons.push("Ochrona Microsoft Defender jest niedostępna lub nieaktywna.");
+      if (report.signaturesOutOfDate !== false) reasons.push("Nie potwierdzono aktualności sygnatur antywirusowych.");
+      if (report.recentDetections !== 0 && !high) reasons.push("Nie udało się potwierdzić liczby wykryć.");
+      if (signatureSummary.Unknown || signatureSummary.UnknownError) reasons.push("Nie udało się zweryfikować części podpisów cyfrowych.");
+      if (signatureSummary.NotSigned) reasons.push("Część plików nie ma podpisu cyfrowego; sam brak podpisu nie oznacza wirusa.");
+      if (process.env.KRYSTA_VIRUSTOTAL_ENABLED !== "1") reasons.push("Sprawdzanie reputacji online nie jest aktywne.");
+      else if (reputationLevels.length < inventory.reputationCandidates.length || reputationLevels.includes("unknown")) reasons.push("Raporty reputacji są niepełne lub niedostępne.");
+      if (inventory.archives) reasons.push("Wykryto archiwa; zawartość wymaga sprawdzenia po rozpakowaniu.");
       const level = high ? "high" : reasons.length ? "review" : "unverified";
       if (!reasons.length) reasons.push("Brak potwierdzonego wyniku skanowania konkretnych plików.");
-      logger.info("[Security Shield] Ocena zagrożenia:", { level, reasons, verified: false });
+      logger.info("[Security Shield] Ocena zagrożenia:", { level, reasons, verified: false, disclaimer: "Nawet pomyślne skanowanie nie gwarantuje bezpieczeństwa plików." });
       if (report.enabled !== true || report.realtime !== true || report.signaturesOutOfDate !== false || report.recentDetections !== 0) {
         logger.warn("[Security Shield] Defender reported detections or protection is not fully available");
         return false;
@@ -228,7 +236,7 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       // Global detection history cannot establish a scan-specific clean verdict.
       return false;
     } catch (error) {
-      logger.warn("[Security Shield] Download scan unavailable or failed", error);
+      logger.warn("[Security Shield] Nie udało się zakończyć skanowania. Pliki pozostają niezweryfikowane.", error);
       return false;
     }
   })();
