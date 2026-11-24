@@ -117,7 +117,36 @@ async function tokenRequest(params: Record<string, string>) {
     const code = typeof value?.error === "string" ? value.error : "";
     throw Error(googleOAuthTokenError(code, r.status));
   }
-  return (await r.json()) as { access_token?: string; refresh_token?: string };
+  return (await r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
+}
+type GoogleCredentials = NonNullable<Credentials["google"]>;
+type CachedGoogleToken = { access_token: string; expiresAt: number };
+const googleTokens = new Map<string, CachedGoogleToken>();
+const googleRefreshes = new Map<string, Promise<CachedGoogleToken>>();
+let googleTokenGeneration = 0;
+function clearGoogleTokens() {
+  googleTokenGeneration++;
+  googleTokens.clear();
+  googleRefreshes.clear();
+}
+async function getGoogleAccessToken(g: GoogleCredentials, force = false): Promise<CachedGoogleToken> {
+  const key = createHash("sha256").update(JSON.stringify(g)).digest("hex");
+  const cached = googleTokens.get(key);
+  if (!force && cached && cached.expiresAt > Date.now() + 60_000) return cached;
+  const pending = googleRefreshes.get(key);
+  if (pending) return pending;
+  const generation = googleTokenGeneration;
+  const request = (async () => {
+    const t = await tokenRequest({ client_id: g.clientId, client_secret: g.clientSecret, refresh_token: g.refreshToken, grant_type: "refresh_token" });
+    if (!t.access_token) throw Error("Google nie zwrócił tokenu dostępu.");
+    if (generation !== googleTokenGeneration) throw Error("Konto Google zostało zmienione.");
+    const seconds = typeof t.expires_in === "number" && Number.isFinite(t.expires_in) ? Math.max(0, Math.min(t.expires_in, 3600)) : 0;
+    const result = { access_token: t.access_token, expiresAt: Date.now() + seconds * 1000 };
+    googleTokens.set(key, result);
+    return result;
+  })();
+  googleRefreshes.set(key, request);
+  try { return await request; } finally { if (googleRefreshes.get(key) === request) googleRefreshes.delete(key); }
 }
 ipcMain.handle("krysta:cloud-account-status", async () => {
   const c = await read().catch(() => null);
@@ -243,6 +272,7 @@ async function connectGoogle(installed: DesktopClient) {
     if (!t.refresh_token || !t.access_token)
       throw Error("Google nie udzielił dostępu offline. Ponownie połącz konto i zaakceptuj wymagane uprawnienia.");
     await probeGoogleDrive(t.access_token);
+    clearGoogleTokens();
     await write({
       ...(await read()),
       googleClient: {
@@ -284,12 +314,7 @@ ipcMain.handle("krysta:cloud-google-test", () =>
       throw Error(
         "Google Drive nie jest połączony / Google Drive is not connected"
       );
-    const t = await tokenRequest({
-      client_id: g.clientId,
-      client_secret: g.clientSecret,
-      refresh_token: g.refreshToken,
-      grant_type: "refresh_token",
-    });
+    const t = await getGoogleAccessToken(g, true);
     if (!t.access_token)
       throw Error(
         "Google nie zwrócił tokenu dostępu. Połącz konto ponownie. / Google access token missing"
@@ -342,6 +367,7 @@ ipcMain.handle("krysta:cloud-account-disconnect", (_e, provider: unknown) =>
   exclusive(async () => {
     const c = await read();
     if (provider === "google") {
+      clearGoogleTokens();
       if (c.google && !c.googleClient)
         c.googleClient = {
           clientId: c.google.clientId,
@@ -395,12 +421,7 @@ export async function uploadCloudSnapshot(
   }
   if (provider === "google" && c.google) {
     const g = c.google,
-      t = await tokenRequest({
-        client_id: g.clientId,
-        client_secret: g.clientSecret,
-        refresh_token: g.refreshToken,
-        grant_type: "refresh_token",
-      });
+      t = await getGoogleAccessToken(g);
     if (!t.access_token) throw Error("Google access token unavailable");
     const auth = { Authorization: "Bearer " + t.access_token };
     const createFolder = async (name: string, parent?: string) => {
@@ -611,12 +632,7 @@ async function remoteCloud(
     throw Error("Cloud account changed");
   if (provider === "google" && c.google) {
     const g = c.google,
-      t = await tokenRequest({
-        client_id: g.clientId,
-        client_secret: g.clientSecret,
-        refresh_token: g.refreshToken,
-        grant_type: "refresh_token",
-      });
+      t = await getGoogleAccessToken(g);
     if (!t.access_token) throw Error("Google access token unavailable");
     const auth = { Authorization: "Bearer " + t.access_token };
     const list = async (q: string) => {
