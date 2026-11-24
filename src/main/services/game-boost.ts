@@ -34,14 +34,14 @@ const applications = new GameBoostApplications({
       : undefined;
   },
   protectedPaths: async () => {
-    const games = await gamesSublevel.values().all();
-    return [
-      process.execPath,
-      ...games.flatMap((game) => [
-        ...(game.executablePath ? [game.executablePath] : []),
-        ...(game.trackingExecutablePaths ?? []).filter(Boolean),
-      ]),
-    ];
+    const paths = new Set<string>([process.execPath]);
+    for await (const game of gamesSublevel.values()) {
+      if (game.executablePath) paths.add(game.executablePath);
+      for (const executable of game.trackingExecutablePaths ?? []) {
+        if (executable) paths.add(executable);
+      }
+    }
+    return [...paths];
   },
   close: ({ pid }, executable) =>
     NativeAddon.requestWindowsBackgroundApplicationClose(pid, executable),
