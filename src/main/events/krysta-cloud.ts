@@ -505,6 +505,35 @@ ipcMain.handle("krysta:cloud-backup", (_e, shop: GameShop, id: string) =>
   backupGame(shop, id)
 );
 
+// Disaster recovery exports verified copies to a user-selected directory.
+ // Never write to a path supplied by a remote manifest.
+ipcMain.handle("krysta:cloud-recovery-export", async (_e, shop:GameShop,id:string,version:unknown) => {
+  if (typeof version !== "string" || !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(version)) throw Error("Invalid version");
+  const ctx = await gameContext(shop,id);
+  if (!ctx.provider || !ctx.identity) throw Error("Select a cloud account");
+  const selected = await dialog.showOpenDialog({properties:["openDirectory","createDirectory"],title:"Wybierz folder odzyskiwania zapisów"});
+  if (selected.canceled || !selected.filePaths[0]) return false;
+  return locked(ctx.key,async () => {
+    if (hasTrackedGamesRunning()) throw Error("Zamknij grę przed odzyskiwaniem");
+    const root = await fs.realpath(selected.filePaths[0]);
+    const dest = path.join(root,"Krysta-Recovery-"+version);
+    const temp = path.join(root,".krysta-recovery-"+randomUUID());
+    await fs.mkdir(temp,{mode:0o700});
+    try {
+      await downloadCloudSnapshot(ctx.provider!,ctx.identity!,ctx.remoteKey,version,temp);
+      // Exclusive directory creation prevents overwriting an earlier recovery.
+      await fs.mkdir(dest,{mode:0o700});
+      try {
+        for (const name of await fs.readdir(temp)) {
+          if (name !== "manifest.json" && !/^\\d+$/.test(name)) throw Error("Invalid recovery file");
+          await copyVerified(path.join(temp,name),path.join(dest,name));
+        }
+      } catch(e) { throw Error("Niepełny eksport odzyskiwania: "+dest+" / "+String(e)); }
+      return true;
+    } finally { await fs.rm(temp,{recursive:true,force:true}); }
+  });
+});
+
 /* Restore only files independently detected for this game on this PC.
  * The remote manifest is never trusted to choose a writable destination. */
 async function restoreGame(shop: GameShop, id: string, version: unknown) {
