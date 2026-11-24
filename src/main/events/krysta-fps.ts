@@ -21,7 +21,7 @@ import {
   isTrackedGameKeyRunning,
   onTrackedGamesRunningChange,
 } from "@main/services/game-running-state";
-import { PresentMonFps } from "@main/services/presentmon-fps";
+import { adaptiveFpsInterval, PresentMonFps } from "@main/services/presentmon-fps";
 
 type Position = "tl" | "tr" | "bl" | "br";
 type Output = "window" | "rtss";
@@ -101,7 +101,7 @@ async function findTool(p: Preference) {
 }
 let overlay: BrowserWindow | null = null,
   child: ChildProcess | null = null,
-  timer: ReturnType<typeof setInterval> | null = null,
+  timer: ReturnType<typeof setTimeout> | null = null,
   activeTarget: CaptureTarget | null = null,
   lastOverlayValue = "FPS: --",
   revision = 0,
@@ -180,7 +180,7 @@ function stop() {
   clearRtss();
   rtssReceiving = false;
   if (timer) {
-    clearInterval(timer);
+    clearTimeout(timer);
     timer = null;
   }
   if (child) {
@@ -396,11 +396,25 @@ async function reconcile() {
     if (child !== proc) return;
     lastError = (lastError + String(chunk)).slice(-2000);
   });
-  timer = setInterval(() => {
+  let previousFps: number | null = null;
+  let stableSamples = 0;
+  const updateFps = () => {
+    if (child !== proc) return;
     const fps = frames.takeFps();
+    stableSamples =
+      fps !== null && previousFps !== null &&
+      Math.abs(fps - previousFps) < Math.max(5, previousFps * 0.1)
+        ? stableSamples + 1
+        : 0;
     status = fps === null ? "waiting-frames" : "measuring";
     show(fps === null ? "FPS: --" : `FPS: ${fps}`);
-  }, 1000);
+    const delay = adaptiveFpsInterval(previousFps, fps, stableSamples);
+    previousFps = fps;
+    timer = setTimeout(updateFps, delay);
+    timer.unref?.();
+  };
+  timer = setTimeout(updateFps, 1000);
+  timer.unref?.();
   const ended = () => {
     if (child === proc) {
       stop();
