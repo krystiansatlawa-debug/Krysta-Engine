@@ -7,6 +7,7 @@ test("existing profiles get background sync deferral without closing apps", () =
     enabled: true,
     pauseBackgroundSync: true,
     closeApplications: [],
+    minimizeAfterGame: false,
     restoreApplications: true,
   });
 });
@@ -20,11 +21,13 @@ test("explicit Game Boost preferences are preserved", () => {
       gameBoostPauseBackgroundSync: false,
       gameBoostCloseApplications: [executable],
       gameBoostRestoreApplications: false,
+      gameBoostMinimizeAfterGame: true,
     }),
     {
       enabled: false,
       pauseBackgroundSync: true,
       closeApplications: [executable],
+      minimizeAfterGame: true,
       restoreApplications: false,
     }
   );
