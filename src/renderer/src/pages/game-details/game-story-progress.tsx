@@ -321,6 +321,11 @@ export function GameStoryProgress({
             )}
             <details className="game-story-progress__options">
               <summary>{t("story_progress_save_options")}</summary>
+              <div role="status">
+                <p>{t("story_progress_diagnostic_heading")}: {t(`story_progress_diagnostic_${automaticStatus}`)}</p>
+                <p>{t(hasCustomSaveFolder ? "story_progress_diagnostic_custom" : "story_progress_diagnostic_default")}</p>
+                {automatic && automaticStatus !== "ready" && <p>{t("story_progress_diagnostic_cached")}</p>}
+              </div>
               <div className="game-story-progress__actions">
                 <Button
                   theme="outline"
