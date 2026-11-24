@@ -1,10 +1,12 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "@primer/octicons-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import Skeleton from "react-loading-skeleton";
 import { ensureArray } from "@renderer/helpers";
 import type { ShopDetailsWithAssets, TrendingGame } from "@types";
+import { useAppSelector } from "@renderer/hooks";
+import { selectFeatured } from "./featured-selection";
 import "./hero.scss";
 
 const rotationInterval = 8_000;
@@ -61,20 +63,14 @@ export function Hero({
     media.addEventListener("change", change);
     return () => media.removeEventListener("change", change);
   }, []);
-  const games = Array.from(
-    new Map(
-      [...alternatives, ...featured].map((game) => [
-        `${game.shop}:${game.objectId}`,
-        game,
-      ])
-    ).values()
-  )
-    .sort(
-      (first, second) =>
-        Number(first.objectId === (featured[0] ?? alternatives[0])?.objectId) -
-        Number(second.objectId === (featured[0] ?? alternatives[0])?.objectId)
-    )
-    .slice(0, 8);
+  const library = useAppSelector((state) => state.library.downloadLibrary);
+  const ownedKeys = useMemo(() => new Set(library.filter(game => !game.isDeleted).flatMap(game => [
+    `${game.shop}:${game.objectId}`,
+    ...(game.catalogueGame ? [`${game.catalogueGame.shop}:${game.catalogueGame.objectId}`] : []),
+  ])), [library]);
+  const games = useMemo(() => selectFeatured(featured, alternatives, ownedKeys), [featured, alternatives, ownedKeys]);
+  const [featuredError, setFeaturedError] = useState(false);
+  const [featuredAttempt, setFeaturedAttempt] = useState(0);
   const selected = games[active % Math.max(games.length, 1)];
   const detailKey = selected
     ? `${selected.shop}:${selected.objectId}:${language}`
@@ -86,6 +82,7 @@ export function Hero({
   useEffect(() => {
     let current = true;
     setFeatured(featuredCache.get(language) ?? []);
+    setFeaturedError(false);
     window.electron.hydraApi
       .get<TrendingGame[]>("/catalogue/featured", {
         params: { language },
@@ -99,11 +96,11 @@ export function Hero({
         featuredCache.set(language, games);
         if (current) setFeatured(games);
       })
-      .catch(() => {});
+      .catch(() => { if (current) setFeaturedError(true); });
     return () => {
       current = false;
     };
-  }, [language]);
+  }, [language, featuredAttempt]);
 
   const selectedShop = selected?.shop;
   const selectedId = selected?.objectId;
@@ -265,7 +262,12 @@ export function Hero({
             )}
           </div>
         ) : (
-          <Skeleton className="store-featured__loading" />
+          featuredError ? (
+            <div className="store-featured__description" role="status">
+              {pl ? "Nie udało się pobrać polecanych gier." : "Could not load featured games."}
+              <button type="button" className="store-featured__link" onClick={() => setFeaturedAttempt(value => value + 1)}>{pl ? "Spróbuj ponownie" : "Retry"}</button>
+            </div>
+          ) : <Skeleton className="store-featured__loading" />
         )}
         {games.length > 1 && (
           <div className="store-featured__controls">
