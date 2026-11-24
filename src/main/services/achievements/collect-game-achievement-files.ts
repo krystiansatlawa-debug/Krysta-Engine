@@ -55,6 +55,7 @@ export const collectGameAchievementFiles = async (
       findNestedAchievementFiles(getEffectiveWinePrefixPath(game)),
     findGameDirectoryAchievementFiles(resolveGameExecutablePath(game), {
       awaitLocations: awaitGameDirectoryLocations,
+      allowedObjectIds: getAlternativeObjectIds(game.objectId),
     }),
   ]);
 
