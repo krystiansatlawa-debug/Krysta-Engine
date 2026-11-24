@@ -37,7 +37,12 @@ type ShelfResults = Partial<Record<ShelfId, ShelfGames | null>>;
 const shelfSize = 10;
 
 export default function CatalogueDiscover() {
-  const { t } = useTranslation("home");
+  const { t, i18n } = useTranslation("home");
+  const pl = i18n.language.startsWith("pl");
+  const [recent, setRecent] = useState<ShelfGames>(() => { try { const data = JSON.parse(localStorage.getItem("krysta-catalogue-recent") ?? "[]"); return Array.isArray(data) ? data.filter(g => g && typeof g.title === "string" && typeof g.shop === "string" && typeof g.objectId === "string").slice(0, 12) : []; } catch { return []; } });
+  const remember = (game: ShelfGames[number]) => {
+    setRecent(current => { const next = [game, ...current.filter(g => g.shop !== game.shop || g.objectId !== game.objectId)].slice(0, 12); try { localStorage.setItem("krysta-catalogue-recent", JSON.stringify(next)); } catch {} return next; });
+  };
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const mode = useAppSelector((state) => state.catalogueSearch.mode);
@@ -200,6 +205,7 @@ export default function CatalogueDiscover() {
                     >
                       <Link
                         to={buildGameDetailsPath(game)}
+                        onClick={() => remember(game)}
                         onPointerEnter={() => setHoveredGame(gameKey(game))}
                         onFocus={() => setHoveredGame(gameKey(game))}
                       >
@@ -229,7 +235,7 @@ export default function CatalogueDiscover() {
             </div>
             {preview && (
               <aside className="catalogue-discover__preview">
-                <Link to={buildGameDetailsPath(preview)}>
+                <Link to={buildGameDetailsPath(preview)} onClick={() => remember(preview)}>
                   <strong>{preview.title}</strong>
                   {"genres" in preview && preview.genres?.length > 0 && (
                     <div className="catalogue-discover__preview-genres">
@@ -247,6 +253,8 @@ export default function CatalogueDiscover() {
           </div>
         )}
 
+        {activeShelf === "new" && <Link to="/catalogue/releases">{pl ? "Kalendarz premier" : "Release calendar"}</Link>}
+        {activeShelf === CatalogueCategory.Hot && <Link to="/catalogue/top">{pl ? "Ranking popularności" : "Popularity ranking"}</Link>}
         {activeShelf === "new" && games && (
           <Button
             theme="outline"
@@ -259,6 +267,10 @@ export default function CatalogueDiscover() {
         )}
       </section>
 
+      {recent.length > 0 && <section className="catalogue-discover__shelf catalogue-store-width">
+        <header className="catalogue-discover__heading"><h2>{pl ? "Ostatnio przeglądane" : "Recently viewed"}</h2><Button theme="outline" size="small" onClick={() => { setRecent([]); try { localStorage.removeItem("krysta-catalogue-recent"); } catch {} }}>{pl ? "Wyczyść" : "Clear"}</Button></header>
+        <div className="catalogue-discover__games">{recent.map(game => <article className="catalogue-discover__game" key={gameKey(game)}><Link to={buildGameDetailsPath(game)} onClick={() => remember(game)}>{game.libraryImageUrl && <img src={game.libraryImageUrl} alt="" loading="lazy" />}<span><strong>{game.title}</strong></span></Link></article>)}</div>
+      </section>}
       <section className="catalogue-discover__browse catalogue-store-width">
         <header className="catalogue-discover__heading">
           <h2>{t("browse_games")}</h2>

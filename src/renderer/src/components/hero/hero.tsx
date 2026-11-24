@@ -29,6 +29,7 @@ export function Hero({
   const [campaignPlay, setCampaignPlay] = useState(() => !window.matchMedia(motionPreference).matches);
   const [failedCampaignImages, setFailedCampaignImages] = useState<Set<string>>(() => new Set());
   const [preview, setPreview] = useState<string>();
+  const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [play, setPlay] = useState(
     () => !window.matchMedia(motionPreference).matches
   );
@@ -148,6 +149,11 @@ export function Hero({
   const screens = shopDetails
     ? (shopDetails.screenshots?.slice(0, 4) ?? [])
     : [];
+  const movie = shopDetails ? shopDetails.movies?.find(movie => movie.mp4?.["480"] || movie.webm?.["480"]) : undefined;
+  const trailer = movie?.mp4?.["480"] ?? movie?.webm?.["480"];
+  const safeTrailer = trailer && /^https:\/\//i.test(trailer) ? trailer : undefined;
+  const playingTrailer = Boolean(visible && detailKey && trailerKey === detailKey && safeTrailer);
+  useEffect(() => { if (playingTrailer) setPlay(false); }, [playingTrailer]);
   const cover = selected?.libraryHeroImageUrl ?? selected?.libraryImageUrl;
   const banner = campaign?.libraryHeroImageUrl ?? campaign?.libraryImageUrl;
   const pl = language === "pl";
@@ -199,7 +205,7 @@ export function Hero({
         <h1>{t("store_featured")}</h1>
         {selected ? (
           <div className="store-featured__frame">
-            <Link
+            {playingTrailer ? <video key={detailKey} className="store-featured__image" src={safeTrailer} controls autoPlay preload="none" onEnded={() => setTrailerKey(null)} onError={() => setTrailerKey(null)} /> : <Link
               className="store-featured__image"
               to={selected.uri}
               aria-label={selected.title}
@@ -207,7 +213,7 @@ export function Hero({
               {(preview ?? cover) && (
                 <img src={preview ?? cover ?? undefined} alt="" />
               )}
-            </Link>
+            </Link>}
             <div className="store-featured__details" key={detailKey}>
               <Link to={selected.uri} className="store-featured__title">
                 {selected.title}
@@ -236,6 +242,7 @@ export function Hero({
                   {selected.description}
                 </p>
               ) : null}
+              {safeTrailer && <button type="button" className="store-featured__link" onClick={() => { setTrailerKey(playingTrailer ? null : detailKey); }}>{playingTrailer ? (pl ? "Zamknij zwiastun" : "Close trailer") : (pl ? "Odtwórz zwiastun" : "Play trailer")}</button>}
               <Link to={selected.uri} className="store-featured__link">
                 {t("view_game")}
               </Link>
