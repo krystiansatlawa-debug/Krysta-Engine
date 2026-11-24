@@ -52,6 +52,18 @@ const pendingExitRecovery = new Map<string, number>();
 const RECOVERY_INTERVAL_MS = 5 * 60_000;
 const ACTIVE_RECOVERY_INTERVAL_MS = 30_000;
 
+type ScanHistoryEntry = { at: number; kind: "recovery" | "changed" | "exit" | "error"; files: number; added: number };
+const scanHistory = db.sublevel<string, ScanHistoryEntry[]>("achievement-scan-history", { valueEncoding: "json" });
+async function recordScan(gameKey: string, kind: ScanHistoryEntry["kind"], files: number, added: number) {
+  try {
+    const previous = await scanHistory.get(gameKey).catch(() => undefined);
+    await scanHistory.put(gameKey, [{ at: Date.now(), kind, files, added }, ...(previous ?? [])].slice(0, 30));
+  } catch { /* History must not interrupt achievement detection. */ }
+}
+export const getAchievementScanHistory = async (gameKey: string) =>
+  (await scanHistory.get(gameKey).catch(() => undefined)) ?? [];
+
+
 const mergeDetectedAchievements = async (
   game: Game,
   achievements: UnlockedAchievement[]
@@ -216,6 +228,7 @@ const processChangedAchievementFiles = async (
       const count = await mergeDetectedAchievements(game, recovered);
       lastRecoveryScan.set(gameKey, Date.now());
       if (exitRecoveryDue) pendingExitRecovery.delete(gameKey);
+      if (!running || count > 0) await recordScan(gameKey, exitRecoveryDue ? "exit" : "recovery", achievementFiles.length, count);
       return count;
     }
 
@@ -225,8 +238,11 @@ const processChangedAchievementFiles = async (
       parseAchievementFile(file.filePath, file.type)
     );
 
-    return await mergeDetectedAchievements(game, unlockedAchievements);
+    const count = await mergeDetectedAchievements(game, unlockedAchievements);
+    if (!running || count > 0) await recordScan(gameKey, "changed", changedFiles.length, count);
+    return count;
   } catch (error) {
+    await recordScan(gameKey, "error", achievementFiles.length, 0);
     lastRecoveryScan.delete(gameKey);
     for (const file of achievementFiles) fileStats.delete(file.filePath);
     achievementsLogger.error("Achievement scan failed; will retry", gameKey, error);
