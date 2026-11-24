@@ -1,3 +1,5 @@
+import { gzip, gunzip } from "node:zlib";
+import { promisify } from "node:util";
 import { app, dialog, ipcMain, safeStorage, shell } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -471,6 +473,23 @@ export async function uploadCloudSnapshot(
   )
     throw Error("Invalid snapshot identity");
   const files = [...names, "manifest.json"];
+  const manifest = validateRemoteManifest(JSON.parse(await fs.readFile(path.join(dir,"manifest.json"),"utf8")),snapshotId);
+  const encoded = new Map<string,{encoding:"gzip";storedSize:number}>();
+  const compress = promisify(gzip);
+  async function encodedPayload(name:string):Promise<Buffer> {
+    const raw = await payload(name);
+    if (name === "manifest.json") {
+      return Buffer.from(JSON.stringify({...manifest,files:manifest.files.map(f=>({...f,...encoded.get(f.name)}))}));
+    }
+    if (raw.length < 4096) return raw;
+    const zipped = await compress(raw,{level:3});
+    if (zipped.length < raw.length * 0.95) {
+      encoded.set(name,{encoding:"gzip",storedSize:zipped.length});
+      return zipped;
+    }
+    return raw;
+  }
+
   // Bound memory per upload; the manifest is committed last, never overwriting an older snapshot.
   async function payload(name: string) {
     checkPause();
@@ -531,7 +550,7 @@ export async function uploadCloudSnapshot(
     checkPause();
     const folder = await createFolder(gameKey + "-" + snapshotId, root);
     for (const name of files) {
-      const bytes = await payload(name),
+      const bytes = await encodedPayload(name),
         boundary = "krysta_" + randomBytes(18).toString("hex");
       // Reuse identical bytes through Drive's server-side copy. Each snapshot
       // still owns independent files, so older versions can be restored alone.
@@ -617,7 +636,7 @@ export async function uploadCloudSnapshot(
         throw Error("WebDAV folder creation failed (" + response.status + ")");
     }
     for (const name of files) {
-      const bytes = await payload(name);
+      const bytes = await encodedPayload(name);
       checkPause();
       const response = await fetch(new URL(name, snapshot), {
         method: "PUT",
@@ -640,7 +659,7 @@ export async function uploadCloudSnapshot(
 type RemoteManifest = {
   id: string;
   createdAt: string;
-  files: { name: string; original: string; size: number; sha256?: string }[];
+  files: { name: string; original: string; size: number; sha256?: string; encoding?: "gzip"; storedSize?: number }[];
 };
 const uuidPattern = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
 async function boundedBody(response: Response, limit: number) {
@@ -691,6 +710,7 @@ function validateRemoteManifest(value: unknown, id: string): RemoteManifest {
       !Number.isSafeInteger(f.size) ||
       f.size < 0 ||
       f.size > 64 * 1024 ** 2 ||
+      (f.encoding !== undefined && (f.encoding !== "gzip" || typeof f.storedSize !== "number" || !Number.isSafeInteger(f.storedSize) || f.storedSize <= 0 || f.storedSize >= f.size)) ||
       (f.sha256 !== undefined && (typeof f.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(f.sha256)))
     )
       throw Error("Invalid cloud save entry");
@@ -907,8 +927,11 @@ export async function downloadCloudSnapshot(
   if (!bytes) throw Error("Incomplete cloud snapshot");
   const m = validateRemoteManifest(JSON.parse(bytes.toString("utf8")), id);
   for (const f of m.files) {
-    const content = await remote.get(id, f.name, f.size);
-    if (!content || content.length !== f.size)
+    const storedSize = f.encoding === "gzip" ? f.storedSize! : f.size;
+    const stored = await remote.get(id,f.name,storedSize);
+    if (!stored || stored.length !== storedSize) throw Error("Incomplete cloud save");
+    const content = f.encoding === "gzip" ? await promisify(gunzip)(stored,{maxOutputLength:f.size}) : stored;
+    if (content.length !== f.size)
       throw Error("Incomplete cloud save");
     if (f.sha256 && createHash("sha256").update(content).digest("hex") !== f.sha256)
       throw Error("KRYSTA_INTEGRITY: Uszkodzona kopia zapisu (SHA-256)");
@@ -917,7 +940,7 @@ export async function downloadCloudSnapshot(
       mode: 0o600,
     });
   }
-  await fs.writeFile(path.join(dir, "manifest.json"), bytes, {
+  await fs.writeFile(path.join(dir, "manifest.json"), JSON.stringify({...m,files:m.files.map(({encoding: _encoding,storedSize: _storedSize,...f})=>f)}), {
     flag: "wx",
     mode: 0o600,
   });
