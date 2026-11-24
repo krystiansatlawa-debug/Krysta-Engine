@@ -137,16 +137,24 @@ export class CloudSync {
       label,
     });
 
-    const fileBuffer = await fs.promises.readFile(bundleLocation);
+    const fileStream = fs.createReadStream(bundleLocation);
 
-    await axios.put(uploadUrl, fileBuffer, {
+    try {
+    await axios.put(uploadUrl, fileStream, {
+      maxRedirects: 0,
+      maxBodyLength: Infinity,
       headers: {
         "Content-Type": "application/tar",
+        "Content-Length": stat.size,
       },
       onUploadProgress: (progressEvent) => {
         logger.log(progressEvent);
       },
     });
+
+    } finally {
+      fileStream.destroy();
+    }
 
     WindowManager.sendToAppWindows(
       `on-upload-complete-${objectId}-${shop}`,
