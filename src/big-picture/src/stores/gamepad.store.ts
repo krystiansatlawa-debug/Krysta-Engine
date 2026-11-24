@@ -190,7 +190,8 @@ export const useGamepadStore = create<GamepadState>((set, get) => {
       ensureInitialized();
 
       const service = GamepadService.getInstance();
-      const rawStates = service.getCurrentState();
+      const currentState = service.getCurrentState();
+      const rawStates: GamepadStateMap = currentState instanceof Map ? currentState : new Map();
       const hasGamepadConnected = rawStates.size > 0;
       let connectedGamepads = cachedConnectedGamepads;
 
