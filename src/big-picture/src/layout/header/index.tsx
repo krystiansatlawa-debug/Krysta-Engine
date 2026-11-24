@@ -16,6 +16,7 @@ import { useNavigationScreenActions } from "../../hooks";
 import type { FocusOverrides } from "../../services";
 import {
   useNavigationHistoryStore,
+  useGamepadStore,
   useNavigationStore,
   useVirtualKeyboardStore,
 } from "../../stores";
@@ -40,6 +41,26 @@ const useCurrentPageTitle = () => {
 
 function Header() {
   const navigate = useNavigate();
+  const connectedPads = useGamepadStore((state) => state.connectedGamepads);
+  const [battery, setBattery] = useState<string | null>(null);
+  const singleXbox = connectedPads.length === 1 && /xbox|xinput/i.test(connectedPads[0].layout);
+  useEffect(() => {
+    setBattery(null);
+    if (!IS_DESKTOP || !singleXbox) return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const levels = (await window.electron.getWindowsXboxBatteryLevels()).filter(Boolean);
+        if (!cancelled) setBattery(levels.length === 1 ? levels[0] : null);
+      } catch {
+        if (!cancelled) setBattery(null);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 15000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [singleXbox]);
+  const batteryLabel = ({ wired: "Przewodowy", empty: "Rozładowana", low: "Niska", medium: "Średnia", full: "Pełna" } as Record<string, string>)[battery ?? ""] ?? "Niedostępna";
   const { pathname } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const pageTitle = useCurrentPageTitle();
@@ -302,6 +323,7 @@ function Header() {
             </button>
           </FocusItem>
 
+          {connectedPads.length > 0 && <span className="header__controller-battery" title="Poziom baterii kontrolera">🔋 {batteryLabel}</span>}
           <form
             ref={searchRef}
             role="search"
