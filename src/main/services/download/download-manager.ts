@@ -87,6 +87,7 @@ import {
   setDownloadLayoutQueues,
 } from "../download-layout-state";
 import { shouldFinalizeDownload } from "./download-completion";
+import { scanCompletedDownload } from "../krysta-download-security";
 import {
   estimateMultipartTotalBytes,
   getMultipartFolderName,
@@ -1029,6 +1030,7 @@ export class DownloadManager {
       try {
         // The adapter verified installed.json, prerequisites and executable before completion.
         await this.updateDownloadStatus(download, gameId, false);
+        void scanCompletedDownload(download);
         await publishDownloadCompleteNotification(game).catch((error) =>
           logger.error(
             "[DownloadManager] Failed to publish Epic completion",
@@ -1053,6 +1055,8 @@ export class DownloadManager {
       gameId,
       userPreferences?.seedAfterDownloadComplete
     );
+
+    void scanCompletedDownload(download);
 
     // Calculate installer size in background
     if (download.folderName) {
