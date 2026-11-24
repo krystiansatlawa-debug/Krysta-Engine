@@ -312,6 +312,7 @@ async function flushPendingCloudSaves() {
             if (typeof f.name!=="string" || !/^\\d+$/.test(f.name) || names.includes(f.name)) return;
             const file = path.join(dir,f.name), st = await fs.lstat(file);
             if (!st.isFile() || st.isSymbolicLink() || st.size!==f.size) return;
+            if (f.sha256 !== undefined && (typeof f.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(f.sha256) || await fileHash(file) !== f.sha256)) throw Error("KRYSTA_INTEGRITY: Uszkodzona kopia lokalna");
             names.push(f.name);
           }
           const latest = await config();
@@ -416,7 +417,7 @@ async function backupGame(
       temp = path.join(base, ".pending-" + uuid);
     await fs.mkdir(temp);
     try {
-      const entries: { name: string; original: string; size: number }[] = [];
+      const entries: { name: string; original: string; size: number; sha256: string }[] = [];
       let total = 0;
       for (const [i, p] of files.entries()) {
         if (signal?.aborted || isTrackedGameKeyRunning(key)) throw Error("Backup cancelled: game restarted");
@@ -439,7 +440,9 @@ async function backupGame(
           if (after.size !== st.size || after.mtimeMs !== st.mtimeMs)
             throw Error("Save changed during backup");
         }
-        entries.push({ name, original: p, size: st.size });
+        const sha256 = await fileHash(dest);
+        if (sha256 !== await fileHash(p)) throw Error("KRYSTA_INTEGRITY: Save changed during backup");
+        entries.push({ name, original: p, size: st.size, sha256 });
       }
       if (signal?.aborted || isTrackedGameKeyRunning(key))
         throw Error("Game started during backup");
@@ -600,6 +603,7 @@ async function restoreGame(shop: GameShop, id: string, version: unknown) {
         (await fs.realpath(src)) !== src
       )
         throw Error("Backup file missing, incomplete or unsafe");
+      if (entry.sha256 !== undefined && (typeof entry.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(entry.sha256) || await fileHash(src) !== entry.sha256)) throw Error("KRYSTA_INTEGRITY: Uszkodzona kopia zapisu");
       total += st.size;
       if (total > 5 * 1024 ** 3) throw Error("Backup exceeds 5 GB");
       files.push({ src, dst, size: st.size });
@@ -632,7 +636,7 @@ async function restoreGame(shop: GameShop, id: string, version: unknown) {
       pending = path.join(base, ".pending-" + safetyId);
     await fs.mkdir(pending);
     try {
-      const entries: { name: string; original: string; size: number }[] = [];
+      const entries: { name: string; original: string; size: number; sha256: string }[] = [];
       for (const [i, f] of files.entries()) {
         const st = await fs.lstat(f.dst);
         if (
@@ -646,7 +650,7 @@ async function restoreGame(shop: GameShop, id: string, version: unknown) {
         const baseline = restoreBaseline.get(f.dst)!;
         if (st.size !== baseline.size || st.mtimeMs !== baseline.mtimeMs || await fileHash(path.join(pending,name)) !== baseline.hash)
           throw Error("SAVE_CONFLICT: Lokalny zapis zmienił się po potwierdzeniu.");
-        entries.push({ name, original: f.dst, size: st.size });
+        entries.push({ name, original: f.dst, size: st.size, sha256: baseline.hash });
       }
       await fs.writeFile(
         path.join(pending, "manifest.json"),
