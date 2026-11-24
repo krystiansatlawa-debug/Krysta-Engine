@@ -253,3 +253,10 @@ test("reports explicit mission counts and nested mission details across save for
     null
   );
 });
+
+
+test("reads explicit main mission completion lists without counting side quests", () => {
+  const result = parseGenericStoryMetadata(JSON.stringify({ campaign: { mainMissions: [{ id: "a", completed: true }, { id: "b", completed: false }], sideQuests: [{ id: "c", completed: true }] } }));
+  assert.equal(result?.completedMissions, 1);
+  assert.equal(result?.totalMissions, 2);
+});
