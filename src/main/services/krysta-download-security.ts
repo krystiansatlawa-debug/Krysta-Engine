@@ -24,7 +24,7 @@ const securityPhaseLabels: Readonly<Record<string, string>> = Object.freeze({
 });
 export function getSecurityScanStatus(download: Download) {
   const phase = getSecurityScanPhase(download);
-  return { phase, label: securityPhaseLabels[phase] ?? securityPhaseLabels.unverified, verified: false, inProgress: phase !== "unverified" };
+  return { phase, label: securityPhaseLabels[phase] ?? securityPhaseLabels.unverified, verified: false, inProgress: phase !== "unverified", disclaimer: "Brak wykryć nie gwarantuje bezpieczeństwa. Status sprawdzonej gry wymaga potwierdzonego wyniku skanowania." };
 }
 export function getSecurityScanPhase(download: Download): string {
   if (!download.downloadPath || !download.folderName) return "unverified";
