@@ -1,0 +1,39 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import fs from "node:fs/promises";
+import path from "node:path";
+import type { Download } from "@types";
+import { logger } from "./logger";
+
+const run = promisify(execFile);
+const active = new Map<string, Promise<boolean>>();
+export async function scanCompletedDownload(download: Download): Promise<boolean> {
+  if (process.platform !== "win32") return false;
+  if (!download.folderName || !download.downloadPath) return false;
+  const base = path.resolve(download.downloadPath);
+  const target = path.resolve(base, download.folderName);
+  const relative = path.relative(base, target);
+  if (!relative || relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative)) return false;
+  const existing = active.get(target);
+  if (existing) return existing;
+  const task = (async () => {
+    try {
+      const stat = await fs.lstat(target);
+      if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile())) return false;
+      const systemRoot = process.env.SystemRoot;
+      if (!systemRoot || !path.isAbsolute(systemRoot)) return false;
+      const powershell = path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+      await run(powershell, ["-NoProfile", "-NonInteractive", "-Command",
+        "$ErrorActionPreference='Stop'; $s=Get-MpComputerStatus; if (-not $s.AntivirusEnabled) { throw 'Defender unavailable' }; Start-MpScan -ScanType CustomScan -ScanPath $env:KRYSTA_SCAN_PATH -ErrorAction Stop; Write-Output 'KRYSTA_SCAN_REQUEST_COMPLETED'"],
+        { windowsHide: true, timeout: 2 * 60 * 60 * 1000, maxBuffer: 1024 * 1024, env: {...process.env, KRYSTA_SCAN_PATH: target} });
+      logger.info("[Security Shield] Defender scan request completed; verdict not yet verified");
+      // A completed scan command is not proof of a clean result.
+      return false;
+    } catch (error) {
+      logger.warn("[Security Shield] Download scan unavailable or failed", error);
+      return false;
+    }
+  })();
+  active.set(target, task);
+  try { return await task; } finally { active.delete(target); }
+}
