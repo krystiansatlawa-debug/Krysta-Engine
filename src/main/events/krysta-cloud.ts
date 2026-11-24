@@ -644,6 +644,32 @@ async function backupStoryToGoogle(expected: Config, signal: AbortSignal) {
     await achievementBackupState.put(stateKey, hash);
   } finally { storyBackupBusy = false; }
 }
+let libraryBackupBusy = false;
+async function backupLibraryToGoogle(expected: Config, signal: AbortSignal) {
+  if (libraryBackupBusy || signal.aborted || expected.provider !== "google" || !expected.autoBackup) return;
+  libraryBackupBusy = true;
+  try {
+    await waitForGameBoostBackgroundSync(signal);
+    const current = await config();
+    if (signal.aborted || current.provider !== "google" || !current.autoBackup || gamesPlaytime.size) return;
+    const identity = await directCloudIdentity("google");
+    const games = [];
+    for await (const game of gamesSublevel.values()) {
+      if (signal.aborted || gamesPlaytime.size) return;
+      if (game.isDeleted) continue;
+      games.push({ shop: game.shop, objectId: game.objectId, title: game.title, favorite: game.favorite, isPinned: game.isPinned, playTimeInMilliseconds: game.playTimeInMilliseconds });
+    }
+    if (!games.length) return;
+    games.sort((a, b) => (a.shop + ":" + a.objectId).localeCompare(b.shop + ":" + b.objectId));
+    const hash = digest(JSON.stringify(games));
+    const stateKey = "library:" + identity;
+    if (await achievementBackupState.get(stateKey).catch(() => undefined) === hash) return;
+    const latest = await config();
+    if (signal.aborted || gamesPlaytime.size || latest.provider !== "google" || !latest.autoBackup) return;
+    await uploadAchievementBackup(identity, JSON.stringify({ version: 1, createdAt: new Date().toISOString(), games }), "library");
+    await achievementBackupState.put(stateKey, hash);
+  } finally { libraryBackupBusy = false; }
+}
 type AutoResult = {
   state: "saved" | "skipped" | "error";
   at: string;
@@ -723,6 +749,9 @@ onTrackedGamesRunningChange(() => {
         });
         await backupStoryToGoogle(c, controller.signal).catch(() => {
           void publishKrystaNotification("KRYSTA_ERROR", game.title, "Kopia postępu fabularnego Google Drive nie powiodła się").catch(() => {});
+        });
+        await backupLibraryToGoogle(c, controller.signal).catch(() => {
+          void publishKrystaNotification("KRYSTA_ERROR", game.title, "Kopia biblioteki Google Drive nie powiodła się").catch(() => {});
         });
         autoResults.set(key, {
           state: done ? "saved" : "skipped",
