@@ -122,6 +122,11 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
         logger.warn("[Security Shield] Defender reported detections or protection is not fully available");
         return false;
       }
+      const finalInventory = await inspectDownloadTree(base, target);
+      if (finalInventory.fingerprint !== inventory.fingerprint) {
+        logger.warn("[Security Shield] Download contents changed during antivirus scan; verdict invalidated");
+        return false;
+      }
       logger.info("[Security Shield] Defender reported no new detections; scan-specific verdict remains unverified");
       // Global detection history cannot establish a scan-specific clean verdict.
       return false;
