@@ -273,8 +273,15 @@ export const syncAndGetUnlockedAchievements = (
 const getUnlockedAchievementsEvent = async (
   _event: Electron.IpcMainInvokeEvent,
   objectId: string,
-  shop: GameShop
+  shop: GameShop,
+  force = false
 ): Promise<UserAchievement[]> => {
+  if (force === true && shop === "steam") {
+    UnlockedAchievementsCache.invalidate(shop, objectId);
+    await AchievementWatcherManager.syncGameAchievementFiles(shop, objectId);
+    UnlockedAchievementsCache.invalidate(shop, objectId);
+    return getUnlockedAchievements(objectId, shop, false);
+  }
   return syncAndGetUnlockedAchievements(objectId, shop);
 };
 
