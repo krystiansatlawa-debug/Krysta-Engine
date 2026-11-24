@@ -4,6 +4,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { achievementsLogger } from "../logger";
 import {
   iniParse,
+  isExplicitAchievementUnlock,
   jsonParse,
   process3DM,
   processCreamAPI,
@@ -22,33 +23,29 @@ const processFltFolder = (filePath: string): UnlockedAchievement[] =>
     unlockTime: Date.now(),
   }));
 
-const processSteamCacheAchievement = (
-  unlockedAchievements: any[]
-): UnlockedAchievement[] => {
-  const newUnlockedAchievements: UnlockedAchievement[] = [];
-
-  const achievementIndex = unlockedAchievements.findIndex(
-    (element) => element[0] === "achievements"
-  );
-
-  if (achievementIndex === -1) {
-    achievementsLogger.info("No achievements found in Steam cache file");
-    return [];
-  }
-
-  const unlockedAchievementsData =
-    unlockedAchievements[achievementIndex][1]["data"]["vecHighlight"];
-
-  for (const achievement of unlockedAchievementsData) {
-    if (achievement.bAchieved) {
-      newUnlockedAchievements.push({
-        name: achievement.strID,
-        unlockTime: achievement.rtUnlocked * 1000,
-      });
+export const processSteamCacheAchievement = (input: unknown): UnlockedAchievement[] => {
+  const blocks = Array.isArray(input)
+    ? input.filter((entry) => Array.isArray(entry) && entry[0] === "achievements").map((entry) => entry[1])
+    : input && typeof input === "object" ? [(input as Record<string, unknown>).achievements] : [];
+  const result = new Map<string, UnlockedAchievement>();
+  for (const block of blocks) {
+    if (!block || typeof block !== "object") continue;
+    const record = block as Record<string, unknown>;
+    const data = (record.data ?? record) as Record<string, unknown>;
+    for (const list of [data.vecHighlight, data.vecAchieved, data.vecAchievements]) {
+      if (!Array.isArray(list)) continue;
+      for (const entry of list) {
+        if (!entry || !isExplicitAchievementUnlock(entry.bAchieved) ||
+            typeof entry.strID !== "string" || !entry.strID.trim()) continue;
+        const time = Number(entry.rtUnlocked);
+        const unlockTime = Number.isFinite(time) && time > 0 ? (time >= 1e12 ? time : time * 1000) : 0;
+        const key = entry.strID.toLowerCase();
+        const previous = result.get(key);
+        if (!previous || (!previous.unlockTime && unlockTime)) result.set(key, { name: entry.strID, unlockTime });
+      }
     }
   }
-
-  return newUnlockedAchievements;
+  return [...result.values()];
 };
 
 const ACHIEVEMENT_PARSERS: Partial<
