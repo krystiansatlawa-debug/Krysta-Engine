@@ -40,6 +40,7 @@ import { isAchievementConcealed } from "@shared";
 import { ControllerSupportSection } from "./controller-support-section";
 import { GameScreenshots } from "../game-screenshots/game-screenshots";
 import { LeaderboardSection } from "../leaderboard/leaderboard-section";
+import { HardwareComparison } from "./hardware-comparison";
 import { AchievementsSkeletonList } from "./achievements-skeleton-list";
 
 const ProtonDBSection = lazy(async () => {
@@ -71,6 +72,7 @@ const getProtonDBData = (shop: string, objectId: string) => {
     })
     .then((protonData) => {
       protonDBResponseCache.set(cacheKey, protonData);
+      if (protonDBResponseCache.size > 32) { const oldest = protonDBResponseCache.keys().next().value; if (oldest !== undefined) protonDBResponseCache.delete(oldest); }
       return protonData;
     })
     .catch(() => null)
@@ -151,7 +153,8 @@ export function Sidebar() {
 
   const { showHydraCloudModal } = useSubscription();
   const { isFeatureEnabled, Feature } = useFeature();
-  const { t } = useTranslation("game_details");
+  const { t, i18n } = useTranslation("game_details");
+  const pl = i18n.language.startsWith("pl");
   const { formatDateTime } = useDate();
   const { numberFormatter } = useFormat();
   const { isEnabled: isGlobalLeaderboardsEnabled } =
@@ -178,6 +181,7 @@ export function Sidebar() {
       (shop === "launchbox" && !!shopDetails?.retroAchievementsGameId));
 
   useEffect(() => {
+    let active = true;
     if (objectId) {
       setHowLongToBeat({ isLoading: true, data: null });
 
@@ -190,15 +194,16 @@ export function Sidebar() {
           }
         )
         .then((howLongToBeatData) => {
-          setHowLongToBeat({
+          if (active) setHowLongToBeat({
             isLoading: false,
             data: Array.isArray(howLongToBeatData) ? howLongToBeatData : null,
           });
         })
         .catch(() => {
-          setHowLongToBeat({ isLoading: false, data: null });
+          if (active) setHowLongToBeat({ isLoading: false, data: null });
         });
     }
+    return () => { active = false; };
   }, [objectId, catalogueGame.shop, catalogueGame.objectId]);
 
   useEffect(() => {
@@ -381,7 +386,7 @@ export function Sidebar() {
             <div className="stats__category">
               <p className="stats__category-title">
                 <PeopleIcon size={18} />
-                {t("player_count")}
+                {pl ? "Gracze w statystykach Hydra" : "Players in Hydra statistics"}
               </p>
               <p>{numberFormatter.format(stats?.playerCount)}</p>
             </div>
@@ -461,6 +466,7 @@ export function Sidebar() {
         </SidebarSection>
       )}
 
+      {shop !== "launchbox" && shopDetails?.pc_requirements && <HardwareComparison requirements={shopDetails.pc_requirements[activeRequirement]} key={`${shop}:${objectId}:${activeRequirement}`} />}
       <GameLanguageSection />
     </aside>
   );

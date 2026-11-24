@@ -41,6 +41,7 @@ export interface SteamAppDetails {
   publishers: string[];
   genres: SteamGenre[];
   movies?: SteamMovie[];
+  dlc?: number[];
   supported_languages: string;
   controller_support?: "full" | "partial";
   categories?: SteamCategory[];

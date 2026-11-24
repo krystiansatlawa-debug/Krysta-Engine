@@ -1744,6 +1744,7 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("deleteArchive", filePath),
 
   /* Hardware */
+  getKrystaHardware: (): Promise<{ ramBytes: number; cpu: string; logicalCores: number }> => ipcRenderer.invoke("getKrystaHardware"),
   getDiskFreeSpace: (path: string) =>
     ipcRenderer.invoke("getDiskFreeSpace", path),
   checkFolderWritePermission: (path: string) =>
