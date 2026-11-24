@@ -288,6 +288,7 @@ declare global {
         duration: number;
         audio: boolean;
         size: number;
+        format: "webm" | "mp4";
         thumbnail?: string;
         before?: number;
       }[];
