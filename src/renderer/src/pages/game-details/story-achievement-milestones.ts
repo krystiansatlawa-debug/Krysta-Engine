@@ -1,4 +1,5 @@
 import type { Game, UserAchievement } from "@types";
+import { storyGameTitleCandidates } from "../../../../shared/story-game-identity";
 
 type Marker = {
   id: string;
@@ -392,8 +393,8 @@ export function getStoryAchievementMilestone(
       : game.catalogueGame?.shop === "steam"
         ? game.catalogueGame.objectId
         : undefined;
-  const title = normalizeTitle(game.title);
-  const campaign = (steamId ? campaigns.get(storefrontAliases.get(steamId) ?? steamId) : undefined) ?? [...campaigns.values()].find((entry) => entry.titles.includes(title));
+  const titles = storyGameTitleCandidates(game.title);
+  const campaign = (steamId ? campaigns.get(storefrontAliases.get(steamId) ?? steamId) : undefined) ?? titles.map(title => [...campaigns.values()].find(entry => entry.titles.includes(title))).find(Boolean);
   if (!campaign) return null;
 
   const byId = new Map(
