@@ -71,6 +71,17 @@ const getAllowedApplicationPaths = (paths: unknown) => {
   );
 };
 
+const protectedNames = new Set(["steam.exe", "steamwebhelper.exe", "rockstarservice.exe", "launcher.exe", "socialclubhelper.exe", "ubisoftconnect.exe", "upc.exe", "epicgameslauncher.exe", "gamingservices.exe", "explorer.exe", "discord.exe"].filter(name => name !== "discord.exe"));
+export const listGameBoostCandidates = async () => {
+  if (process.platform !== "win32") return [];
+  const processes = await NativeAddon.listProcesses();
+  const games = await gamesSublevel.values().all();
+  const protectedKeys = new Set([process.execPath, ...games.flatMap(game => [game.executablePath, ...(game.trackingExecutablePaths ?? [])].filter((p): p is string => Boolean(p)))].map(windowsExecutableKey));
+  return getAllowedApplicationPaths(processes.map(p => p.exe))
+    .filter(exe => !protectedKeys.has(windowsExecutableKey(exe)) && !protectedNames.has(path.win32.basename(exe).toLowerCase()))
+    .sort((a, b) => a.localeCompare(b));
+};
+
 const syncApplications = () => {
   if (process.platform === "win32")
     applications.sync(
