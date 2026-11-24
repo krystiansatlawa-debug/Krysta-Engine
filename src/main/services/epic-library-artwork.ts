@@ -7,6 +7,7 @@ import {
 import { composeAssetsWithArtwork } from "@shared";
 import { WindowManager } from "./window-manager";
 import { HydraApi } from "./hydra-api";
+import { waitForGameBoostBackgroundSync } from "./game-boost-background-sync";
 import { EpicLibraryArtworkQueue } from "./epic-library-artwork-queue";
 
 const displayedArtwork = (
@@ -29,6 +30,7 @@ const displayedArtwork = (
 
 export const epicLibraryArtworkQueue = new EpicLibraryArtworkQueue(
   async (game) => {
+    await waitForGameBoostBackgroundSync();
     const context = HydraApi.getAuthContext();
     if (!context) return false;
     const identity = game.catalogueGame ?? game;
