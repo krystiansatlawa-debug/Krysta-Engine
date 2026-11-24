@@ -20,7 +20,12 @@ export async function exportKrystaCloudBackup() {
   try {
     const last = await settings.get("last-success").catch(() => undefined);
     if (last && Date.now() - last < interval) return;
-    const games = [];
+    const games: Array<{
+      shop: string; objectId: string; title: string;
+      collectionIds?: string[]; collectionPositions?: Record<string, number>;
+      favorite?: boolean; isPinned?: boolean; playTimeInMilliseconds: number;
+      achievements: {name: string; unlockTime: number; hardcoreUnlockTime?: number}[];
+    }> = [];
     for (const game of await gamesSublevel.values().all()) {
       if (hasTrackedGamesRunning()) return;
       if (game.isDeleted) continue;
@@ -34,7 +39,7 @@ export async function exportKrystaCloudBackup() {
         }))
       });
     }
-    const preferences = await db.get<Record<string, unknown>>(levelKeys.userPreferences).catch(() => undefined);
+    const preferences = await db.get<string, Record<string, unknown>>(levelKeys.userPreferences).catch(() => undefined);
     const safePreferences = Object.fromEntries(Object.entries(preferences ?? {}).filter(([key, value]) =>
       ["language", "gameBoostEnabled", "enableSteamAchievements", "achievementNotificationsEnabled", "achievementSoundVolume", "screenshotsEnabled", "startMinimized", "launchToLibraryPage"].includes(key) &&
       ["string", "boolean", "number"].includes(typeof value)));
