@@ -657,7 +657,7 @@ async function backupLibraryToGoogle(expected: Config, signal: AbortSignal) {
     for await (const game of gamesSublevel.values()) {
       if (signal.aborted || gamesPlaytime.size) return;
       if (game.isDeleted) continue;
-      games.push({ shop: game.shop, objectId: game.objectId, title: game.title, favorite: game.favorite, isPinned: game.isPinned, playTimeInMilliseconds: game.playTimeInMilliseconds });
+      games.push({ shop: game.shop, objectId: game.objectId, title: game.title, favorite: game.favorite, isPinned: game.isPinned, playTimeInMilliseconds: game.playTimeInMilliseconds, collectionIds: game.collectionIds, collectionPositions: game.collectionPositions });
     }
     if (!games.length) return;
     games.sort((a, b) => (a.shop + ":" + a.objectId).localeCompare(b.shop + ":" + b.objectId));
