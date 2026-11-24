@@ -713,3 +713,47 @@ pub fn move_windows_controller_cursor(dx: i32, dy: i32) -> bool {
     #[cfg(not(target_os = "windows"))]
     { let _ = (dx, dy); false }
 }
+
+#[napi]
+pub fn windows_controller_desktop_action(action: String, value: i32) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::*;
+        fn mouse(flags: u32, data: i32) -> INPUT {
+            let mut input: INPUT = unsafe { std::mem::zeroed() };
+            input.r#type = INPUT_MOUSE;
+            input.Anonymous.mi.dwFlags = flags;
+            input.Anonymous.mi.mouseData = data as u32;
+            input
+        }
+        fn key(vk: u16, up: bool) -> INPUT {
+            let mut input: INPUT = unsafe { std::mem::zeroed() };
+            input.r#type = INPUT_KEYBOARD;
+            input.Anonymous.ki.wVk = vk;
+            input.Anonymous.ki.dwFlags = if up { KEYEVENTF_KEYUP } else { 0 };
+            input
+        }
+        fn chord(modifier: u16, vk: u16) -> Vec<INPUT> {
+            vec![key(modifier, false), key(vk, false), key(vk, true), key(modifier, true)]
+        }
+        let inputs = match action.as_str() {
+            "scroll" => vec![mouse(MOUSEEVENTF_WHEEL, value.clamp(-3, 3) * 120)],
+            "horizontalScroll" => vec![mouse(MOUSEEVENTF_HWHEEL, value.clamp(-3, 3) * 120)],
+            "leftDown" => vec![mouse(MOUSEEVENTF_LEFTDOWN, 0)],
+            "leftUp" => vec![mouse(MOUSEEVENTF_LEFTUP, 0)],
+            "rightDown" => vec![mouse(MOUSEEVENTF_RIGHTDOWN, 0)],
+            "rightUp" => vec![mouse(MOUSEEVENTF_RIGHTUP, 0)],
+            "doubleClick" => vec![mouse(MOUSEEVENTF_LEFTDOWN, 0), mouse(MOUSEEVENTF_LEFTUP, 0), mouse(MOUSEEVENTF_LEFTDOWN, 0), mouse(MOUSEEVENTF_LEFTUP, 0)],
+            "volumeUp" => vec![key(VK_VOLUME_UP, false), key(VK_VOLUME_UP, true)],
+            "volumeDown" => vec![key(VK_VOLUME_DOWN, false), key(VK_VOLUME_DOWN, true)],
+            "switchWindow" => chord(VK_MENU, VK_TAB),
+            "minimize" => chord(VK_LWIN, VK_DOWN),
+            "maximize" => chord(VK_LWIN, VK_UP),
+            "showDesktop" => chord(VK_LWIN, 0x44),
+            _ => return false,
+        };
+        unsafe { SendInput(inputs.len() as u32, inputs.as_ptr(), std::mem::size_of::<INPUT>() as i32) == inputs.len() as u32 }
+    }
+    #[cfg(not(target_os = "windows"))]
+    { let _ = (action, value); false }
+}
