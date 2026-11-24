@@ -58,7 +58,7 @@ export const iniParse = (filePath: string) => {
 };
 
 export const jsonParse = (filePath: string) => {
-  return JSON.parse(readFileSync(filePath, "utf-8"));
+  return JSON.parse(readFileSync(filePath, "utf-8").replace(/^\uFEFF/, ""));
 };
 
 export const processRazor1911 = (filePath: string): UnlockedAchievement[] => {
@@ -143,35 +143,27 @@ export const processSkidrow = (
   return parsedUnlockedAchievements;
 };
 
-export const processGoldberg = (
-  unlockedAchievements: any
-): UnlockedAchievement[] => {
-  const newUnlockedAchievements: UnlockedAchievement[] = [];
+export const isExplicitAchievementUnlock = (value: unknown): boolean =>
+  value === true || value === 1 ||
+  (typeof value === "string" && /^(true|1)$/i.test(value.trim()));
 
-  if (Array.isArray(unlockedAchievements)) {
-    for (const achievement of unlockedAchievements) {
-      if (achievement?.earned) {
-        newUnlockedAchievements.push({
-          name: achievement.name,
-          unlockTime: achievement.earned_time * 1000,
-        });
-      }
-    }
-
-    return newUnlockedAchievements;
+export const processGoldberg = (data: unknown): UnlockedAchievement[] => {
+  if (!data || typeof data !== "object") return [];
+  const entries = Array.isArray(data)
+    ? data.map((entry) => [undefined, entry] as const)
+    : Object.entries(data);
+  const result: UnlockedAchievement[] = [];
+  for (const [key, entry] of entries) {
+    if (!entry || typeof entry !== "object") continue;
+    const record = entry as Record<string, unknown>;
+    if (!isExplicitAchievementUnlock(record.earned ?? record.unlocked ?? record.achieved)) continue;
+    const name = key ?? record.name ?? record.id;
+    const raw = record.earned_time ?? record.unlockTime ?? record.unlock_time ?? record.timestamp;
+    if (typeof name !== "string" || !name.trim()) continue;
+    const time = typeof raw === "number" || typeof raw === "string" ? Number(raw) : 0;
+    result.push({ name, unlockTime: Number.isFinite(time) && time > 0 ? (time >= 1e12 ? time : time * 1000) : 0 });
   }
-
-  for (const achievement of Object.keys(unlockedAchievements)) {
-    const unlockedAchievement = unlockedAchievements[achievement];
-
-    if (unlockedAchievement?.earned) {
-      newUnlockedAchievements.push({
-        name: achievement,
-        unlockTime: unlockedAchievement.earned_time * 1000,
-      });
-    }
-  }
-  return newUnlockedAchievements;
+  return result;
 };
 
 export const process3DM = (
@@ -209,7 +201,7 @@ export const processDefault = (
   for (const achievement of Object.keys(unlockedAchievements)) {
     const unlockedAchievement = unlockedAchievements[achievement];
 
-    if (unlockedAchievement?.[achievedKey] == "1") {
+    if (isExplicitAchievementUnlock(unlockedAchievement?.[achievedKey])) {
       newUnlockedAchievements.push({
         name: achievement,
         unlockTime: unlockedAchievement[unlockTimeKey] * 1000,
