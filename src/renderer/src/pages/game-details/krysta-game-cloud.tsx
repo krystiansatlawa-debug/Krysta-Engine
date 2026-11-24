@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@renderer/components";
 
-type Entry = { id: string; createdAt: string; files: number };
+type Entry = { id: string; createdAt: string; files: number; kind?: string; deviceId?: string; location?: "local" | "cloud" | "both" };
 export function KrystaGameCloud({
   shop,
   objectId,
@@ -211,8 +211,8 @@ export function KrystaGameCloud({
           )}
           <h3>
             {pl
-              ? "Historia kopii na tym komputerze"
-              : "Backup history on this computer"}
+              ? "Historia wersji zapisów"
+              : "Save version history"}
           </h3>
           {!entries.length ? (
             <p>{pl ? "Brak kopii." : "No backups."}</p>
@@ -228,6 +228,18 @@ export function KrystaGameCloud({
               >
                 {new Date(e.createdAt).toLocaleString(i18n.language)} ·{" "}
                 {e.files} {pl ? "plików" : "files"}{" "}
+                <p>
+                  {e.kind === "automatic" ? (pl ? "Automatyczna" : "Automatic") :
+                    e.kind === "manual" ? (pl ? "Ręczna" : "Manual") :
+                    e.kind === "pre-update" ? (pl ? "Przed aktualizacją" : "Before update") :
+                    e.kind === "before-restore" ? (pl ? "Przed przywróceniem" : "Before restore") :
+                    (pl ? "Starsza kopia" : "Legacy backup")}
+                  {" · "}
+                  {e.location === "both" ? (pl ? "Lokalnie i w chmurze" : "Local and cloud") :
+                    e.location === "cloud" ? (pl ? "Chmura" : "Cloud") :
+                    e.location === "local" ? (pl ? "Lokalnie" : "Local") : (pl ? "Nieznane źródło" : "Unknown source")}
+                  {e.deviceId && (" · " + (pl ? "Urządzenie " : "Device ") + e.deviceId.slice(0,8))}
+                </p>
                 <Button
                   theme="outline"
                   disabled={busy}
