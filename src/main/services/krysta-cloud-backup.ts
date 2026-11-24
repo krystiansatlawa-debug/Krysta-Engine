@@ -6,6 +6,7 @@ import { hasTrackedGamesRunning } from "./game-running-state";
 
 const interval = 24 * 60 * 60 * 1000;
 let lastAttempt = 0;
+let nextSuccessfulBackupDue = 0;
 let busy = false;
 const settings = db.sublevel<string, number>("krysta-backup-state", { valueEncoding: "json" });
 const story = db.sublevel<string, unknown>("automatic-story-progress", { valueEncoding: "json" });
@@ -14,12 +15,12 @@ const history = db.sublevel<string, unknown>("achievement-scan-history", { value
 export async function exportKrystaCloudBackup() {
   // Explicit opt-in: a user-selected, locally synchronized directory.
   const root = process.env.KRYSTA_BACKUP_FOLDER;
-  if (!root || !path.isAbsolute(root) || busy || hasTrackedGamesRunning() || Date.now() - lastAttempt < 60_000) return;
+  if (!root || !path.isAbsolute(root) || busy || hasTrackedGamesRunning() || Date.now() < nextSuccessfulBackupDue || Date.now() - lastAttempt < 60_000) return;
   lastAttempt = Date.now();
   busy = true;
   try {
     const last = await settings.get("last-success").catch(() => undefined);
-    if (last && Date.now() - last < interval) return;
+    if (last && Date.now() - last < interval) { nextSuccessfulBackupDue = last + interval; return; }
     const games: Array<{
       shop: string; objectId: string; title: string;
       collectionIds?: string[]; collectionPositions?: Record<string, number>;
@@ -54,7 +55,9 @@ export async function exportKrystaCloudBackup() {
     await writeFile(destination + ".tmp", payload, { flag: "wx" });
     if (hasTrackedGamesRunning()) { await unlink(destination + ".tmp"); return; }
     await rename(destination + ".tmp", destination);
-    await settings.put("last-success", Date.now());
+    const completedAt = Date.now();
+    await settings.put("last-success", completedAt);
+    nextSuccessfulBackupDue = completedAt + interval;
     const files = (await readdir(folder)).filter(n => /^krysta-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.json$/.test(n)).sort().reverse();
     for (const file of files.slice(7)) {
       if (hasTrackedGamesRunning()) break;

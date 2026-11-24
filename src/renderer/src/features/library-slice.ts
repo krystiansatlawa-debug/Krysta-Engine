@@ -49,6 +49,15 @@ export const librarySlice = createSlice({
         }
       }
     },
+    updateGameNewDownloadOptionsBatch: (state, action: PayloadAction<{ gameId: string; count: number }[]>) => {
+      const counts = new Map(action.payload.map(({ gameId, count }) => [gameId, count]));
+      for (const library of [state.value, state.downloadLibrary]) {
+        for (const game of library) {
+          const count = counts.get(game.id);
+          if (count !== undefined && game.newDownloadOptionsCount !== count) game.newDownloadOptionsCount = count;
+        }
+      }
+    },
     clearNewDownloadOptions: (
       state,
       action: PayloadAction<{ gameId: string }>
@@ -95,6 +104,7 @@ export const {
   setLibrarySyncingRemote,
   setLibraryAwaitingAccount,
   updateGameNewDownloadOptions,
+  updateGameNewDownloadOptionsBatch,
   clearNewDownloadOptions,
   setLibrarySearchQuery,
   setGameCollectionIds,

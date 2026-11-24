@@ -427,7 +427,8 @@ async function reconcile() {
     if (child === proc) lastError = String(e);
     ended();
   });
-  proc.once("close", ended);
+  proc.once("close", () => { reader.close(); ended(); });
+  proc.once("error", () => reader.close());
 }
 function refresh() {
   if (process.platform !== "win32" || !app.isReady() || quitting) return;

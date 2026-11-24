@@ -243,6 +243,12 @@ export class GamepadService {
   };
 
   private pollGamepads() {
+    if (!this.isPolling) return;
+    if (globalThis.document.hidden) {
+      this.clearAllTimers();
+      this.animationFrameId = globalThis.requestAnimationFrame(() => this.pollGamepads());
+      return;
+    }
     const gamepads = globalThis.navigator.getGamepads();
 
     for (const gamepad of gamepads) {
@@ -1357,6 +1363,8 @@ export class GamepadService {
     this.buttonPressCallbacks.clear();
     this.stickMoveCallbacks.clear();
     this.stateChangeCallbacks.clear();
+    this.anyButtonPressCallbacks.clear();
+    this.layoutCache.clear();
     this.activeGamepadIndex = null;
     this.lastActiveGamepadSwitchTime = 0;
     this.hasPendingActiveGamepadChange = false;

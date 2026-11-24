@@ -54,8 +54,11 @@ const wrapInLoop = (
   loop();
 };
 
+let mainLoopStarted = false;
 export const startMainLoop = async () => {
-  wrapInLoop(() => exportKrystaCloudBackup(), 60_000, true);
+  if (mainLoopStarted) return;
+  mainLoopStarted = true;
+  if (process.env.KRYSTA_BACKUP_FOLDER) wrapInLoop(() => exportKrystaCloudBackup(), 60_000, true);
   wrapInLoop(async () => {
     await watchProcesses();
     refreshQueuedStoryProgress();
