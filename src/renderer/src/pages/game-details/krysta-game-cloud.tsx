@@ -3,6 +3,23 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@renderer/components";
 
 type Entry = { id: string; createdAt: string; files: number; kind?: string; deviceId?: string; location?: "local" | "cloud" | "both" };
+function cloudDiagnostic(error:string):string {
+  const rules: [RegExp,string][] = [
+    [/KRYSTA_INTEGRITY|incomplete cloud save|backup file missing/i,"Kopia jest niekompletna lub uszkodzona. Wybierz wcześniejszą wersję w historii."],
+    [/SAVE_CONFLICT/i,"Wykryto konflikt zapisów. Porównaj wersje i wybierz właściwą kopię."],
+    [/KRYSTA_NO_SAVE_FILES|no save files detected/i,"Nie wykryto zapisów gry. Uruchom grę, utwórz zapis i zamknij ją przed ponowną próbą."],
+    [/invalid_grant|refresh token|401|cannot decrypt cloud credentials/i,"Nie można potwierdzić autoryzacji. Sprawdź połączenie konta w Ustawienia → Krysta Cloud i zaloguj się ponownie, jeśli potrzeba."],
+    [/403|permission|forbidden/i,"Brak dostępu lub ograniczenie usługi. Sprawdź uprawnienia konta i dostępne miejsce."],
+    [/429|rate limit/i,"Przekroczono limit zapytań. Odczekaj kilka minut i ponów próbę."],
+    [/507|quota|storage full|ENOSPC/i,"Brakuje miejsca na dane. Sprawdź wolne miejsce na dysku i w chmurze."],
+    [/cloud account changed|cloud provider changed/i,"Zmieniono konto lub dostawcę. Wybierz właściwe konto i ponów operację."],
+    [/close the game|KRYSTA_CLOUD_PAUSED/i,"Zamknij grę przed synchronizacją. Game Boost ogranicza operacje w tle."],
+    [/timeout|network|fetch failed|offline|502|503|504/i,"Problem z połączeniem lub usługą chmury. Sprawdź internet i spróbuj ponownie."],
+    [/save destination not recognized/i,"Nie rozpoznano lokalizacji zapisów. Uruchom grę na tym komputerze i utwórz zapis przed przywracaniem."],
+    [/64 MB|too large|exceeds/i,"Kopia przekracza obsługiwany limit rozmiaru. Sprawdź pliki zapisów."]
+  ];
+  return rules.find(([pattern])=>pattern.test(error))?.[1] ?? "Nie udało się wykonać operacji. Sprawdź ustawienia chmury i ponów próbę.";
+}
 export function KrystaGameCloud({
   shop,
   objectId,
@@ -318,9 +335,11 @@ export function KrystaGameCloud({
       )}
       {notice && <p role="status">{notice}</p>}
       {error && (
-        <p role="alert" style={{ overflowWrap: "anywhere" }}>
-          {error}
-        </p>
+        <div role="alert" style={{overflowWrap:"anywhere"}}>
+          <strong>{pl ? "Diagnostyka chmury" : "Cloud diagnostics"}</strong>
+          <p>{pl ? cloudDiagnostic(error) : "Cloud operation failed. Check your cloud settings and retry."}</p>
+          <details><summary>{pl ? "Szczegóły techniczne" : "Technical details"}</summary><p>{error.replace(/(Bearer\s+)[^\s]+/gi,"$1[ukryto]").replace(/((?:access_token|refresh_token|client_secret|password)[=:]\s*)[^\s&,]+/gi,"$1[ukryto]")}</p></details>
+        </div>
       )}
     </section>
   );
