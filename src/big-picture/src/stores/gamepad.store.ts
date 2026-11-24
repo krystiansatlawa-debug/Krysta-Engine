@@ -37,7 +37,13 @@ export const useGamepadStore = create<GamepadState>((set, get) => {
       if (key.startsWith("[")) profiles[key] = normalizeControllerProfile(value);
     }
   } catch { /* unavailable storage */ }
-  const resolveProfile = (pad: GamepadInfo | null) => pad ? profiles[controllerProfileKey(pad.name, pad.layout)] ?? defaultControllerProfile() : defaultControllerProfile();
+  // Browser Gamepad API exposes a slot, not a hardware serial number.
+  const slotKey = (pad: GamepadInfo) => JSON.stringify([controllerProfileKey(pad.name, pad.layout), pad.index]);
+  const resolveProfile = (pad: GamepadInfo | null) => pad ? profiles[slotKey(pad)] ?? profiles[controllerProfileKey(pad.name, pad.layout)] ?? defaultControllerProfile() : defaultControllerProfile();
+  const editKey = (name: string, layout: string) => {
+    const pad = get().getActiveGamepad();
+    return pad && pad.name === name && pad.layout === layout ? slotKey(pad) : controllerProfileKey(name, layout);
+  };
   const persist = () => {
     try { localStorage.setItem(storageKey, JSON.stringify(profiles)); } catch { /* session-only settings */ }
     set({ profiles, activeProfile: resolveProfile(get().getActiveGamepad()) });
@@ -73,12 +79,12 @@ export const useGamepadStore = create<GamepadState>((set, get) => {
     profiles,
     activeProfile: defaultControllerProfile(),
     saveProfile: (name, layout, profile) => {
-      profiles = { ...profiles, [controllerProfileKey(name, layout)]: normalizeControllerProfile(profile) };
+      profiles = { ...profiles, [editKey(name, layout)]: normalizeControllerProfile(profile) };
       persist();
     },
     resetProfile: (name, layout) => {
       profiles = { ...profiles };
-      delete profiles[controllerProfileKey(name, layout)];
+      profiles[editKey(name, layout)] = defaultControllerProfile();
       persist();
     },
     states: new Map(),
