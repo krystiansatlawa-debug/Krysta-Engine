@@ -115,22 +115,10 @@ const isRecordingFormat = (value: unknown): value is RecordingFormat =>
 
 let muxerScript: Promise<string> | undefined;
 
-async function prepareNvidiaEncoder(win: BrowserWindow): Promise<boolean> {
+async function prepareHardwareEncoder(win: BrowserWindow): Promise<boolean> {
   try {
-    const info = (await app.getGPUInfo("complete")) as {
-      gpuDevice?: { vendorId: number; deviceId: number; active: boolean }[];
-    };
-    const hardwareDevices = info.gpuDevice?.filter(
-      ({ vendorId, deviceId }) => vendorId !== 0x1414 || deviceId !== 0x008c
-    );
-    // Chromium can select another vendor's Media Foundation encoder when
-    // multiple hardware vendors are present, even with NVIDIA marked active.
-    if (
-      !hardwareDevices?.some((device) => device.active) ||
-      hardwareDevices.some((device) => device.vendorId !== 0x10de)
-    )
-      return false;
-
+    // Let Chromium probe actual hardware H.264 support, including hybrid GPUs.
+    // The worker requires hardware acceleration and falls back if unavailable.
     muxerScript ??= fs.readFile(captureMuxer, "utf8");
     await win.webContents.executeJavaScript(
       `${await muxerScript}\n;void (globalThis.krystaRecordingMuxer = Mediabunny);`
@@ -688,7 +676,7 @@ async function openCapture(
       return null;
     }
     await Promise.race([
-      prepareNvidiaEncoder(win).then((preferNvidia) =>
+      prepareHardwareEncoder(win).then((preferNvidia) =>
         win.webContents.executeJavaScript(
           "globalThis.krystaStart(" +
             JSON.stringify({ ...prefs, maxBytes, preferNvidia }) +
