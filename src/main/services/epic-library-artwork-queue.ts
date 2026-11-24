@@ -22,6 +22,7 @@ export class EpicLibraryArtworkQueue {
   ) {}
 
   schedule(games: LibraryGame[]) {
+    games = games.filter(game => game.shop === "epic" && game.catalogueGame?.shop !== "steam");
     // Collection reads may be partial or empty. Keep unvisited work until the
     // active pass finishes, while allowing newer records to update its entries.
     this.library = this.running
