@@ -221,7 +221,7 @@ async function createOverlay(
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
-      backgroundThrottling: false,
+      backgroundThrottling: true,
     },
   });
   overlay = window;
@@ -528,7 +528,7 @@ if (process.platform === "win32") {
         hasTrackedGamesRunning()
       )
         refresh();
-    }, 500);
+    }, 1000);
     poll.unref?.();
   });
   app.on("before-quit", () => {
