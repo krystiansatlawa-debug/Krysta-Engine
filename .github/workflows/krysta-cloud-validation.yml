@@ -1,0 +1,72 @@
+name: Cloud Sync 2.0 validation
+# Validate Cloud Sync before publishing.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/krysta-cloud-validation.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: krysta-cloud-validation
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.21.0"
+          cache: yarn
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        run: yarn --frozen-lockfile
+      - name: Run Windows release regressions
+        run: >
+          node --import ./scripts/register-ts-node.mjs --test
+          src/main/services/krysta-settings-recovery.test.ts
+          src/main/services/achievements/ubisoft-recording-baseline.test.ts
+          src/main/services/achievements/rockstar-achievement-data.test.ts
+          src/main/services/achievements/rockstar-achievement-client.test.ts
+          src/main/services/achievements/ubisoft-achievement-presentation.test.ts
+          src/main/events/user/get-unlocked-achievements-ubisoft.test.ts
+          src/main/services/steam-integration/steam-community-achievements.test.ts
+          src/main/services/steam-integration/steam-game-exit-sync.test.ts
+          src/main/services/krysta-google-oauth.test.ts
+          src/main/services/krysta-local-media-and-executable.test.ts
+          src/main/helpers/krysta-executable-ranking.test.ts
+          src/main/helpers/krysta-executable-autolink.test.ts
+          src/shared/game-update-patch-history.test.ts
+          scripts/krysta-recording.test.mjs
+          src/main/services/windows-game-window-match.test.ts
+          src/main/services/xbox-guide-window-toggle.test.ts
+          src/main/services/presentmon-fps.test.ts
+          src/main/events/krysta-fps.test.ts
+          src/main/events/krysta-updates-during-game.test.ts
+          src/main/services/game-running-state.test.ts
+          src/main/services/game-boost-applications.test.ts
+          src/main/services/game-boost-background-sync.test.ts
+          src/shared/game-boost-preferences.test.ts
+          src/shared/controller-shortcut-recorder.test.ts
+          src/shared/screenshot-input.test.ts
+          src/main/services/game-journal-store.test.ts
+          src/main/services/story-progress-save.test.ts
+          src/main/services/story-progress-metadata.test.ts
+          src/renderer/src/pages/game-details/story-progress-card-registry.test.ts
+          src/renderer/src/pages/game-details/story-achievement-milestones.test.ts
+          src/renderer/src/context/game-details/game-details.context.test.ts
+          src/renderer/src/pages/library/library-hidden-games.test.ts
+          src/renderer/src/pages/catalogue/catalogue-extras-data.test.ts
+          src/main/services/automatic-story-progress.test.ts
+          src/main/services/epic/sync-runtime.test.ts
+          src/main/services/library-sync/epic-hydra-writes.test.ts
+          src/main/services/cloud-save/cloud-save-game-context.test.ts
+      - name: Type-check Krysta 1.0.25 Windows release
+        run: yarn typecheck
