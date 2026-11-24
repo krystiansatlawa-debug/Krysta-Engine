@@ -220,7 +220,8 @@ test("reports explicit mission counts and nested mission details across save for
       })
     ),
     {
-      percent: null,
+      percent: 22.22,
+      progressKind: "story",
       saveTitle: "Find shelter",
       missionDescription: "Reach the ridge.",
       completedMissions: 2,
@@ -233,7 +234,8 @@ test("reports explicit mission counts and nested mission details across save for
       "xml"
     ),
     {
-      percent: null,
+      percent: 0,
+      progressKind: "story",
       saveTitle: "Prologue",
       completedMissions: 0,
       totalMissions: 12,
