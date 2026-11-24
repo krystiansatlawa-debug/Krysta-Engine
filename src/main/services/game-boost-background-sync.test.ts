@@ -3,6 +3,7 @@ import { afterEach, test } from "node:test";
 import { setImmediate } from "node:timers/promises";
 import {
   isGameBoostBackgroundSyncPaused,
+  onGameBoostBackgroundSyncChange,
   syncGameBoostBackgroundSyncPreferences,
   waitForGameBoostBackgroundSync,
 } from "./game-boost-background-sync.js";
@@ -70,4 +71,19 @@ test("deferred synchronization can be cancelled when its game restarts", async (
   controller.abort(new Error("game restarted"));
   await assert.rejects(pending, /game restarted/);
   assert.equal(isGameBoostBackgroundSyncPaused(), true);
+});
+
+test("a failing listener cannot block deferred tasks from resuming", async () => {
+  setEmulatorGameRunning(emulator);
+  const unsubscribe = onGameBoostBackgroundSyncChange(() => {
+    throw new Error("test listener failure");
+  });
+  try {
+    const pending = waitForGameBoostBackgroundSync();
+    deleteEmulatorGameRunning(emulator);
+    await pending;
+    assert.equal(isGameBoostBackgroundSyncPaused(), false);
+  } finally {
+    unsubscribe();
+  }
 });
