@@ -250,6 +250,7 @@ contextBridge.exposeInMainWorld("electron", {
   moveControllerWindowToDisplay: (id: number) => ipcRenderer.invoke("moveControllerWindowToDisplay", id),
   getWindowsSonyBatteryLevels: () => ipcRenderer.invoke("getWindowsSonyBatteryLevels"),
   controllerPointerAction: (action: string, value: number) => ipcRenderer.invoke("controllerPointerAction", action, value),
+  setBackgroundControllerCursor: (enabled: boolean, slot: number, speed: number, deadZone: number) => ipcRenderer.invoke("setBackgroundControllerCursor", enabled, slot, speed, deadZone),
   moveControllerCursor: (dx: number, dy: number) => ipcRenderer.invoke("moveControllerCursor", dx, dy),
   getWindowsXboxBatteryLevels: () => ipcRenderer.invoke("getWindowsXboxBatteryLevels"),
   getWindowsGameBarControllerEnabled: () =>
