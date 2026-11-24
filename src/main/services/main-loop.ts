@@ -13,6 +13,7 @@ import { PowerSaveBlockerManager } from "./power-save-blocker";
 import { logger } from "./logger";
 import { DownloadOrchestrator } from "./download-orchestrator";
 import { refreshQueuedStoryProgress } from "./automatic-story-progress";
+import { exportKrystaCloudBackup } from "./krysta-cloud-backup";
 
 const wrapInLoop = (
   fn: () => unknown,
@@ -54,6 +55,7 @@ const wrapInLoop = (
 };
 
 export const startMainLoop = async () => {
+  wrapInLoop(() => exportKrystaCloudBackup(), 60_000, true);
   wrapInLoop(async () => {
     await watchProcesses();
     refreshQueuedStoryProgress();
