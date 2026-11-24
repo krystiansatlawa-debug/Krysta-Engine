@@ -28,7 +28,7 @@ export const lookupCachedPlatform = async (
 ): Promise<string | null> => {
   const prefix = `${gameKey}:`;
   try {
-    for await (const [key, value] of gamesShopCacheSublevel.iterator()) {
+    for await (const [key, value] of gamesShopCacheSublevel.iterator({ gte: prefix, lt: `${gameKey};` })) {
       if (
         typeof key === "string" &&
         key.startsWith(prefix) &&
