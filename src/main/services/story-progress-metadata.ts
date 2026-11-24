@@ -7,7 +7,7 @@ import type { AutomaticGameStoryProgress } from "@types";
 type MetadataProgress = Omit<AutomaticGameStoryProgress, "savedAt">;
 type Candidate = { file: string; savedAt: number };
 
-const MAX_METADATA_BYTES = 512 * 1024;
+const MAX_METADATA_BYTES = 2 * 1024 * 1024;
 const MAX_METADATA_FILES = 96;
 const MAX_FOLDER_ENTRIES = 500;
 const METADATA_EXTENSION = /\.(?:json|ini|xml|sav|save|dat|bin|gz)$/i;
@@ -31,6 +31,9 @@ const progressKeys = new Set([
   "campaigncompletionpercent",
   "campaigncompletionpercentage",
   "mainquestprogresspercent",
+  "mainstorycompletionpercentage",
+  "storycompletion",
+  "campaigncompletion",
 ]);
 const scopedPercentKeys = new Set([
   "percent",
@@ -52,6 +55,8 @@ const trackedMissionKeys = new Set([
   "trackedquestname",
   "mainquestname",
   "mainmissionname",
+  "currentmainquest",
+  "currentmainmission",
 ]);
 const scopedMissionTitleKeys = new Set(["name", "title", "displayname"]);
 const scopedMissionCountKeys = new Set([
@@ -72,12 +77,14 @@ const explicitMissionTotalKeys = new Set([
   "totalcampaignmissions",
   "totalmainquests",
   "totalmainmissions",
+  "mainquestcount",
 ]);
 const explicitChapterKeys = new Set([
   "currentstorychapter",
   "currentcampaignchapter",
   "storychaptername",
   "campaignchaptername",
+  "currentmainstorychapter",
 ]);
 const scopedTitleKeys = new Set([
   "currentchapter",
@@ -219,8 +226,8 @@ export function parseGenericStoryMetadata(
 
   const walk = (node: unknown, ancestors: string[], depth: number) => {
     if (
-      depth > 5 ||
-      visited++ > 300 ||
+      depth > 8 ||
+      visited++ > 1000 ||
       !node ||
       typeof node !== "object" ||
       Array.isArray(node)
@@ -228,7 +235,7 @@ export function parseGenericStoryMetadata(
       return;
 
     const relatedToStory = ancestors.some((part) =>
-      /^(?:story|mainstory|campaign|mainquest|mainmission|storyprogress|storydata|questprogress)$/.test(
+      /^(?:story|mainstory|campaign|mainquest|mainmission|storyprogress|storydata|questprogress|maincampaign|campaignprogress|mainstoryprogress)$/.test(
         part
       )
     );
@@ -286,6 +293,13 @@ export function parseGenericStoryMetadata(
             (key === "description" || key === "summary")))
       ) {
         description = safeText(value, 500);
+      }
+      if (relatedToStory && (key === "mainmissions" || key === "mainquests") && Array.isArray(value) && value.length > 0 && value.length <= 10000) {
+        const valid = value.every(entry => entry && typeof entry === "object" && !Array.isArray(entry) && typeof entry.completed === "boolean" && typeof entry.id === "string" && entry.id.trim());
+        if (valid && new Set(value.map(entry => entry.id)).size === value.length) {
+          completedMissions ??= value.filter(entry => entry.completed).length;
+          totalMissions ??= value.length;
+        }
       }
       if (typeof value === "object" && value !== null) {
         walk(value, [...ancestors, key], depth + 1);
