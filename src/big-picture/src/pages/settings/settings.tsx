@@ -48,6 +48,7 @@ import {
   NOTIFICATIONS_LIBRARY_ITEM_FOCUS_IDS,
 } from "./settings-navigation";
 
+import { ControllerSettingsSection } from "./controllers";
 import "./page.scss";
 
 const ALL_SETTINGS_TABS = [
@@ -57,6 +58,7 @@ const ALL_SETTINGS_TABS = [
   { id: "content", label: "Content" },
   { id: "screenshots", label: "Screenshots" },
   { id: "big-picture", label: "Big Picture" },
+  { id: "controllers", label: "Kontrolery" },
   { id: "emulation", label: "Emulation" },
   { id: "integrations", label: "Integrations" },
   { id: "compatibility", label: "Compatibility" },
@@ -110,6 +112,7 @@ const SETTINGS_TAB_CONTENT: Record<
   content: ContentSettingsSection,
   screenshots: ScreenshotsSettingsSection,
   "big-picture": BigPictureSettingsSection,
+  controllers: ControllerSettingsSection,
   emulation: EmulationSettingsSection,
   integrations: IntegrationsSettingsSection,
   compatibility: CompatibilitySettingsSection,
