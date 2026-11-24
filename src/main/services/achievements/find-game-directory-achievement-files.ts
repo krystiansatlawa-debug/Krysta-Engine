@@ -24,15 +24,15 @@ const locationsCache = createThrottledCache<GameDirectoryLocations>(
 
 export const findGameDirectoryAchievementFiles = (
   executablePath?: string | null,
-  { awaitLocations = false } = {}
+  { awaitLocations = false, allowedObjectIds }: { awaitLocations?: boolean; allowedObjectIds?: readonly string[] } = {}
 ): Promise<AchievementFile[]> => {
   if (!executablePath) return Promise.resolve([]);
 
   if (!awaitLocations) {
-    return findAchievementFilesInLocations(locationsCache.get(executablePath));
+    return findAchievementFilesInLocations(locationsCache.get(executablePath), allowedObjectIds);
   }
 
   return locationsCache
     .resolve(executablePath)
-    .then(findAchievementFilesInLocations);
+    .then((locations) => findAchievementFilesInLocations(locations, allowedObjectIds));
 };
