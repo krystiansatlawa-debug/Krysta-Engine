@@ -50,6 +50,22 @@ function recordSecurityDecision(fingerprint: string | null, level: string, reaso
   historyQueue = task.catch(() => { logger.warn("[Security Shield] Nie udało się zapisać historii decyzji."); });
   return historyQueue;
 }
+export async function readSecurityDecisionHistory(limit = 100) {
+  const count = Number.isFinite(limit) ? Math.max(1, Math.min(500, Math.floor(limit))) : 100;
+  await historyQueue;
+  const directory = path.join(app.getPath("userData"), "security-shield");
+  const entries: unknown[] = [];
+  for (const name of ["decisions.jsonl.previous", "decisions.jsonl"]) {
+    try {
+      const filename = path.join(directory, name);
+      if ((await fs.stat(filename)).size > 6 * 1024 * 1024) continue;
+      for (const line of (await fs.readFile(filename, "utf8")).split("\n")) {
+        try { const item = JSON.parse(line); if (item?.schema === 1 && item.verified === false) entries.push(item); } catch { /* skip malformed entries */ }
+      }
+    } catch { /* missing history */ }
+  }
+  return entries.slice(-count).reverse();
+}
 let nextReputationRequest = 0;
 
 // Hash-only, opt-in reputation lookup. Never upload downloaded files.
