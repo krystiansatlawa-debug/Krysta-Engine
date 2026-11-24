@@ -64,6 +64,7 @@ export async function readSecurityDecisionHistory(limit = 100) {
       if ((await fs.stat(filename)).size > 6 * 1024 * 1024) continue;
       for (const line of (await fs.readFile(filename, "utf8")).split("\n")) {
         try { const item = JSON.parse(line); if (item?.schema === 1 && item.verified === false && typeof item.timestamp === "string" && Number.isFinite(Date.parse(item.timestamp)) && (item.fingerprint === null || (typeof item.fingerprint === "string" && /^[a-f0-9]{64}$/.test(item.fingerprint))) && ["high", "review", "unverified"].includes(item.level) && Array.isArray(item.reasons) && item.reasons.every((reason: unknown) => typeof reason === "string")) entries.push({ schema: 1, timestamp: item.timestamp, fingerprint: item.fingerprint, level: item.level, reasons: item.reasons.slice(0, 100).map((reason: string) => reason.slice(0, 1000)), verified: false }); } catch { /* skip malformed entries */ }
+        if (entries.length > count * 2) entries.splice(0, entries.length - count);
       }
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") logger.warn("[Security Shield] Nie udało się odczytać części historii."); }
   }
