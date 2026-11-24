@@ -38,7 +38,6 @@ import {
   shell,
 } from "electron";
 import { t } from "i18next";
-import { orderBy } from "lodash-es";
 import path from "node:path";
 import UserAgent from "user-agents";
 import { HydraApi } from "./hydra-api";
@@ -1649,19 +1648,15 @@ export class WindowManager {
     }
 
     const updateSystemTray = async () => {
-      const games = await gamesSublevel
-        .values()
-        .all()
-        .then((games) => {
-          const filteredGames = games.filter(
-            (game) =>
-              !game.isDeleted && game.executablePath && game.lastTimePlayed
-          );
-
-          const sortedGames = orderBy(filteredGames, "lastTimePlayed", "desc");
-
-          return sortedGames.slice(0, 6);
-        });
+      const games: Array<{ title: string; executablePath: string; lastTimePlayed: number }> = [];
+      for await (const game of gamesSublevel.values()) {
+        if (game.isDeleted || !game.executablePath || !game.lastTimePlayed) continue;
+        const lastTimePlayed = new Date(game.lastTimePlayed).getTime();
+        if (!Number.isFinite(lastTimePlayed)) continue;
+        games.push({ title: game.title, executablePath: game.executablePath, lastTimePlayed });
+        games.sort((a, b) => b.lastTimePlayed - a.lastTimePlayed);
+        if (games.length > 6) games.pop();
+      }
 
       const recentlyPlayedGames: Array<MenuItemConstructorOptions | MenuItem> =
         games.map(({ title, executablePath }) => ({
