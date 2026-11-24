@@ -2,7 +2,7 @@ import {
   readKrystaSettings,
   writeKrystaSettings,
 } from "@main/services/krysta-settings-recovery";
-import { app, dialog, ipcMain, shell } from "electron";
+import { app, dialog, ipcMain, shell, net } from "electron";
 import fs from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import path from "node:path";
@@ -276,6 +276,47 @@ ipcMain.handle("krysta:cloud-open-pre-update-folder", async () => {
   const error = await shell.openPath(folder);
   if (error) throw Error("Cannot open backup folder");
 });
+type PendingCloudSave = {shop:GameShop; id:string; provider:"google"|"synology"; identity:string; version:string; expectedRemote:string|null};
+const pendingCloudSaves = db.sublevel<string, PendingCloudSave>("krysta-pending-cloud-saves",{valueEncoding:"json"});
+let pendingCloudBusy = false;
+async function flushPendingCloudSaves() {
+  if (pendingCloudBusy || !net.isOnline() || hasTrackedGamesRunning()) return;
+  pendingCloudBusy = true;
+  try {
+    for await (const [queueKey, item] of pendingCloudSaves.iterator()) {
+      if (!net.isOnline() || hasTrackedGamesRunning()) break;
+      try {
+        const ctx = await gameContext(item.shop,item.id);
+        if (ctx.provider !== item.provider || ctx.identity !== item.identity) continue;
+        await locked(ctx.key,async () => {
+          if (hasTrackedGamesRunning()) return;
+          const remote = await listRemoteCloudSnapshots(item.provider,item.identity,ctx.remoteKey);
+          if (remote.some(m=>m.id===item.version)) { await pendingCloudSaves.del(queueKey); return; }
+          if ((remote[0]?.id ?? null) !== item.expectedRemote) return;
+          if (!/^[a-f0-9-]{36}$/.test(item.version)) return;
+          const dir = path.join(ctx.base,item.version);
+          await safeDirectory(ctx.root,dir);
+          const m = JSON.parse(await fs.readFile(path.join(dir,"manifest.json"),"utf8"));
+          if (m.id!==item.version || !Array.isArray(m.files) || !m.files.length || m.files.length>5000) return;
+          const names:string[] = [];
+          for (const f of m.files) {
+            if (typeof f.name!=="string" || !/^\\d+$/.test(f.name) || names.includes(f.name)) return;
+            const file = path.join(dir,f.name), st = await fs.lstat(file);
+            if (!st.isFile() || st.isSymbolicLink() || st.size!==f.size) return;
+            names.push(f.name);
+          }
+          if (hasTrackedGamesRunning() || (await config()).provider!==item.provider) return;
+          await uploadCloudSnapshot(item.provider,item.identity,ctx.remoteKey,item.version,dir,names);
+          await pendingCloudSaves.del(queueKey);
+        });
+      } catch { /* retain local copy and retry later */ }
+    }
+  } finally { pendingCloudBusy = false; }
+}
+const pendingCloudTimer = setInterval(() => { void flushPendingCloudSaves().catch(()=>{}); },60_000);
+pendingCloudTimer.unref();
+app.once("before-quit",()=>clearInterval(pendingCloudTimer));
+
 async function backupGame(
   shop: GameShop,
   id: string,
@@ -314,7 +355,7 @@ async function backupGame(
       ? { state: "no-backup", version: undefined }
       : await compareSaves(base, root, files);
     if (automatic && comparison.state === "same" && !provider) return false;
-    if (provider && automatic) {
+    if (provider && automatic && net.isOnline()) {
       const remote = await listRemoteCloudSnapshots(
         provider,
         identity!,
@@ -405,6 +446,12 @@ async function backupGame(
           (await directCloudIdentity(provider)) !== identity
         )
           throw Error("Cloud provider changed");
+        if (!net.isOnline()) {
+          await fs.rename(temp,path.join(base,uuid));
+          await pendingCloudSaves.put(identity+":"+uuid,{shop,id,provider,identity:identity!,version:uuid,expectedRemote:comparison.version ?? null});
+          await publishKrystaNotification("KRYSTA_CLOUD",game.title,"Kopia lokalna zapisana. Oczekuje na internet.").catch(()=>{});
+          return true;
+        }
         await uploadCloudSnapshot(
           provider,
           identity!,
