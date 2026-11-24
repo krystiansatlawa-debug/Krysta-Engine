@@ -213,6 +213,33 @@ async function probeGoogleDrive(accessToken: string) {
         "). Sprawdź Drive API i uprawnienia aplikacji. / Drive access unavailable."
     );
 }
+async function verifyGoogleWriteAccess(accessToken: string) {
+  const auth = { Authorization: "Bearer " + accessToken };
+  const name = ".krysta-connection-test-" + randomBytes(12).toString("hex");
+  const response = await fetch("https://www.googleapis.com/drive/v3/files?fields=id", {
+    method: "POST", headers: { ...auth, "Content-Type": "application/json" },
+    body: JSON.stringify({ name, mimeType: "application/octet-stream" }),
+    redirect: "error", signal: AbortSignal.timeout(15000)
+  });
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw Error("Google Drive: brak możliwości utworzenia pliku testowego (HTTP " + response.status + "). Sprawdź uprawnienia i wolne miejsce.");
+  }
+  const data = await response.json() as { id?: string };
+  if (!data.id || !/^[\w-]+$/.test(data.id)) throw Error("Google Drive: nieprawidłowy identyfikator pliku testowego.");
+  const url = "https://www.googleapis.com/drive/v3/files/" + data.id;
+  try {
+    const check = await googleRetryFetch(url + "?fields=id,name,capabilities(canEdit)", { headers: auth, redirect: "error" }, 15000);
+    if (!check.ok) { await check.body?.cancel(); throw Error("Google Drive: nie można odczytać pliku testowego (HTTP " + check.status + ")."); }
+    const info = await check.json() as { id?: string; name?: string; capabilities?: { canEdit?: boolean } };
+    if (info.id !== data.id || info.name !== name || info.capabilities?.canEdit !== true)
+      throw Error("Google Drive: nie potwierdzono uprawnień do edycji pliku testowego.");
+  } finally {
+    const cleanup = await fetch(url, { method: "DELETE", headers: auth, redirect: "error", signal: AbortSignal.timeout(15000) });
+    await cleanup.body?.cancel();
+    if (!cleanup.ok && cleanup.status !== 404) throw Error("Google Drive: nie udało się usunąć pliku testowego " + name + ".");
+  }
+}
 async function connectGoogle(installed: DesktopClient) {
   if (
     !safeStorage.isEncryptionAvailable() ||
@@ -349,6 +376,7 @@ ipcMain.handle("krysta:cloud-google-test", () =>
         "Google nie zwrócił tokenu dostępu. Połącz konto ponownie. / Google access token missing"
       );
     await probeGoogleDrive(t.access_token);
+    await verifyGoogleWriteAccess(t.access_token);
     return true;
   })
 );
