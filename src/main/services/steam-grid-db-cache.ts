@@ -29,6 +29,8 @@ export const isSteamGridDbArtworkRequest = ({
 export const addSteamGridDbCacheControl = (
   responseHeaders: ResponseHeaders | undefined
 ): ResponseHeaders => {
+  const existing = Object.entries(responseHeaders ?? {}).find(([name]) => name.toLowerCase() === "cache-control");
+  if (existing) return responseHeaders!;
   const headersWithoutCacheControl = Object.fromEntries(
     Object.entries(responseHeaders ?? {}).filter(
       ([headerName]) => headerName.toLowerCase() !== "cache-control"
