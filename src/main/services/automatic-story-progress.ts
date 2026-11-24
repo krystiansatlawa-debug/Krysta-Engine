@@ -31,6 +31,7 @@ type CompletedScan = StorySaveScan & {
   installationKey?: string;
   saveObjectId?: string;
   readerVersion?: number;
+  scannedAt?: number;
 };
 type PendingScan = {
   game: Game;
@@ -48,7 +49,8 @@ const customFolders = db.sublevel<string, string>("story-save-folders", {
 const queued = new Map<string, PendingScan>();
 let activeScan: { key: string; result: Promise<CompletedScan> } | undefined;
 const canRead = () => !isGameBoostBackgroundSyncPaused();
-const storyReaderVersion = 3;
+const storyReaderVersion = 4;
+const storyRefreshInterval = 5 * 60 * 1000;
 
 function storyKey(game: Game, source: StorySaveSource | undefined) {
   const { shop, objectId } = getGameCatalogueIdentity(game);
@@ -60,6 +62,7 @@ function storyKey(game: Game, source: StorySaveSource | undefined) {
 let sessionRevision = 0;
 onGameBoostBackgroundSyncChange(() => {
   sessionRevision++;
+  if (canRead()) scheduleQueuedStoryRefresh();
 });
 
 async function readStoredScan(key: string): Promise<CompletedScan> {
@@ -289,6 +292,7 @@ function refresh(key: string, scan: PendingScan) {
       status: current.status,
       lastSaveAt: current.lastSaveAt,
       readerVersion: storyReaderVersion,
+      scannedAt: Date.now(),
       ...((catalogue.shop !== game.shop ||
         catalogue.objectId !== game.objectId) && {
         installationKey: levelKeys.game(game.shop, game.objectId),
@@ -301,9 +305,20 @@ function refresh(key: string, scan: PendingScan) {
   })().finally(() => {
     activeScan = undefined;
     WindowManager.sendToAppWindows("on-game-story-progress-changed");
+    scheduleQueuedStoryRefresh();
   });
   activeScan = { key, result };
   return result;
+}
+
+let queueTimer: ReturnType<typeof setTimeout> | undefined;
+function scheduleQueuedStoryRefresh() {
+  if (queueTimer || activeScan || !canRead() || !queued.size) return;
+  queueTimer = setTimeout(() => {
+    queueTimer = undefined;
+    refreshQueuedStoryProgress();
+  }, 2000);
+  queueTimer.unref();
 }
 
 export function queueAutomaticStoryProgress(
@@ -313,6 +328,7 @@ export function queueAutomaticStoryProgress(
   const source = identifyStorySaveSource(game);
   const key = storyKey(game, source);
   queued.set(key, { game, source, saveObjectId });
+  scheduleQueuedStoryRefresh();
 }
 
 export function refreshQueuedStoryProgress() {
@@ -366,8 +382,7 @@ export async function getAutomaticStoryProgress(
       (source ? await customFolders.get(source) : undefined)
     ),
     canSelectSaveFolder: true,
-    ...(stored.readerVersion !== storyReaderVersion &&
-      (stored.status === "save-found" || stored.status === "unreadable") && {
+    ...((stored.readerVersion !== storyReaderVersion || Date.now() - (stored.scannedAt ?? 0) >= storyRefreshInterval) && {
         shouldRefreshSave: true,
       }),
   };
