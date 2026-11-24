@@ -1,3 +1,4 @@
+import { hasTrackedGamesRunning } from "../services/game-running-state";
 import { screen, BrowserWindow } from "electron";
 import { NativeAddon } from "@main/services/native-addon";
 import { registerEvent } from "./register-event";
@@ -81,4 +82,9 @@ registerEvent("moveControllerWindowToDisplay", (event, displayId: unknown) => {
     move();
   }
   return true;
+});
+
+registerEvent("moveControllerCursor", (_event, dx: number, dy: number) => {
+  if (process.platform !== "win32" || hasTrackedGamesRunning() || !Number.isInteger(dx) || !Number.isInteger(dy) || Math.abs(dx) > 40 || Math.abs(dy) > 40) return false;
+  return NativeAddon.moveControllerCursor(dx, dy);
 });
