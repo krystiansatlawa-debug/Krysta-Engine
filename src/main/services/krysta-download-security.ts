@@ -13,6 +13,19 @@ let historyQueue: Promise<void> = Promise.resolve();
 let scanQueue: Promise<unknown> = Promise.resolve();
 let runningScans = 0;
 const scanPhases = new Map<string, string>();
+const securityPhaseLabels: Readonly<Record<string, string>> = Object.freeze({
+  queued: "Oczekiwanie na skanowanie",
+  inventory: "Analiza pobranych plików",
+  reputation: "Sprawdzanie reputacji plików",
+  signatures: "Weryfikacja podpisów cyfrowych",
+  antivirus: "Skanowanie antywirusowe",
+  integrity: "Kontrola integralności plików",
+  unverified: "Bezpieczeństwo niepotwierdzone"
+});
+export function getSecurityScanStatus(download: Download) {
+  const phase = getSecurityScanPhase(download);
+  return { phase, label: securityPhaseLabels[phase] ?? securityPhaseLabels.unverified, verified: false, inProgress: phase !== "unverified" };
+}
 export function getSecurityScanPhase(download: Download): string {
   if (!download.downloadPath || !download.folderName) return "unverified";
   const target = path.resolve(download.downloadPath, download.folderName);
