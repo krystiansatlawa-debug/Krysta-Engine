@@ -1,5 +1,5 @@
 name: Krysta Release
-# Retry regression fixes and publish combined Game Boost 2.0 and Story Progress 2.0 as 1.0.23.
+# Retry achievement marker fix and publish combined Game Boost 2.0 and Story Progress 2.0 as 1.0.23.
 on:
   workflow_dispatch:
   push:
