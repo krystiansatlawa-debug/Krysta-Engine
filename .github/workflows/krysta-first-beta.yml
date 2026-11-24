@@ -3,7 +3,7 @@ name: Krysta Release
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: ['release/1.0.24']
     paths:
       - ".github/workflows/krysta-first-beta.yml"
 
@@ -11,12 +11,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: krysta-release
+  group: krysta-release-1-0-24
   cancel-in-progress: true
 
 jobs:
   windows:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/release/1.0.24'
     runs-on: windows-2022
     timeout-minutes: 90
     steps:
