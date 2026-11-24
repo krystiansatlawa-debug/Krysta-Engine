@@ -190,11 +190,13 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
     await recordSecurityDecision(null, "unverified", ["Ścieżka pobrania znajduje się poza dozwolonym katalogiem."]);
     return false;
   }
-  const existing = active.get(target);
+  const scanKey = process.platform === "win32" ? target.toLowerCase() : target;
+  const existing = active.get(scanKey);
   if (existing) {
     if (!afterExtraction) return existing;
     await existing;
-    return scanCompletedDownload(download);
+    // Recheck after extraction, even if another scan started meanwhile.
+    return scanCompletedDownload(download, true);
   }
   const task = (async () => {
     let inspectedFingerprint: string | null = null;
@@ -284,6 +286,8 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       return false;
     }
   })();
-  active.set(target, task);
-  try { return await task; } finally { active.delete(target); }
+  active.set(scanKey, task);
+  try { return await task; } finally {
+    if (active.get(scanKey) === task) active.delete(scanKey);
+  }
 }
