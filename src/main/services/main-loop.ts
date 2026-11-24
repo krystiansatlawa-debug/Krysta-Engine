@@ -1,4 +1,4 @@
-import { hasTrackedGamesRunning } from "./game-running-state";
+import { hasTrackedGamesRunning, onTrackedGamesRunningChange } from "./game-running-state";
 import { sleep } from "@main/helpers";
 import { DownloadManager } from "./download";
 import { gamesPlaytime, watchProcesses } from "./process-watcher";
@@ -26,7 +26,25 @@ const wrapInLoop = (
         );
       }
 
-      await sleep(interval);
+      if (deferDuringGame) {
+        // Wake deferred tasks promptly when the final tracked game exits.
+        await new Promise<void>((resolve) => {
+          let wasRunning = hasTrackedGamesRunning();
+          const finish = () => {
+            clearTimeout(timer);
+            unsubscribe();
+            resolve();
+          };
+          const unsubscribe = onTrackedGamesRunningChange(() => {
+            const running = hasTrackedGamesRunning();
+            if (wasRunning && !running) finish();
+            wasRunning = running;
+          });
+          const timer = setTimeout(finish, interval);
+        });
+      } else {
+        await sleep(interval);
+      }
     }
   };
   loop();
