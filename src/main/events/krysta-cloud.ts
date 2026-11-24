@@ -44,7 +44,13 @@ type Config = {
   backupScreenshots?: boolean;
   backupRecordings?: boolean;
 };
-type Entry = { id: string; createdAt: string; files: number };
+type Entry = { id: string; createdAt: string; files: number; kind?: string; deviceId?: string; location?: "local" | "cloud" | "both" };
+function historyMetadata(m: {kind?: unknown; deviceId?: unknown}) {
+  return {
+    kind: typeof m.kind === "string" && ["manual","automatic","pre-update","before-restore"].includes(m.kind) ? m.kind : undefined,
+    deviceId: typeof m.deviceId === "string" && /^[a-f0-9-]{36}$/.test(m.deviceId) ? m.deviceId : undefined,
+  };
+}
 async function config(): Promise<Config> {
   return readKrystaSettings<Config>(app.getPath("userData"), "cloud");
 }
@@ -215,9 +221,9 @@ async function localEntries(base: string, root: string): Promise<Entry[]> {
       if (
         m.id === name &&
         Array.isArray(m.files) &&
-        typeof m.createdAt === "string"
+        typeof m.createdAt === "string" && Number.isFinite(Date.parse(m.createdAt))
       )
-        list.push({ id: name, createdAt: m.createdAt, files: m.files.length });
+        list.push({ id: name, createdAt: m.createdAt, files: m.files.length, ...historyMetadata(m), location:"local" });
     } catch {
       continue;
     }
@@ -242,18 +248,21 @@ ipcMain.handle("krysta:cloud-list", async (_e, shop: GameShop, id: string) => {
         remoteKey
       );
       for (const m of remote) {
-        if (!list.some((e) => e.id === m.id))
-          list.push({
+        const existing = list.find(e => e.id === m.id);
+        if (existing) existing.location = "both";
+        else list.push({
             id: m.id,
             createdAt: m.createdAt,
             files: m.files.length,
+            ...historyMetadata(m as typeof m & {kind?: unknown; deviceId?: unknown}),
+            location:"cloud",
           });
       }
     }
   } catch (e) {
     if (!list.length) throw e;
   }
-  return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return list.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.id.localeCompare(a.id));
 });
 ipcMain.handle("krysta:cloud-open-pre-update-folder", async () => {
   const folder = path.join(
