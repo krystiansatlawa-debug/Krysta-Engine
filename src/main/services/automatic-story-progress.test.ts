@@ -61,6 +61,8 @@ test("captures unknown saves after a session and serializes scans across the lib
   const exported = {} as typeof import("./automatic-story-progress.js");
   const deps: Record<string, unknown> = {
     electron: {},
+    "node:fs/promises": { readdir: async () => [] },
+    "./story-catalogue-update": { remoteStoryDescription: async () => undefined },
     "node:path": { default: path },
     "@main/level": {
       db: {
@@ -132,6 +134,8 @@ test("captures unknown saves after a session and serializes scans across the lib
     require: (name: string) =>
       Object.hasOwn(deps, name) ? deps[name] : assert.fail(name),
     AbortController,
+    process: { platform: "linux" },
+    setTimeout: () => ({ unref() {} }),
   });
 
   const legacyGame = game("legacy");
