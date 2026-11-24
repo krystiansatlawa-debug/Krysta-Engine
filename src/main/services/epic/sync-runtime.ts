@@ -9,6 +9,10 @@ import type {
 } from "../../../types/epic-integration.types";
 import { db, downloadsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import { HydraApi } from "../hydra-api";
+import {
+  isGameBoostBackgroundSyncPaused,
+  waitForGameBoostBackgroundSync,
+} from "../game-boost-background-sync";
 import { WindowManager } from "../window-manager";
 import { logger } from "../logger";
 import { mergeWithRemoteGames } from "../library-sync/merge-with-remote-games";
@@ -100,7 +104,7 @@ export class EpicSyncRuntime {
     string,
     {
       timers: ReturnType<typeof setTimeout>[];
-      cancelled: boolean;
+      controller: AbortController;
       first?: Promise<number | null>;
     }
   >();
@@ -693,7 +697,7 @@ export class EpicSyncRuntime {
   cancelExit(objectId: string) {
     const entry = this.exitTimers.get(objectId);
     if (entry) {
-      entry.cancelled = true;
+      entry.controller.abort();
       for (const timer of entry.timers) clearTimeout(timer);
     }
     this.exitTimers.delete(objectId);
@@ -704,18 +708,26 @@ export class EpicSyncRuntime {
     this.cancelExit(game.objectId);
     const entry: {
       timers: ReturnType<typeof setTimeout>[];
-      cancelled: boolean;
+      controller: AbortController;
       first?: Promise<number | null>;
-    } = { timers: [], cancelled: false };
+    } = { timers: [], controller: new AbortController() };
+    const { signal } = entry.controller;
     entry.timers = EPIC_EXIT_SYNC_DELAYS_MS.map((delay, index) =>
       setTimeout(() => {
-        if (entry.cancelled) return;
+        if (signal.aborted) return;
         if (!index) {
-          entry.first = this.syncGame(game.objectId, true).catch(() => null);
+          entry.first = (
+            isGameBoostBackgroundSyncPaused()
+              ? waitForGameBoostBackgroundSync(signal).then(() =>
+                  signal.aborted ? null : this.syncGame(game.objectId, true)
+                )
+              : this.syncGame(game.objectId, true)
+          ).catch(() => null);
         } else {
           void (async () => {
             const previous = await entry.first;
-            if (entry.cancelled) return;
+            await waitForGameBoostBackgroundSync(signal).catch(() => undefined);
+            if (signal.aborted) return;
             await this.syncGame(
               game.objectId,
               true,

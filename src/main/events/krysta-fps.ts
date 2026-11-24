@@ -110,7 +110,7 @@ let hidden = false,
   registered = "",
   shortcutError = false,
   lastError = "",
-  poll: ReturnType<typeof setInterval> | undefined;
+  poll: ReturnType<typeof setTimeout> | undefined;
 let reconciling = false,
   refreshPending = false,
   quitting = false;
@@ -118,6 +118,8 @@ let failedCapture: { target: CaptureTarget; time: number } | null = null;
 let ignoredWindow: { window: GameWindow; time: number } | null = null;
 let rtssPublished = false;
 let rtssReceiving = false;
+
+const pollIntervalMs = 1000;
 
 const isSameWindow = (
   current: GameWindow | null | undefined,
@@ -139,9 +141,18 @@ function clearRtss() {
 function hideOverlay() {
   overlay?.hide();
   clearRtss();
+  rtssReceiving = false;
 }
 
 const defaultHotkey = "Control+Shift+F10";
+
+function getHotkey(preference: Preference) {
+  // F9 is reserved for the recording shortcut, including older FPS settings.
+  return preference.hotkey === "F9"
+    ? defaultHotkey
+    : (preference.hotkey ?? defaultHotkey);
+}
+
 function registerHotkey(value: string) {
   if (registered === value) return true;
   if (!value) {
@@ -237,16 +248,23 @@ async function createOverlay(
     return false;
   }
   const current = NativeAddon.getWindowsForegroundWindow();
-  if (!hidden && (current === undefined || isSameWindow(current, foreground))) {
-    window.showInactive();
+  if (
+    hidden ||
+    !hasTrackedGamesRunning() ||
+    (current !== undefined && !isSameWindow(current, foreground))
+  ) {
+    stop();
+    status = "waiting-game";
+    return false;
   }
+  window.showInactive();
   return true;
 }
 async function reconcile() {
   const generation = ++revision;
   const p = await readPreference();
   if (generation !== revision) return;
-  shortcutError = !registerHotkey(p.enabled ? (p.hotkey ?? defaultHotkey) : "");
+  shortcutError = !registerHotkey(p.enabled ? getHotkey(p) : "");
   if (!p.enabled) {
     stop();
     status = "disabled";
@@ -279,13 +297,15 @@ async function reconcile() {
       ? activeTarget?.key
       : undefined;
   if (!key) {
-    hideOverlay();
+    if (activeTarget) stop();
     if (
       ignoredWindow &&
       isSameWindow(foreground, ignoredWindow.window) &&
       Date.now() - ignoredWindow.time < 3000
-    )
+    ) {
+      status = "waiting-game";
       return;
+    }
     const resolved = await resolveForegroundGame("deeplink");
     if (generation !== revision || hidden) return;
     if (
@@ -308,8 +328,8 @@ async function reconcile() {
   }
 
   if (!key || !foreground) {
-    hideOverlay();
-    if (!child && status !== "capture-error") status = "waiting-game";
+    stop();
+    status = "waiting-game";
     return;
   }
   const target = { key, processId: foreground.processId, tool, output };
@@ -327,7 +347,8 @@ async function reconcile() {
 
   const point = overlayPosition(foreground, normalizePosition(p.position));
   if (!point || !tool) {
-    hideOverlay();
+    stop();
+    status = "waiting-game";
     return;
   }
   if (sameCapture(activeTarget, target) && child) {
@@ -396,6 +417,10 @@ async function reconcile() {
 }
 function refresh() {
   if (process.platform !== "win32" || !app.isReady() || quitting) return;
+  if (poll) {
+    clearTimeout(poll);
+    poll = undefined;
+  }
   if (reconciling) {
     refreshPending = true;
     return;
@@ -412,6 +437,14 @@ function refresh() {
       if (refreshPending) {
         refreshPending = false;
         refresh();
+      } else if (
+        !quitting &&
+        status !== "disabled" &&
+        status !== "hidden" &&
+        hasTrackedGamesRunning()
+      ) {
+        poll = setTimeout(refresh, pollIntervalMs);
+        poll.unref?.();
       }
     });
 }
@@ -484,9 +517,8 @@ ipcMain.handle("krysta:fps-select-tool", async () => {
   refresh();
   return true;
 });
-ipcMain.handle(
-  "krysta:fps-hotkey",
-  async () => (await readPreference()).hotkey ?? defaultHotkey
+ipcMain.handle("krysta:fps-hotkey", async () =>
+  getHotkey(await readPreference())
 );
 ipcMain.handle("krysta:fps-set-hotkey", async (_e, value: unknown) => {
   if (
@@ -497,6 +529,7 @@ ipcMain.handle("krysta:fps-set-hotkey", async (_e, value: unknown) => {
       value !== "")
   )
     throw Error("Invalid shortcut");
+  if (value === "F9") throw Error("F9 is reserved for recording");
   if (value && !value.includes("+") && !/^F\d+$/.test(value))
     throw Error("Use a modifier with letters or numbers");
   const pref = await readPreference();
@@ -521,15 +554,6 @@ if (process.platform === "win32") {
     if (quitting) return;
     screen.on("display-metrics-changed", refreshOverlayPlacement);
     refresh();
-    poll = setInterval(() => {
-      if (
-        status !== "disabled" &&
-        status !== "hidden" &&
-        hasTrackedGamesRunning()
-      )
-        refresh();
-    }, 1000);
-    poll.unref?.();
   });
   app.on("before-quit", () => {
     quitting = true;
@@ -537,7 +561,7 @@ if (process.platform === "win32") {
     unsubscribe();
     if (app.isReady())
       screen.removeListener("display-metrics-changed", refreshOverlayPlacement);
-    if (poll) clearInterval(poll);
+    if (poll) clearTimeout(poll);
     if (registered) globalShortcut.unregister(registered);
     stop();
   });

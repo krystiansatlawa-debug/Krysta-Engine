@@ -1,4 +1,8 @@
 import type { ScreenshotGamepadButton } from "@types";
+import {
+  normalizeScreenshotGamepadCombo,
+  validateScreenshotGamepadCombo,
+} from "./screenshot-input";
 
 const controllerLabels: Record<ScreenshotGamepadButton, string> = {
   a: "A",
@@ -20,5 +24,28 @@ const controllerLabels: Record<ScreenshotGamepadButton, string> = {
 };
 
 export const recordingControllerLabel = (
-  button: ScreenshotGamepadButton | ""
-) => (button ? controllerLabels[button] : "");
+  buttons: readonly ScreenshotGamepadButton[]
+) => buttons.map((button) => controllerLabels[button]).join(" + ");
+
+export function normalizeRecordingControllerCombo(
+  combo: unknown,
+  legacyButton: unknown
+): ScreenshotGamepadButton[] | null {
+  const buttons =
+    combo === undefined
+      ? legacyButton === "" || legacyButton == null
+        ? []
+        : [legacyButton]
+      : combo;
+
+  if (
+    !Array.isArray(buttons) ||
+    !buttons.every((button) => typeof button === "string")
+  ) {
+    return null;
+  }
+  if (buttons.length === 0) return [];
+  if (!validateScreenshotGamepadCombo(buttons).valid) return null;
+
+  return normalizeScreenshotGamepadCombo(buttons);
+}

@@ -1,4 +1,5 @@
 mod active_window;
+mod background_application;
 mod cloud_save;
 mod constants;
 mod desktop_duplication;
@@ -101,8 +102,26 @@ pub fn get_windows_foreground_window() -> Option<NativeForegroundWindow> {
 }
 
 #[napi]
+pub fn request_windows_background_application_close(process_id: u32, expected_path: String) -> bool {
+    background_application::request_close(process_id, &expected_path)
+}
+
+#[napi]
 pub fn get_windows_xbox_guide_pressed() -> Option<bool> {
     xbox_guide::is_pressed()
+}
+
+#[cfg(windows)]
+#[napi]
+pub fn get_windows_game_bar_controller_enabled() -> napi::Result<bool> {
+    xbox_guide::game_bar_controller_enabled().map_err(|error| Error::from_reason(error.to_string()))
+}
+
+#[cfg(windows)]
+#[napi]
+pub fn set_windows_game_bar_controller_enabled(enabled: bool) -> napi::Result<bool> {
+    xbox_guide::set_game_bar_controller_enabled(enabled)
+        .map_err(|error| Error::from_reason(error.to_string()))
 }
 
 #[napi]

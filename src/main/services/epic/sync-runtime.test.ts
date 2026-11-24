@@ -139,6 +139,10 @@ function fixture() {
         },
       },
     },
+    "../game-boost-background-sync": {
+      isGameBoostBackgroundSyncPaused: () => false,
+      waitForGameBoostBackgroundSync: async () => undefined,
+    },
     "../hydra-api": {
       HydraApi: {
         post: async (_url: string) => {

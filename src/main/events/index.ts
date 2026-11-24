@@ -47,6 +47,7 @@ import "./krysta-cloud";
 import "./krysta-updates";
 import "./krysta-cloud-accounts";
 import "./screenshot-input";
+import "./windows-game-bar-controller";
 
 ipcMain.handle("ping", () => "pong");
 ipcMain.handle("getVersion", () => appVersion);

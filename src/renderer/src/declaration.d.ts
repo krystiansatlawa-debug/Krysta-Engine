@@ -271,7 +271,7 @@ declare global {
         fps: number;
         limitGb: number;
         hotkey: string;
-        controllerButton: ScreenshotGamepadButton | "";
+        controllerCombo: ScreenshotGamepadButton[];
         folder?: string;
       };
       folder: string;
@@ -301,7 +301,7 @@ declare global {
       fps: number;
       limitGb: number;
       hotkey: string;
-      controllerButton: ScreenshotGamepadButton | "";
+      controllerCombo: ScreenshotGamepadButton[];
       folder?: string;
     }) => Promise<void>;
     krystaRecordingRead: (id: string) => Promise<Uint8Array>;
@@ -324,6 +324,10 @@ declare global {
     krystaFpsSetPosition: (
       position: "tl" | "tr" | "bl" | "br"
     ) => Promise<"tl" | "tr" | "bl" | "br">;
+    getWindowsGameBarControllerEnabled: () => Promise<boolean | null>;
+    setWindowsGameBarControllerEnabled: (
+      enabled: boolean
+    ) => Promise<boolean | null>;
     krystaCloudAuto: (enabled: boolean) => Promise<{
       provider: string;
       folder?: string;
@@ -1598,6 +1602,8 @@ declare global {
       cb: (preferences: UserPreferences | null) => void
     ) => () => Electron.IpcRenderer;
     getScreenshotInputStatus: () => Promise<ScreenshotInputStatus>;
+    beginControllerShortcutCapture: () => Promise<string | null>;
+    endControllerShortcutCapture: (token: string) => Promise<void>;
     onScreenshotInputStatusChange: (
       cb: (status: ScreenshotInputStatus) => void
     ) => () => Electron.IpcRenderer;

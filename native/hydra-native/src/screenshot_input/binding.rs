@@ -205,7 +205,7 @@ pub mod gamepad {
     pub const LT: u32 = 0x1_0000;
     pub const RT: u32 = 0x2_0000;
 
-    pub const MIN_COMBO_BUTTONS: u32 = 2;
+    pub const MIN_COMBO_BUTTONS: u32 = 1;
     pub const MAX_COMBO_BUTTONS: u32 = 4;
 
     #[cfg(any(target_os = "windows", test))]
@@ -845,12 +845,12 @@ mod tests {
     }
 
     #[test]
-    fn combo_mask_requires_two_known_buttons() {
+    fn combo_mask_requires_one_to_four_known_buttons() {
         assert_eq!(
             gamepad::combo_mask(&["back", "rb"]),
             Some(gamepad::BACK | gamepad::RB)
         );
-        assert_eq!(gamepad::combo_mask(&["back"]), None);
+        assert_eq!(gamepad::combo_mask(&["back"]), Some(gamepad::BACK));
         assert_eq!(gamepad::combo_mask(&["back", "guide"]), None);
         assert_eq!(gamepad::combo_mask::<&str>(&[]), None);
         assert!(gamepad::combo_mask(&["a", "b", "x", "y"]).is_some());

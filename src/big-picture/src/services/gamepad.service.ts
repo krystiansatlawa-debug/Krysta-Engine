@@ -96,7 +96,12 @@ export class GamepadService {
   private lastActiveGamepadSwitchTime = 0;
   private lastGamepadActivityTime = 0;
   private hasPendingActiveGamepadChange = false;
-  private inputEnabled = true;
+  private windowInputEnabled = true;
+  private inputPauseCount = 0;
+
+  private get inputEnabled() {
+    return this.windowInputEnabled && this.inputPauseCount === 0;
+  }
 
   private readonly gamepads: GamepadRegistry = new Map();
   private readonly gamepadStates = new Map<number, GamepadRawState>();
@@ -1214,14 +1219,27 @@ export class GamepadService {
   }
 
   public setInputEnabled(enabled: boolean): void {
-    if (this.inputEnabled === enabled) return;
+    if (this.windowInputEnabled === enabled) return;
 
-    this.inputEnabled = enabled;
+    this.windowInputEnabled = enabled;
 
     if (!enabled) {
       this.clearAllTimers();
       this.recentAcceptedInputs = [];
     }
+  }
+
+  public pauseInput(): () => void {
+    this.inputPauseCount++;
+    this.clearAllTimers();
+    this.recentAcceptedInputs = [];
+    let released = false;
+
+    return () => {
+      if (released) return;
+      released = true;
+      this.inputPauseCount--;
+    };
   }
 
   public getLastActiveGamepad(): number | null {

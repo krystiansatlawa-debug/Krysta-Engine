@@ -189,7 +189,7 @@ contextBridge.exposeInMainWorld("electron", {
     fps: number;
     limitGb: number;
     hotkey: string;
-    controllerButton: ScreenshotGamepadButton | "";
+    controllerCombo: ScreenshotGamepadButton[];
     folder?: string;
   }) => ipcRenderer.invoke("krysta:recordings-settings", value),
   krystaRecordingTrimSave: (
@@ -246,6 +246,10 @@ contextBridge.exposeInMainWorld("electron", {
   krystaFpsPosition: () => ipcRenderer.invoke("krysta:fps-position"),
   krystaFpsSetPosition: (position: "tl" | "tr" | "bl" | "br") =>
     ipcRenderer.invoke("krysta:fps-set-position", position),
+  getWindowsGameBarControllerEnabled: () =>
+    ipcRenderer.invoke("getWindowsGameBarControllerEnabled"),
+  setWindowsGameBarControllerEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke("setWindowsGameBarControllerEnabled", enabled),
   krystaCloudAuto: (enabled: boolean) =>
     ipcRenderer.invoke("krysta:cloud-auto", enabled),
   krystaCloudSyncBeforeLaunch: (enabled: boolean) =>
@@ -1211,6 +1215,10 @@ contextBridge.exposeInMainWorld("electron", {
   },
   getScreenshotInputStatus: (): Promise<ScreenshotInputStatus> =>
     ipcRenderer.invoke("getScreenshotInputStatus"),
+  beginControllerShortcutCapture: (): Promise<string | null> =>
+    ipcRenderer.invoke("beginControllerShortcutCapture"),
+  endControllerShortcutCapture: (token: string): Promise<void> =>
+    ipcRenderer.invoke("endControllerShortcutCapture", token),
   onScreenshotInputStatusChange: (
     cb: (status: ScreenshotInputStatus) => void
   ) => {

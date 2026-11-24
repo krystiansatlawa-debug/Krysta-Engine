@@ -8,9 +8,9 @@ import type {
   GameStoryProgressView,
 } from "@types";
 import {
-  hasTrackedGamesRunning,
-  onTrackedGamesRunningChange,
-} from "./game-running-state";
+  isGameBoostBackgroundSyncPaused,
+  onGameBoostBackgroundSyncChange,
+} from "./game-boost-background-sync";
 import { readHydraStorySave } from "./hydra-story-save-discovery";
 import { discoverSelectedStorySaveFiles } from "./story-progress-metadata.js";
 import { logger } from "./logger";
@@ -46,7 +46,7 @@ const customFolders = db.sublevel<string, string>("story-save-folders", {
 });
 const queued = new Map<string, PendingScan>();
 let activeScan: { key: string; result: Promise<CompletedScan> } | undefined;
-const canRead = () => !hasTrackedGamesRunning();
+const canRead = () => !isGameBoostBackgroundSyncPaused();
 const storyReaderVersion = 2;
 
 function storyKey(game: Game, source: StorySaveSource | undefined) {
@@ -57,7 +57,7 @@ function storyKey(game: Game, source: StorySaveSource | undefined) {
 }
 
 let sessionRevision = 0;
-onTrackedGamesRunningChange(() => {
+onGameBoostBackgroundSyncChange(() => {
   sessionRevision++;
 });
 
@@ -154,7 +154,7 @@ async function readAutomaticSave(
   }
 
   const controller = new AbortController();
-  const unsubscribe = onTrackedGamesRunningChange(() => controller.abort());
+  const unsubscribe = onGameBoostBackgroundSyncChange(() => controller.abort());
   try {
     const detected = await readHydraStorySave(
       game,

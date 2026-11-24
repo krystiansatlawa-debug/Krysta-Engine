@@ -1,6 +1,7 @@
 import { useContext, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KrystaGameUpdateSettings } from "./krysta-game-update-settings";
+import { SettingsGameBoost } from "./settings-game-boost";
 import { CheckboxField } from "@renderer/components";
 import { settingsContext } from "@renderer/context";
 import { useAppSelector } from "@renderer/hooks";
@@ -13,6 +14,44 @@ export function SettingsContextGame() {
     (state) => state.userPreferences.value?.xboxGuideGameShortcutEnabled === true
   );
   const [guideShortcutError, setGuideShortcutError] = useState(false);
+  const [gameBarControllerEnabled, setGameBarControllerEnabled] = useState<
+    boolean | null
+  >(null);
+  const [gameBarControllerBusy, setGameBarControllerBusy] = useState(false);
+  const [gameBarControllerError, setGameBarControllerError] = useState(false);
+  useEffect(() => {
+    if (window.electron.platform !== "win32") return;
+
+    let active = true;
+    void window.electron
+      .getWindowsGameBarControllerEnabled()
+      .then((value) => {
+        if (!active) return;
+        setGameBarControllerEnabled(value);
+        setGameBarControllerError(value === null);
+      })
+      .catch(() => {
+        if (active) setGameBarControllerError(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+  const setGameBarControllerShortcut = async (enabled: boolean) => {
+    setGameBarControllerBusy(true);
+    setGameBarControllerError(false);
+    try {
+      const value =
+        await window.electron.setWindowsGameBarControllerEnabled(enabled);
+      setGameBarControllerEnabled(value);
+      setGameBarControllerError(value !== enabled);
+    } catch {
+      setGameBarControllerError(true);
+    } finally {
+      setGameBarControllerBusy(false);
+    }
+  };
   const [enabled, setEnabled] = useState(false);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -141,6 +180,7 @@ export function SettingsContextGame() {
   };
   return (
     <div className="settings-context-panel">
+      <SettingsGameBoost />
       <KrystaGameUpdateSettings />
       {window.electron.platform === "win32" && (
         <div className="settings-context-panel__group">
@@ -160,17 +200,26 @@ export function SettingsContextGame() {
             }}
           />
           <p>{t("krysta_xbox_fullscreen_hint")}</p>
-          <small>
-            {pl
-              ? "Jeśli przycisk otwiera Xbox Game Bar, wyłącz otwieranie paska za pomocą kontrolera w ustawieniach Windows."
-              : "If the button opens Xbox Game Bar, turn off opening Game Bar with a controller in Windows settings."}
-          </small>
           {guideShortcutError && (
             <p role="alert">
               {pl
                 ? "Nie udało się zapisać ustawienia kontrolera."
                 : "Could not save the controller setting."}
             </p>
+          )}
+          <CheckboxField
+            label={t("windows_game_bar_controller_label")}
+            checked={gameBarControllerEnabled === true}
+            disabled={
+              gameBarControllerEnabled === null || gameBarControllerBusy
+            }
+            onChange={(event) =>
+              void setGameBarControllerShortcut(event.currentTarget.checked)
+            }
+          />
+          <small>{t("windows_game_bar_controller_hint")}</small>
+          {gameBarControllerError && (
+            <p role="alert">{t("windows_game_bar_controller_error")}</p>
           )}
         </div>
       )}

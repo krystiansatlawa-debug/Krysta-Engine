@@ -2,6 +2,7 @@ import { levelKeys } from "@main/level";
 import type { Game, SteamGameSyncPayload } from "@types";
 
 import { updateGameRecord } from "../game-record-updater";
+import { waitForGameBoostBackgroundSync } from "../game-boost-background-sync";
 import { HydraApi } from "../hydra-api";
 import { getCollectionOrderRevision } from "../library-sync/library-write-queue";
 import {
@@ -54,6 +55,7 @@ const publishGame = async (
 
 const scheduler = createSteamGameExitSyncScheduler({
   waitForFullSync: () => steamSyncOrchestrator.waitForCurrentRun(),
+  waitForBackgroundSync: waitForGameBoostBackgroundSync,
   collect: (steamAppId, signal) =>
     steamSyncOrchestrator.collectGameSyncPayload(steamAppId, signal),
   publish: publishGame,

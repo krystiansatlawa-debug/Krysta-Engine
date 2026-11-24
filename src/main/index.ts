@@ -66,6 +66,7 @@ import {
   resumeEpicPlaytime,
 } from "./services/epic";
 import { removeAppImageLibraryPath } from "./helpers/remove-appimage-library-path";
+import { shutdownGameBoost } from "./services/game-boost";
 
 if (process.platform === "linux") removeAppImageLibraryPath();
 
@@ -503,6 +504,7 @@ app.on("before-quit", async (e) => {
       saveRecompilationPlaytimeOnQuit(),
       emulators.stopAllEmulatorSouvenirCaptureSessions(),
       flushScreenshotTelemetry(SCREENSHOT_TELEMETRY_QUIT_FLUSH_TIMEOUT_MS),
+      shutdownGameBoost(),
     ]);
     await flushGameJournalWrites();
     for (const result of results) {

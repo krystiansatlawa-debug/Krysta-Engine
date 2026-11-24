@@ -9,6 +9,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import type { Game } from "@types";
 import * as runningState from "./game-running-state.js";
+import * as gameBoostBackgroundSync from "./game-boost-background-sync.js";
 import * as saveParser from "./story-progress-save.js";
 import { discoverSelectedStorySaveFiles } from "./story-progress-metadata.js";
 import { levelKeys } from "../level/sublevels/keys.js";
@@ -84,7 +85,7 @@ test("captures unknown saves after a session and serializes scans across the lib
       },
     },
     "../../shared/library-catalogue": { getGameCatalogueIdentity },
-    "./game-running-state": runningState,
+    "./game-boost-background-sync": gameBoostBackgroundSync,
     "./story-progress-save": saveParser,
     "./hydra-story-save-discovery": {
       readHydraStorySave: async (

@@ -119,8 +119,7 @@ describe("normalizeScreenshotHotkey", () => {
 describe("validateScreenshotGamepadCombo", () => {
   const cases: [string[], string | null][] = [
     [[], "gamepad_combo_too_short"],
-    [["back"], "gamepad_combo_too_short"],
-    [["back", "back"], "gamepad_combo_too_short"],
+    [["back"], null],
     [["back", "rb"], null],
     [["back", "rb", "a"], null],
     [["a", "b", "x", "y"], null],
@@ -144,7 +143,7 @@ describe("normalizeScreenshotGamepadCombo", () => {
       undefined,
       null,
       "back+rb",
-      ["back"],
+      [],
       ["back", 1],
       ["a", "b", "x", "y", "lb"],
     ]) {
@@ -160,5 +159,9 @@ describe("normalizeScreenshotGamepadCombo", () => {
       "rb",
       "start",
     ]);
+  });
+
+  it("keeps a single-button shortcut", () => {
+    assert.deepEqual(normalizeScreenshotGamepadCombo(["back"]), ["back"]);
   });
 });

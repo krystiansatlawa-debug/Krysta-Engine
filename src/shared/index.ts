@@ -49,6 +49,8 @@ export * from "./cloud-save-access";
 export * from "./cloud-save-emulator-provider";
 export * from "./screenshot-input";
 export * from "./recording-controller";
+export * from "./use-controller-shortcut-recorder";
+export * from "./game-boost-preferences";
 export * from "./profile-friends";
 export * from "./classics-disc-label";
 export {

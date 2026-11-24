@@ -10,6 +10,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { gamesSublevel, levelKeys } from "@main/level";
 import { publishKrystaNotification } from "@main/services/notifications/krysta-notifications";
 import { Ludusavi } from "@main/services/ludusavi";
+import { waitForGameBoostBackgroundSync } from "@main/services/game-boost-background-sync";
 import {
   gamesPlaytime,
   onTrackedGamesRunningChange,
@@ -574,7 +575,17 @@ type AutoResult = {
   message?: string;
 };
 const autoResults = new Map<string, AutoResult>();
-const pendingAuto = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingAuto = new Map<
+  string,
+  { timer: ReturnType<typeof setTimeout>; controller: AbortController }
+>();
+const cancelAutomaticBackup = (key: string) => {
+  const pending = pendingAuto.get(key);
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  pending.controller.abort();
+  pendingAuto.delete(key);
+};
 let previousRunning = new Set<string>();
 let shuttingDown = false;
 ipcMain.handle("krysta:cloud-auto", async (_e, enabled: unknown) => {
@@ -598,8 +609,7 @@ ipcMain.handle("krysta:cloud-auto", async (_e, enabled: unknown) => {
     });
     if (answer.response !== 1) return c;
   } else {
-    for (const timer of pendingAuto.values()) clearTimeout(timer);
-    pendingAuto.clear();
+    for (const key of pendingAuto.keys()) cancelAutomaticBackup(key);
   }
   return save({ ...c, autoBackup: enabled });
 });
@@ -610,21 +620,17 @@ ipcMain.handle(
 );
 onTrackedGamesRunningChange(() => {
   const now = new Set(gamesPlaytime.keys());
-  for (const key of now) {
-    const pending = pendingAuto.get(key);
-    if (pending) {
-      clearTimeout(pending);
-      pendingAuto.delete(key);
-    }
-  }
+  for (const key of now) cancelAutomaticBackup(key);
   for (const key of previousRunning) {
     if (now.has(key) || shuttingDown || pendingAuto.has(key)) continue;
+    const controller = new AbortController();
     const timer = setTimeout(() => {
-      pendingAuto.delete(key);
       void (async () => {
+        await waitForGameBoostBackgroundSync(controller.signal);
         const c = await config();
         if (
           shuttingDown ||
+          controller.signal.aborted ||
           !c.autoBackup ||
           c.provider === "hydra" ||
           (c.provider === "local" && !c.folder) ||
@@ -632,38 +638,44 @@ onTrackedGamesRunningChange(() => {
         )
           return;
         const game = await gamesSublevel.get(key);
-        if (!game) return;
+        if (!game || controller.signal.aborted) return;
+        await waitForGameBoostBackgroundSync(controller.signal);
         const done = await backupGame(game.shop, game.objectId, true, c);
         autoResults.set(key, {
           state: done ? "saved" : "skipped",
           at: new Date().toISOString(),
         });
-      })().catch((e) => {
-        autoResults.set(key, {
-          state: "error",
-          at: new Date().toISOString(),
-          message: String(e),
-        });
-        void gamesSublevel
-          .get(key)
-          .then((game) =>
-            publishKrystaNotification(
-              "KRYSTA_ERROR",
-              game?.title ?? "Krysta Cloud",
-              "Automatyczna kopia zapisów nie powiodła się / Automatic save backup failed"
+      })()
+        .catch((e) => {
+          if (controller.signal.aborted) return;
+          autoResults.set(key, {
+            state: "error",
+            at: new Date().toISOString(),
+            message: String(e),
+          });
+          void gamesSublevel
+            .get(key)
+            .then((game) =>
+              publishKrystaNotification(
+                "KRYSTA_ERROR",
+                game?.title ?? "Krysta Cloud",
+                "Automatyczna kopia zapisów nie powiodła się / Automatic save backup failed"
+              )
             )
-          )
-          .catch(() => {});
-      });
+            .catch(() => {});
+        })
+        .finally(() => {
+          if (pendingAuto.get(key)?.controller === controller)
+            pendingAuto.delete(key);
+        });
     }, 15000);
-    pendingAuto.set(key, timer);
+    pendingAuto.set(key, { timer, controller });
   }
   previousRunning = now;
 });
 app.on("before-quit", () => {
   shuttingDown = true;
-  for (const timer of pendingAuto.values()) clearTimeout(timer);
-  pendingAuto.clear();
+  for (const key of pendingAuto.keys()) cancelAutomaticBackup(key);
 });
 
 type Comparison = {

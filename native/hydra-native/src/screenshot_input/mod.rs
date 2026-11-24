@@ -277,14 +277,14 @@ pub fn stop_screenshot_input() {
 }
 
 #[napi]
-pub fn get_windows_gamepad_button_pressed(button: String) -> Option<bool> {
+pub fn get_windows_gamepad_combo_pressed(buttons: Vec<String>) -> Option<bool> {
     #[cfg(target_os = "windows")]
     {
-        windows::gamepad_button_pressed(gamepad::button_mask(&button)?)
+        windows::gamepad_combo_pressed(gamepad::combo_mask(&buttons)?)
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = button;
+        let _ = buttons;
         None
     }
 }
@@ -323,7 +323,7 @@ mod tests {
 
     #[test]
     fn reports_invalid_key_and_combo() {
-        let parsed = parse_config(&config("MetaLeft", &["rb"]));
+        let parsed = parse_config(&config("MetaLeft", &["guide"]));
         assert!(!parsed.options.keyboard && !parsed.options.gamepad);
         assert_eq!(parsed.keyboard_error, Some("unsupported-key"));
         assert_eq!(parsed.gamepad_error, Some("invalid-combo"));

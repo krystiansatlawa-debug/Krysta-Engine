@@ -11,6 +11,7 @@ type TimerHandle = ReturnType<typeof setTimeout>;
 
 type ExitSyncDependencies = {
   waitForFullSync: () => Promise<void>;
+  waitForBackgroundSync?: (signal: AbortSignal) => Promise<void>;
   collect: (
     steamAppId: string,
     signal: AbortSignal
@@ -147,6 +148,10 @@ export const createSteamGameExitSyncScheduler = (
 
     try {
       await dependencies.waitForFullSync();
+      if (dependencies.waitForBackgroundSync)
+        await dependencies.waitForBackgroundSync(
+          pending.abortController.signal
+        );
       if (!isCurrent(gameKey, pending)) return;
 
       const payload = await dependencies.collect(

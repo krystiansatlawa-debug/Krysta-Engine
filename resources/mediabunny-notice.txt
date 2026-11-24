@@ -1,0 +1,8 @@
+Krysta includes the unmodified Mediabunny 1.66.4 browser bundle.
+Copyright (c) 2026-present, Vanilagy and contributors.
+
+Mediabunny is distributed under the Mozilla Public License, Version 2.0.
+The license is included in Mediabunny-LICENSE.txt.
+
+The exact version of the source code is distributed in this package archive:
+https://registry.npmjs.org/mediabunny/-/mediabunny-1.66.4.tgz

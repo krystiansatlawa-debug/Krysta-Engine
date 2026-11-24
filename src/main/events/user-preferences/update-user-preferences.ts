@@ -10,6 +10,10 @@ import { patchUserProfile } from "../profile/update-profile";
 import { DownloadManager, ScreenshotInputService, Wine } from "@main/services";
 import { WindowManager } from "@main/services/window-manager";
 import { syncXboxGuideGameShortcut } from "@main/services/xbox-guide-game-shortcut";
+import {
+  normalizeGameBoostPreferencePatch,
+  syncGameBoostPreferences,
+} from "@main/services/game-boost";
 import { getDownloadDirectoryPreferences } from "@shared";
 import {
   restoreDuckStationFileLogging,
@@ -186,8 +190,9 @@ const applyDownloadManagerPreferences = async (
 
 const updateUserPreferences = async (
   _event: Electron.IpcMainInvokeEvent,
-  preferences: Partial<UserPreferences>
+  patch: Partial<UserPreferences>
 ) => {
+  const preferences = normalizeGameBoostPreferencePatch(patch);
   const userPreferences = await db.get<string, UserPreferences | null>(
     levelKeys.userPreferences,
     { valueEncoding: "json" }
@@ -228,6 +233,7 @@ const updateUserPreferences = async (
   Wine.syncUserPreferences(updatedPreferences);
   ScreenshotInputService.syncUserPreferences(updatedPreferences);
   syncXboxGuideGameShortcut(updatedPreferences);
+  syncGameBoostPreferences(updatedPreferences);
 
   await updateEmulatorAchievementTracking(preferences, updatedPreferences);
   await unlinkRetroAchievementsEmulatorAccount(preferences);

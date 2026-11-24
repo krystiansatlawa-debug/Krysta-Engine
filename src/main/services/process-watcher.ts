@@ -78,6 +78,10 @@ import {
   interruptManagedEpicPlaytime,
 } from "./epic/launch";
 import { runWithHydraSaveGuard } from "./epic/cloud-saves";
+import {
+  isGameBoostBackgroundSyncPaused,
+  waitForGameBoostBackgroundSync,
+} from "./game-boost-background-sync";
 
 export { gamesPlaytime };
 export { isGameRunning } from "./game-running-state";
@@ -139,6 +143,32 @@ const handleAutomaticCloudSaveLifecycleError = (
     errorName: error instanceof Error ? error.name : "UnknownError",
     errorMessage: error instanceof Error ? error.message : "Unknown error",
   });
+};
+
+const cloudSavesAfterExit = new Map<string, AbortController>();
+
+const scheduleAutomaticCloudSaveOnClose = (
+  game: Game,
+  gameKey: string,
+  authContext: HydraApiAuthContext | null
+) => {
+  cloudSavesAfterExit.get(gameKey)?.abort();
+  const controller = new AbortController();
+  cloudSavesAfterExit.set(gameKey, controller);
+  void waitForGameBoostBackgroundSync(controller.signal)
+    .then(async () => {
+      if (controller.signal.aborted || gamesPlaytime.has(gameKey)) return;
+      if (!authContext || !HydraApi.isAuthContextCurrent(authContext)) return;
+      await runAutomaticCloudSaveOnClose(game);
+    })
+    .catch((error: unknown) => {
+      if (!controller.signal.aborted)
+        handleAutomaticCloudSaveLifecycleError("close", game, error);
+    })
+    .finally(() => {
+      if (cloudSavesAfterExit.get(gameKey) === controller)
+        cloudSavesAfterExit.delete(gameKey);
+    });
 };
 
 export const getGamesRunning = () => {
@@ -371,6 +401,7 @@ export const watchProcesses = async () => {
   const pidToProcess = new Map<number, LinuxProcessInfo>(
     linuxProcesses.map((process) => [process.pid, process])
   );
+  const closedGames: Game[] = [];
 
   for (const game of games) {
     const gameKey = levelKeys.game(game.shop, game.objectId);
@@ -440,9 +471,13 @@ export const watchProcesses = async () => {
         await onOpenGame(game, matchedPath);
       }
     } else if (gamesPlaytime.has(gameKey)) {
-      onCloseGame(game);
+      closedGames.push(game);
     }
   }
+
+  // Start sessions found in this scan before removing closed ones. A handoff
+  // between games must not resume deferred work in the middle of the scan.
+  for (const game of closedGames) onCloseGame(game);
 
   currentTick++;
 
@@ -459,6 +494,7 @@ async function onOpenGame(game: Game, matchedPath: string) {
 
   const now = performance.now();
   const gameKey = levelKeys.game(game.shop, game.objectId);
+  cloudSavesAfterExit.get(gameKey)?.abort();
   let countHydraPlaytime = true;
   let syncSteamOnExit = false;
   let syncEpicOnExit = false;
@@ -555,6 +591,8 @@ async function onOpenGame(game: Game, matchedPath: string) {
 
   AchievementWatcherManager.syncGameAchievementFiles(game.shop, game.objectId);
 
+  if (isGameBoostBackgroundSyncPaused()) return;
+
   if (game.remoteId) {
     const deltaToSync = game.unsyncedDeltaPlayTimeInMilliseconds ?? 0;
     const syncTimestamp = new Date();
@@ -625,7 +663,9 @@ function onTickGame(game: Game) {
   if (!gamePlaytime) return;
 
   const syncDue =
-    currentTick % TICKS_TO_UPDATE_API === 0 && game.shop !== "custom";
+    currentTick % TICKS_TO_UPDATE_API === 0 &&
+    game.shop !== "custom" &&
+    !isGameBoostBackgroundSyncPaused();
   if (!syncDue && !isGamePlaytimeCheckpointDue(gamePlaytime, now)) return;
 
   const { localDelta: delta, syncDelta: deltaToSync } = getGamePlaytimeDeltas(
@@ -774,21 +814,19 @@ const onCloseGame = (game: Game, options: { isShutdown?: boolean } = {}) => {
   if (game.shop === "custom") return;
 
   const closedManagedEpic = onManagedEpicClosed(game);
-  if (!gamePlaytime.managedEpicSession || closedManagedEpic)
-    void runAutomaticCloudSaveOnClose(game).catch((error: unknown) => {
-      handleAutomaticCloudSaveLifecycleError("close", game, error);
-    });
+  if (
+    !options.isShutdown &&
+    (!gamePlaytime.managedEpicSession || closedManagedEpic)
+  )
+    scheduleAutomaticCloudSaveOnClose(game, gameKey, authContext);
 
   if (game.remoteId) {
     logPlaytimeTrace("close-sync-track-request", game, {
       deltaToSync,
-      syncTimestamp:
-        game.lastTimePlayed instanceof Date
-          ? game.lastTimePlayed.toISOString()
-          : game.lastTimePlayed,
+      syncTimestamp: updatedGame.lastTimePlayed.toISOString(),
     });
 
-    return trackGamePlaytime(game, deltaToSync, game.lastTimePlayed!)
+    return trackGamePlaytime(game, deltaToSync, updatedGame.lastTimePlayed)
       .then(() => {
         logPlaytimeTrace("close-sync-track-success", game, {
           deltaToSync,
@@ -842,6 +880,7 @@ const onCloseGame = (game: Game, options: { isShutdown?: boolean } = {}) => {
 };
 
 export const clearGamesPlaytime = async () => {
+  for (const controller of cloudSavesAfterExit.values()) controller.abort();
   await Promise.all(
     Array.from(gamesPlaytime.keys(), async (game) => {
       const gameData = await gamesSublevel.get(game);

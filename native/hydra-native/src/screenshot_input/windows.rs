@@ -411,11 +411,11 @@ fn xinput_buttons(user: u32) -> Option<u32> {
     })
 }
 
-pub(super) fn gamepad_button_pressed(button_mask: u32) -> Option<bool> {
+pub(super) fn gamepad_combo_pressed(combo_mask: u32) -> Option<bool> {
     let mut connected = false;
     for user in 0..XINPUT_USER_COUNT {
         if let Some(buttons) = xinput_buttons(user as u32) {
-            if buttons & button_mask != 0 {
+            if buttons & combo_mask == combo_mask {
                 return Some(true);
             }
             connected = true;

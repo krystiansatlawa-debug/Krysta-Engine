@@ -47,7 +47,7 @@ export default function KrystaRecordings() {
       const raw = await window.electron.krystaRecordingRead(c.id);
       if (token !== request.current) return;
       const url = URL.createObjectURL(
-        new Blob([new Uint8Array(raw)], { type: "video/webm" })
+        new Blob([new Uint8Array(raw)], { type: `video/${c.format}` })
       );
       videoUrl.current = url;
       setPlaying({
@@ -141,7 +141,7 @@ export default function KrystaRecordings() {
             {state.settings.limitGb} GB ·{" "}
             {[
               state.settings.hotkey.replace("Control", "Ctrl"),
-              recordingControllerLabel(state.settings.controllerButton),
+              recordingControllerLabel(state.settings.controllerCombo),
             ]
               .filter(Boolean)
               .join(" / ") || (pl ? "Skrót wyłączony" : "Hotkey disabled")}

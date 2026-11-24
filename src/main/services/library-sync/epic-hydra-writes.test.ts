@@ -137,6 +137,7 @@ function fixture() {
           dependencies[name] ?? assert.fail(`Unexpected dependency ${name}`),
         Date,
         Math,
+        AbortController,
         process,
         performance: { now: () => state.now },
       }
@@ -166,6 +167,10 @@ function fixture() {
     }>(
       "../process-watcher.ts",
       {
+        "./game-boost-background-sync": {
+          isGameBoostBackgroundSyncPaused: () => false,
+          waitForGameBoostBackgroundSync: async () => undefined,
+        },
         "./library-sync/library-write-queue": queue,
         "./library-sync": {
           createGame: sync.create,

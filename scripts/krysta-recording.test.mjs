@@ -13,11 +13,12 @@ const source = readFileSync(
   "utf8"
 ).match(/<script>([\s\S]*?)<\/script>/)[1];
 
-function fixture() {
+function fixture({ nvidia = "disabled", audio = false } = {}) {
   let clock = 0;
   let activeEncoders = 0;
   let previewCount = 0;
   let nextTimer = 0;
+  let hardwareStarts = 0;
   const timers = new Map();
   const stops = [];
   const worker = {
@@ -62,9 +63,21 @@ function fixture() {
       mediaDevices: {
         getDisplayMedia: async () => ({
           active: true,
-          getAudioTracks: () => [],
+          getAudioTracks: () =>
+            audio
+              ? [
+                  {
+                    getSettings: () => ({ channelCount: 2, sampleRate: 48000 }),
+                  },
+                ]
+              : [],
           getTracks: () => [{ stop: () => undefined }],
-          getVideoTracks: () => [{ addEventListener: () => undefined }],
+          getVideoTracks: () => [
+            {
+              addEventListener: () => undefined,
+              getSettings: () => ({ width: 1280, height: 720 }),
+            },
+          ],
         }),
       },
     },
@@ -76,6 +89,59 @@ function fixture() {
     },
     clearTimeout: (id) => timers.delete(id),
   };
+  if (nvidia !== "disabled") {
+    worker.krystaRecordingMuxer = {
+      canEncodeVideo: async (codec, config) => {
+        assert.equal(codec, "avc");
+        assert.equal(config.hardwareAcceleration, "prefer-hardware");
+        return nvidia !== "unsupported";
+      },
+      canEncodeAudio: async (codec) => codec === "aac",
+      BufferTarget: class {},
+      Mp4OutputFormat: class {},
+      MediaStreamVideoTrackSource: class {
+        errorPromise = new Promise(() => {});
+        constructor(_track, config, options) {
+          assert.equal(config.hardwareAcceleration, "prefer-hardware");
+          assert.equal(options.frameRate, null);
+          this.config = config;
+        }
+      },
+      MediaStreamAudioTrackSource: class {
+        errorPromise = new Promise(() => {});
+        constructor(_track, config) {
+          assert.equal(config.codec, "aac");
+          this.config = config;
+        }
+      },
+      Output: class {
+        constructor({ target }) {
+          this.target = target;
+        }
+        addVideoTrack(track) {
+          this.video = track;
+        }
+        addAudioTrack(track) {
+          this.audio = track;
+        }
+        async start() {
+          hardwareStarts++;
+          assert.equal(activeEncoders, 0);
+          activeEncoders++;
+          if (nvidia === "unavailable") throw Error("NVENC driver unavailable");
+          this.video.config.onEncodedPacket({ byteLength: 100 });
+          this.audio?.config.onEncodedPacket({ byteLength: 10 });
+        }
+        async cancel() {
+          activeEncoders--;
+        }
+        async finalize() {
+          activeEncoders--;
+          this.target.buffer = new ArrayBuffer(12);
+        }
+      },
+    };
+  }
   runInNewContext(source, worker);
   return {
     start: (preSeconds) =>
@@ -84,8 +150,9 @@ function fixture() {
         seconds: 5,
         fps: 30,
         quality: 720,
-        audio: false,
+        audio,
         maxBytes: 1000,
+        preferNvidia: nvidia !== "disabled",
       }),
     save: () => worker.krystaSave(),
     manualStart: () => worker.krystaManualStart(),
@@ -93,6 +160,7 @@ function fixture() {
     manualFinish: () => worker.krystaManualFinish(),
     previewCount: () => previewCount,
     activeEncoders: () => activeEncoders,
+    hardwareStarts: () => hardwareStarts,
     acknowledgeStop() {
       assert.equal(stops.length, 1);
       stops.shift()();
@@ -144,11 +212,13 @@ test("a clip with no replay buffer uses an encoder only after recording starts",
 
   const save = f.save();
   assert.equal(f.activeEncoders(), 1);
+  await flush();
   f.advance(5000);
   f.acknowledgeStop();
   const result = await save;
   assert.equal(result.before, 0);
   assert.equal(result.data, "Y2xpcA==");
+  assert.equal(result.format, "webm");
   assert.equal(f.activeEncoders(), 0);
 });
 
@@ -194,6 +264,45 @@ test("a stopped capture keeps its manual frames until the main process saves the
   assert.equal(result.data, "Y2xpcA==");
 });
 
+test("NVIDIA uses hardware H.264 and keeps loopback audio in the MP4", async () => {
+  const f = fixture({ nvidia: "available", audio: true });
+  await f.start(0);
+  assert.equal(f.hardwareStarts(), 0);
+  await f.manualStart();
+  assert.equal(f.hardwareStarts(), 1);
+  assert.equal(f.activeEncoders(), 1);
+  f.advanceClock(4000);
+  const result = await f.manualFinish();
+  assert.equal(result.duration, 4);
+  assert.equal(result.format, "mp4");
+  assert.equal(result.audio, true);
+  assert.equal(f.activeEncoders(), 0);
+});
+
+test("failed NVIDIA startup releases the encoder and the same hotkey records WebM", async () => {
+  const f = fixture({ nvidia: "unavailable" });
+  await f.start(0);
+  await f.manualStart();
+  assert.equal(f.hardwareStarts(), 1);
+  assert.equal(f.activeEncoders(), 1);
+  f.advanceClock(4000);
+  const finishing = f.manualFinish();
+  f.acknowledgeStop();
+  assert.equal((await finishing).format, "webm");
+  assert.equal(f.activeEncoders(), 0);
+});
+
+test("unsupported hardware configuration goes straight to WebM", async () => {
+  const f = fixture({ nvidia: "unsupported" });
+  await f.start(0);
+  await f.manualStart();
+  assert.equal(f.hardwareStarts(), 0);
+  f.advanceClock(4000);
+  const finishing = f.manualFinish();
+  f.acknowledgeStop();
+  assert.equal((await finishing).format, "webm");
+});
+
 function transpile(sourcePath) {
   return ts.transpileModule(
     readFileSync(new URL(sourcePath, import.meta.url), "utf8"),
@@ -217,12 +326,26 @@ runInNewContext(transpile("../src/shared/screenshot-input.ts"), {
 });
 runInNewContext(transpile("../src/shared/recording-controller.ts"), {
   exports: recordingController,
+  require(name) {
+    assert.equal(name, "./screenshot-input");
+    return screenshotInput;
+  },
 });
 
 async function serviceFixture(
   t,
   savedSettings,
-  { shortcutAvailable = true, displayPermission = "media" } = {}
+  {
+    shortcutAvailable = true,
+    displayPermission = "media",
+    gpuDevices = [],
+    recordingResult = {
+      data: "GkXfow==",
+      duration: 4,
+      before: 0,
+      audio: false,
+    },
+  } = {}
 ) {
   const directory = await fs.mkdtemp(path.join(tmpdir(), "krysta-f9-test-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
@@ -231,6 +354,8 @@ async function serviceFixture(
     path.join(directory, "recordings", "settings.json"),
     JSON.stringify({ enabled: true, ...savedSettings })
   );
+  const muxerFile = path.join(directory, "muxer.cjs");
+  await fs.writeFile(muxerFile, "var Mediabunny = {};");
   const hotkeys = new Map();
   const notices = [];
   const calls = [];
@@ -240,6 +365,7 @@ async function serviceFixture(
   const controllerReads = [];
   const pressedButtons = new Set();
   let controllerConnected = true;
+  let capturingControllerShortcut = false;
   let intervalId = 0;
   let permissionRequest;
   let displayMediaRequest;
@@ -263,6 +389,7 @@ async function serviceFixture(
         getPath: () => directory,
         isReady: () => true,
         whenReady: async () => {},
+        getGPUInfo: async () => ({ gpuDevice: gpuDevices }),
         on() {},
       },
       globalShortcut: {
@@ -281,6 +408,8 @@ async function serviceFixture(
           mainFrame: {},
           executeJavaScript: async (script) => {
             calls.push(script);
+            if (script.includes("krystaRecordingMuxer = Mediabunny"))
+              assert.equal(runInNewContext(script, {}), undefined);
             if (script.includes("krystaStart")) {
               const details = { isMainFrame: true, mediaTypes: [] };
               const allowed = await requestPermission(
@@ -298,7 +427,7 @@ async function serviceFixture(
               assert.equal(streams.video?.id, "window:123:0");
             }
             return script.includes("krystaManualFinish")
-              ? { data: "GkXfow==", duration: 4, before: 0, audio: false }
+              ? recordingResult
               : true;
           },
           setWindowOpenHandler() {},
@@ -322,11 +451,18 @@ async function serviceFixture(
     "@shared": { ...screenshotInput, ...recordingController },
     "./native-addon": {
       NativeAddon: {
-        getWindowsGamepadButtonPressed(button) {
-          controllerReads.push(button);
-          return controllerConnected ? pressedButtons.has(button) : null;
+        getWindowsGamepadComboPressed(buttons) {
+          controllerReads.push(buttons.join("+"));
+          return controllerConnected
+            ? buttons.every((button) => pressedButtons.has(button))
+            : null;
         },
       },
+    },
+    "./controller-shortcut-actions": {
+      dispatchControllerShortcut: (_action, trigger) =>
+        !capturingControllerShortcut && trigger(),
+      setControllerShortcutBinding() {},
     },
     "./game-running-state": {
       hasTrackedGamesRunning: () => true,
@@ -348,6 +484,8 @@ async function serviceFixture(
       isWindowsWindowSource: (id, handle) => id === `window:${handle}:0`,
     },
     "@resources/krysta-recording.html?asset": "capture.html",
+    "../../../node_modules/mediabunny/dist/bundles/mediabunny.min.cjs?asset":
+      muxerFile,
     "./recording-notice": {
       showRecordingNotice: (state) => notices.push(state),
     },
@@ -391,6 +529,9 @@ async function serviceFixture(
     },
     restoreFocus: () => (foreground = { windowHandle: "123", processId: 42 }),
     controllerReads,
+    setCapturingControllerShortcut: (value) => {
+      capturingControllerShortcut = value;
+    },
     sampleController(buttons, connected = true) {
       controllerConnected = connected;
       pressedButtons.clear();
@@ -414,6 +555,67 @@ async function waitFor(check) {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
+
+test("in a NVIDIA-only system F9 loads the muxer and saves an MP4", async (t) => {
+  const bytes = Buffer.from(
+    "00000018667479706d703432000000006d70343269736f6d",
+    "hex"
+  );
+  const f = await serviceFixture(
+    t,
+    {},
+    {
+      gpuDevices: [
+        { vendorId: 0x10de, deviceId: 0x2000, active: true },
+        { vendorId: 0x1414, deviceId: 0x008c, active: false },
+      ],
+      recordingResult: {
+        data: bytes.toString("base64"),
+        duration: 4,
+        before: 0,
+        audio: true,
+        format: "mp4",
+      },
+    }
+  );
+  f.press();
+  await waitFor(() => f.notices.includes("started"));
+  assert.ok(
+    f.calls.some((script) =>
+      script.includes("krystaRecordingMuxer = Mediabunny")
+    )
+  );
+  assert.ok(f.calls.some((script) => script.includes('"preferNvidia":true')));
+
+  f.press();
+  await waitFor(() => f.notices.includes("saved"));
+  const { clips } = await f.recordingState();
+  assert.equal(clips.length, 1);
+  assert.equal(clips[0].format, "mp4");
+  assert.deepEqual(Buffer.from(await f.readRecording(clips[0].id)), bytes);
+  await f.deleteRecording(clips[0].id);
+  assert.equal((await f.recordingState()).clips.length, 0);
+});
+
+test("a hybrid system records WebM because the video encoder vendor is ambiguous", async (t) => {
+  const f = await serviceFixture(
+    t,
+    {},
+    {
+      gpuDevices: [
+        { vendorId: 0x10de, deviceId: 0x2000, active: true },
+        { vendorId: 0x8086, deviceId: 0x2000, active: false },
+      ],
+    }
+  );
+  f.press();
+  await waitFor(() => f.notices.includes("started"));
+  assert.ok(f.calls.some((script) => script.includes('"preferNvidia":false')));
+  assert.ok(!f.calls.some((script) => script.includes("krystaRecordingMuxer")));
+  f.press();
+  await waitFor(() => f.notices.includes("saved"));
+  assert.equal((await f.recordingState()).clips[0].format, "webm");
+});
 
 test("F9 migrates the old default, starts capture, saves on focus loss and works again", async (t) => {
   const f = await serviceFixture(t, { hotkey: "Control+Shift+F9" });
@@ -507,6 +709,10 @@ test("allows display-capture requests from newer Electron on the recorder main f
 
 test("an assigned controller button starts recording once per press and saves on the next press", async (t) => {
   const f = await serviceFixture(t, { controllerButton: "back" });
+  assert.equal(
+    (await f.recordingState()).settings.controllerCombo.join("+"),
+    "back"
+  );
   f.sampleController(["back"]);
   f.sampleController(["back"]);
   await flush();
@@ -539,22 +745,96 @@ test("an assigned controller button starts recording once per press and saves on
 test("controller input is opt-in and its supported binding can be saved or removed", async (t) => {
   const f = await serviceFixture(t, {});
   const settings = (await f.recordingState()).settings;
-  assert.equal(settings.controllerButton, "");
+  assert.equal(settings.controllerCombo.length, 0);
   f.sampleController(["back"]);
   assert.deepEqual(f.controllerReads, []);
 
   await assert.rejects(
-    f.setRecordingSettings({ ...settings, controllerButton: "guide" }),
+    f.setRecordingSettings({ ...settings, controllerCombo: ["guide"] }),
     /Invalid recording settings/
   );
-  await f.setRecordingSettings({ ...settings, controllerButton: "rb" });
-  assert.equal((await f.recordingState()).settings.controllerButton, "rb");
+  await f.setRecordingSettings({ ...settings, controllerCombo: ["rb", "lb"] });
+  assert.equal(
+    (await f.recordingState()).settings.controllerCombo.join("+"),
+    "lb+rb"
+  );
   f.sampleController([]);
-  assert.deepEqual(f.controllerReads, ["rb"]);
+  assert.deepEqual(f.controllerReads, ["lb+rb"]);
 
-  await f.setRecordingSettings({ ...settings, controllerButton: "" });
+  await f.setRecordingSettings({ ...settings, controllerCombo: [] });
   f.sampleController(["rb"]);
-  assert.deepEqual(f.controllerReads, ["rb"]);
+  assert.deepEqual(f.controllerReads, ["lb+rb"]);
+});
+
+test("a controller chord triggers recording only when complete and outside shortcut capture", async (t) => {
+  const f = await serviceFixture(t, { controllerCombo: ["lb", "rb"] });
+  f.sampleController([]);
+  f.sampleController(["lb"]);
+  f.setCapturingControllerShortcut(true);
+  f.sampleController(["lb", "rb"]);
+  f.setCapturingControllerShortcut(false);
+  f.sampleController(["lb", "rb"]);
+  await flush();
+  assert.deepEqual(f.notices, []);
+
+  f.sampleController([]);
+  f.sampleController(["lb", "rb"]);
+  await waitFor(() => f.notices.includes("started"));
+});
+
+test("the longer controller shortcut supersedes its shorter overlapping shortcut", () => {
+  const exports = {};
+  let pressed = false;
+  let pollRelease;
+  runInNewContext(
+    transpile("../src/main/services/controller-shortcut-actions.ts"),
+    {
+      exports,
+      require(name) {
+        const deps = {
+          "@shared": screenshotInput,
+          "./native-addon": {
+            NativeAddon: { getWindowsGamepadComboPressed: () => pressed },
+          },
+          "./controller-shortcut-capture": {
+            isControllerShortcutCaptureActive: () => false,
+          },
+        };
+        assert.ok(Object.hasOwn(deps, name), name);
+        return deps[name];
+      },
+      setInterval(callback) {
+        pollRelease = callback;
+        return { unref() {} };
+      },
+      clearInterval() {
+        pollRelease = undefined;
+      },
+    }
+  );
+  const { setControllerShortcutBinding, dispatchControllerShortcut } = exports;
+  setControllerShortcutBinding("recording", ["lb"]);
+  setControllerShortcutBinding("screenshot", ["lb", "rb"]);
+  const called = [];
+  const fire = (action) => () => {
+    called.push(action);
+    return true;
+  };
+
+  pressed = true;
+  dispatchControllerShortcut("recording", fire("recording"));
+  pollRelease();
+  assert.deepEqual(called, []);
+  dispatchControllerShortcut("screenshot", fire("screenshot"));
+  pressed = false;
+  pollRelease();
+  assert.deepEqual(called, ["screenshot"]);
+
+  pressed = true;
+  dispatchControllerShortcut("recording", fire("recording"));
+  pressed = false;
+  pollRelease();
+  assert.deepEqual(called, ["screenshot", "recording"]);
 });
 
 test("a controller press outside the foreground game stays quiet", async (t) => {

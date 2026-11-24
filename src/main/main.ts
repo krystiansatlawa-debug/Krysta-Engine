@@ -50,6 +50,7 @@ import { UmuUpdater } from "./services/umu-updater";
 import { initializeScreenshots } from "./services/screenshots";
 import { setTrackedGamesRunningListenerErrorReporter } from "./services/game-running-state";
 import { syncXboxGuideGameShortcut } from "./services/xbox-guide-game-shortcut";
+import { syncGameBoostPreferences } from "./services/game-boost";
 
 const hasMissingSeedFiles = async (download: Download): Promise<boolean> => {
   if (!download.folderName) return false;
@@ -93,6 +94,7 @@ export const loadState = async () => {
   );
   ScreenshotInputService.syncUserPreferences(userPreferences);
   syncXboxGuideGameShortcut(userPreferences);
+  syncGameBoostPreferences(userPreferences);
 
   await import("./events");
 

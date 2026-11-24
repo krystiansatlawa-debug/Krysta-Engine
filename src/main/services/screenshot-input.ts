@@ -1,4 +1,8 @@
 import { globalShortcut } from "electron";
+import {
+  dispatchControllerShortcut,
+  setControllerShortcutBinding,
+} from "./controller-shortcut-actions";
 import type {
   ScreenshotGamepadButton,
   ScreenshotHotkeyBinding,
@@ -208,6 +212,15 @@ export class ScreenshotInputService {
   }
 
   public static trigger(source: ScreenshotTriggerSource) {
+    if (source === "gamepad") {
+      return dispatchControllerShortcut("screenshot", () =>
+        this.triggerInput(source)
+      );
+    }
+    return this.triggerInput(source);
+  }
+
+  private static triggerInput(source: ScreenshotTriggerSource) {
     if (!this.featureEnabled || !this.settings.enabled) {
       logger.debug("Screenshot trigger ignored: input disabled", {
         source,
@@ -366,6 +379,8 @@ export class ScreenshotInputService {
       return;
     }
 
+    this.syncControllerShortcutBinding();
+
     if (previous.gamepadEnabled !== this.settings.gamepadEnabled) {
       this.stopListening();
       this.startListening();
@@ -407,6 +422,7 @@ export class ScreenshotInputService {
       this.listening = true;
       this.listeningSince = performance.now();
       this.nativeStatus = nativeStatus;
+      this.syncControllerShortcutBinding();
       const status = this.applyListeningStatus(nativeStatus);
       logger.info("Screenshot input started", {
         ...status,
@@ -484,6 +500,7 @@ export class ScreenshotInputService {
     if (!this.listening) return;
     this.listening = false;
     this.nativeStatus = null;
+    this.syncControllerShortcutBinding();
     this.unregisterPortalShortcut();
 
     try {
@@ -494,6 +511,17 @@ export class ScreenshotInputService {
 
     logger.info("Screenshot input stopped");
     this.setStatus({ ...this.status, active: false });
+  }
+
+  private static syncControllerShortcutBinding() {
+    setControllerShortcutBinding(
+      "screenshot",
+      this.listening &&
+        this.settings.gamepadEnabled &&
+        this.nativeStatus?.gamepadBackend === "xinput"
+        ? this.settings.gamepadCombo
+        : []
+    );
   }
 
   private static handleNativeEvent(

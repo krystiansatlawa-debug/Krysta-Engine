@@ -34,6 +34,7 @@ import { SettingsContextEmulation } from "./emulation/settings-context-emulation
 
 const BASIC_SETTINGS = new Set([
   "general",
+  "game",
   "downloads",
   "krysta_updates",
   "screenshots",
@@ -106,6 +107,7 @@ export default function Settings() {
       {
         id: "game" as const,
         label: t("krysta_game_category", { defaultValue: "Game" }),
+        searchLabel: t("game_boost_heading"),
         icon: <Gamepad2 size={16} />,
       },
       {
@@ -155,10 +157,16 @@ export default function Settings() {
             categories.find((category) => category.id === currentCategoryId) ??
             categories[0];
           const selectedCategoryId = currentCategory.id;
-          const searchedCategories = categories.filter((category) =>
-            category.label
-              .toLocaleLowerCase(i18n.language)
-              .includes(categorySearch.toLocaleLowerCase(i18n.language))
+          const search = categorySearch.toLocaleLowerCase(i18n.language);
+          const searchedCategories = categories.filter(
+            (category) =>
+              category.label
+                .toLocaleLowerCase(i18n.language)
+                .includes(search) ||
+              ("searchLabel" in category &&
+                category.searchLabel
+                  ?.toLocaleLowerCase(i18n.language)
+                  .includes(search))
           );
           const displayedCategories = searchedCategories.filter(
             (category) =>

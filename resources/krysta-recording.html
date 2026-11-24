@@ -21,62 +21,80 @@
         ended = false,
         saving = false,
         selected = null,
+        starting = null,
         finishTimer = null;
       let chosenMime = "";
-      async function chooseMime() {
-        const candidates = ["h264", "vp8", "vp9"].filter((codec) =>
-          MediaRecorder.isTypeSupported(
-            "video/webm;codecs=" + codec + (config.audio ? ",opus" : "")
-          )
-        );
-        for (const codec of candidates) {
-          try {
-            const result = await navigator.mediaCapabilities?.encodingInfo({
-              type: "record",
-              video: {
-                contentType: "video/webm;codecs=" + codec,
-                width: Math.round((config.quality * 16) / 9),
-                height: config.quality,
-                bitrate: 5000000,
-                framerate: config.fps,
-              },
-            });
-            if (result?.supported && result.powerEfficient)
-              return (
-                "video/webm;codecs=" + codec + (config.audio ? ",opus" : "")
-              );
-          } catch {
-            /* encoder reporting is optional */
-          }
-        }
-        const fallback = candidates.find((codec) => codec !== "h264");
-        return fallback
-          ? "video/webm;codecs=" + fallback + (config.audio ? ",opus" : "")
-          : MediaRecorder.isTypeSupported("video/webm")
-            ? "video/webm"
-            : "";
-      }
-      function stopSegment(s) {
-        if (!s || s.recorder.state === "inactive") return;
-        try {
-          s.recorder.stop();
-        } catch {}
-      }
-      function segment() {
-        if (!stream?.active || ended) throw Error("Capture stream ended");
-        const mime = chosenMime;
-        if (!mime) throw Error("WebM recording not supported");
-        const bitrate = Math.round(
+      let nvidiaEncoder = null;
+
+      function videoBitrate() {
+        return Math.round(
           ({ 720: 3000000, 1080: 5000000, 1440: 7000000 }[config.quality] ||
             5000000) * (config.fps === 60 ? 1.3 : 1)
         );
+      }
+      function chooseMime() {
+        const audioCodec = config.audio ? ",opus" : "";
+        return (
+          [
+            "video/webm;codecs=vp8" + audioCodec,
+            "video/webm;codecs=vp9" + audioCodec,
+            "video/webm",
+          ].find((type) => MediaRecorder.isTypeSupported(type)) || ""
+        );
+      }
+      async function chooseNvidiaEncoder() {
+        const muxer = globalThis.krystaRecordingMuxer;
+        if (!config.preferNvidia || !muxer) return null;
+        const videoTrack = stream.getVideoTracks()[0];
+        const audioTrack = stream.getAudioTracks()[0];
+        const { width, height } = videoTrack.getSettings();
+        if (!width || !height) return null;
+        const videoConfig = {
+          bitrate: videoBitrate(),
+          hardwareAcceleration: "prefer-hardware",
+          latencyMode: "realtime",
+        };
+        // Electron's Chromium backend treats prefer-hardware as a hard
+        // requirement. It does not substitute a software video encoder.
+        if (
+          !(await muxer.canEncodeVideo("avc", {
+            ...videoConfig,
+            width,
+            height,
+            frameRate: config.fps,
+          }))
+        )
+          return null;
+
+        const audioConfig = { codec: "aac", bitrate: 128000 };
+        if (audioTrack) {
+          const { channelCount, sampleRate } = audioTrack.getSettings();
+          const audioOptions = {
+            bitrate: audioConfig.bitrate,
+            numberOfChannels: channelCount ?? 2,
+            sampleRate: sampleRate ?? 48000,
+          };
+          if (!(await muxer.canEncodeAudio("aac", audioOptions))) return null;
+        }
+        return { muxer, videoTrack, audioTrack, videoConfig, audioConfig };
+      }
+      function stopSegment(s) {
+        if (!s?.recording()) return;
+        try {
+          s.stop();
+        } catch {}
+      }
+      function webmSegment() {
+        if (!chosenMime) throw Error("WebM recording not supported");
         const recorder = new MediaRecorder(stream, {
-          mimeType: mime,
-          videoBitsPerSecond: bitrate,
+          mimeType: chosenMime,
+          videoBitsPerSecond: videoBitrate(),
           audioBitsPerSecond: 128000,
         });
         const s = {
-          recorder,
+          recording: () => recorder.state === "recording",
+          stop: () => recorder.stop(),
+          format: "webm",
           start: performance.now(),
           chunks: [],
           size: 0,
@@ -107,6 +125,128 @@
         recorder.start(2000);
         return s;
       }
+      async function nvidiaSegment(encoder) {
+        const { muxer, videoTrack, audioTrack, videoConfig, audioConfig } =
+          encoder;
+        const target = new muxer.BufferTarget();
+        const output = new muxer.Output({
+          format: new muxer.Mp4OutputFormat(),
+          target,
+        });
+        const finishSignal = Promise.withResolvers();
+        const ready = Promise.withResolvers();
+        let isRecording = true;
+        let hasVideo = false;
+        let hasAudio = !audioTrack;
+        const s = {
+          recording: () => isRecording,
+          stop: () => {
+            isRecording = false;
+            finishSignal.resolve();
+          },
+          format: "mp4",
+          start: performance.now(),
+          chunks: [],
+          size: 0,
+          discard: false,
+          error: null,
+          done: null,
+        };
+        function fail(error) {
+          s.error ||= error;
+          ready.reject(error);
+          stopSegment(s);
+        }
+        function packetWritten(packet) {
+          s.size += packet.byteLength;
+          if (s.size > config.maxBytes)
+            fail(Error("Recording size limit reached"));
+          else if (hasAudio && hasVideo) ready.resolve();
+        }
+        const video = new muxer.MediaStreamVideoTrackSource(
+          videoTrack,
+          {
+            ...videoConfig,
+            codec: "avc",
+            sizeChangeBehavior: "contain",
+            onEncodedPacket(packet) {
+              hasVideo = true;
+              packetWritten(packet);
+            },
+          },
+          { frameRate: null }
+        );
+        const sourceErrors = [video.errorPromise];
+        output.addVideoTrack(video);
+        if (audioTrack) {
+          const audio = new muxer.MediaStreamAudioTrackSource(audioTrack, {
+            ...audioConfig,
+            onEncodedPacket(packet) {
+              hasAudio = true;
+              packetWritten(packet);
+            },
+          });
+          sourceErrors.push(audio.errorPromise);
+          output.addAudioTrack(audio);
+        }
+        void Promise.race(sourceErrors).catch((error) => {
+          nvidiaEncoder = null;
+          fail(error);
+        });
+
+        s.done = finishSignal.promise.then(async () => {
+          const duration = Math.max(0, (performance.now() - s.start) / 1000);
+          try {
+            if (s.discard || s.error) await output.cancel();
+            else {
+              await output.finalize();
+              if (!target.buffer || target.buffer.byteLength > config.maxBytes)
+                throw Error("Recording size limit reached");
+              s.chunks = [target.buffer];
+            }
+          } catch (error) {
+            s.error ||= error;
+          }
+          return duration;
+        });
+
+        let deadline;
+        starting = s;
+        try {
+          await Promise.race([
+            Promise.all([output.start(), ready.promise]),
+            finishSignal.promise.then(() => {
+              throw s.error || Error("Capture cancelled");
+            }),
+            new Promise((_, reject) => {
+              deadline = setTimeout(
+                () => reject(Error("NVIDIA encoder startup timed out")),
+                2500
+              );
+            }),
+          ]);
+          return s;
+        } catch (error) {
+          fail(error);
+          await s.done;
+          throw error;
+        } finally {
+          starting = null;
+          clearTimeout(deadline);
+        }
+      }
+      async function segment() {
+        if (!stream?.active || ended) throw Error("Capture stream ended");
+        if (nvidiaEncoder) {
+          try {
+            return await nvidiaSegment(nvidiaEncoder);
+          } catch {
+            nvidiaEncoder = null;
+            if (!stream?.active || ended) throw Error("Capture stream ended");
+          }
+        }
+        return webmSegment();
+      }
       function discard(s) {
         s.discard = true;
         s.chunks = [];
@@ -130,12 +270,20 @@
       }
       function startRotation() {
         if (ended || saving || config.preSeconds === 0) return;
-        try {
-          buffered = segment();
-          rotation = setTimeout(rotate, config.preSeconds * 1000);
-        } catch {
-          globalThis.krystaStop();
-        }
+        rotating = segment()
+          .then(async (next) => {
+            if (ended || saving) {
+              await discard(next);
+              return;
+            }
+            buffered = next;
+            rotation = setTimeout(rotate, config.preSeconds * 1000);
+          })
+          .catch(() => globalThis.krystaStop())
+          .finally(() => {
+            rotating = null;
+          });
+        return rotating;
       }
       function stopPreview() {
         if (!video) return;
@@ -185,6 +333,7 @@
       globalThis.krystaStop = () => {
         ended = true;
         stopRotation();
+        if (starting) void discard(starting);
         if (buffered) {
           void discard(buffered);
           buffered = null;
@@ -225,20 +374,22 @@
           .addEventListener("ended", () => globalThis.krystaStop(), {
             once: true,
           });
-        chosenMime = await chooseMime();
-        if (ended || !chosenMime) {
+        chosenMime = chooseMime();
+        nvidiaEncoder = await chooseNvidiaEncoder().catch(() => null);
+        if (ended || (!chosenMime && !nvidiaEncoder)) {
           globalThis.krystaStop();
           throw Error("Video encoder unavailable");
         }
         started = true;
-        startRotation();
+        await startRotation();
         return true;
       };
       // Manual recording starts immediately and finishes only on the next hotkey.
       // Keep it separate from achievement clips and the replay buffer.
       let manual = null;
       globalThis.krystaManualStart = async () => {
-        if (!started || ended || saving || manual) throw Error("Capture not ready");
+        if (!started || ended || saving || manual)
+          throw Error("Capture not ready");
         saving = true;
         stopRotation();
         try {
@@ -247,7 +398,7 @@
             await discard(buffered);
             buffered = null;
           }
-          manual = segment();
+          manual = await segment();
           // Start the recorder before reporting success to the caller.
           return true;
         } catch (error) {
@@ -264,14 +415,23 @@
           stopSegment(selectedManual);
           const duration = await selectedManual.done;
           if (selectedManual.error) throw selectedManual.error;
-          const blob = new Blob(selectedManual.chunks, { type: "video/webm" });
+          const format = selectedManual.format;
+          const blob = new Blob(selectedManual.chunks, {
+            type: "video/" + format,
+          });
           const data = await new Promise((resolve, reject) => {
             const r = new FileReader();
             r.onload = () => resolve(String(r.result).split(",")[1]);
             r.onerror = () => reject(r.error);
             r.readAsDataURL(blob);
           });
-          return { data, duration, audio: stream.getAudioTracks().length > 0, before: 0 };
+          return {
+            data,
+            duration,
+            audio: stream.getAudioTracks().length > 0,
+            before: 0,
+            format,
+          };
         } finally {
           saving = false;
           if (!ended) startRotation();
@@ -286,14 +446,14 @@
           const previous = buffered;
           buffered = null;
           if (
-            previous?.recorder.state === "recording" &&
+            previous?.recording() &&
             !previous.error &&
             performance.now() - previous.start <= config.preSeconds * 1000 + 500
           ) {
             selected = previous;
           } else {
             if (previous) await discard(previous);
-            selected = segment();
+            selected = await segment();
           }
           const before = Math.min(
             config.preSeconds,
@@ -307,14 +467,15 @@
           finishTimer = setTimeout(finish, config.seconds * 1000);
           const duration = await selected.done;
           if (selected.error) throw selected.error;
-          const blob = new Blob(selected.chunks, { type: "video/webm" });
+          const format = selected.format;
+          const blob = new Blob(selected.chunks, { type: "video/" + format });
           const data = await new Promise((resolve, reject) => {
             const r = new FileReader();
             r.onload = () => resolve(String(r.result).split(",")[1]);
             r.onerror = () => reject(r.error);
             r.readAsDataURL(blob);
           });
-          return { data, duration, audio, thumbnail, before };
+          return { data, duration, audio, thumbnail, before, format };
         } finally {
           finish();
           stopPreview();

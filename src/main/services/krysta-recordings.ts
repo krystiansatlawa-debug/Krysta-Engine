@@ -11,7 +11,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Game, ScreenshotGamepadButton } from "@types";
-import { SCREENSHOT_GAMEPAD_BUTTONS, recordingControllerLabel } from "@shared";
+import {
+  isSameScreenshotGamepadCombo,
+  normalizeRecordingControllerCombo,
+  recordingControllerLabel,
+} from "@shared";
 import { levelKeys } from "@main/level";
 import {
   hasTrackedGamesRunning,
@@ -24,8 +28,14 @@ import {
 import { NativeAddon } from "./native-addon";
 import { isWindowsWindowSource } from "./windows-game-window-match";
 import capturePage from "@resources/krysta-recording.html?asset";
+import captureMuxer from "../../../node_modules/mediabunny/dist/bundles/mediabunny.min.cjs?asset";
 import { showRecordingNotice } from "./recording-notice";
+import {
+  dispatchControllerShortcut,
+  setControllerShortcutBinding,
+} from "./controller-shortcut-actions";
 
+type RecordingFormat = "webm" | "mp4";
 type Settings = {
   enabled: boolean;
   seconds: number;
@@ -36,7 +46,7 @@ type Settings = {
   limitGb: number;
   hotkey: string;
   hotkeyVersion: 1;
-  controllerButton: ScreenshotGamepadButton | "";
+  controllerCombo: ScreenshotGamepadButton[];
   folder?: string;
 };
 type Clip = {
@@ -47,6 +57,7 @@ type Clip = {
   duration: number;
   audio: boolean;
   size: number;
+  format: RecordingFormat;
   thumbnail?: string;
   before?: number;
 };
@@ -56,6 +67,7 @@ type Result = {
   audio: boolean;
   thumbnail?: string;
   before: number;
+  format?: RecordingFormat;
 };
 type Active = {
   win: BrowserWindow;
@@ -79,7 +91,7 @@ const defaults: Settings = {
   limitGb: 10,
   hotkey: "F9",
   hotkeyVersion: 1,
-  controllerButton: "",
+  controllerCombo: [],
 };
 const durations = [5, 10, 15, 30, 45, 60],
   preDurations = [0, 5, 10, 15, 30],
@@ -98,9 +110,47 @@ const thumbnail = (value: unknown): value is string =>
   typeof value === "string" &&
   value.length <= 24000 &&
   /^data:image\/jpeg;base64,[a-zA-Z0-9+/=]+$/.test(value);
+const isRecordingFormat = (value: unknown): value is RecordingFormat =>
+  value === "webm" || value === "mp4";
+
+let muxerScript: Promise<string> | undefined;
+
+async function prepareNvidiaEncoder(win: BrowserWindow): Promise<boolean> {
+  try {
+    const info = (await app.getGPUInfo("complete")) as {
+      gpuDevice?: { vendorId: number; deviceId: number; active: boolean }[];
+    };
+    const hardwareDevices = info.gpuDevice?.filter(
+      ({ vendorId, deviceId }) => vendorId !== 0x1414 || deviceId !== 0x008c
+    );
+    // Chromium can select another vendor's Media Foundation encoder when
+    // multiple hardware vendors are present, even with NVIDIA marked active.
+    if (
+      !hardwareDevices?.some((device) => device.active) ||
+      hardwareDevices.some((device) => device.vendorId !== 0x10de)
+    )
+      return false;
+
+    muxerScript ??= fs.readFile(captureMuxer, "utf8");
+    await win.webContents.executeJavaScript(
+      `${await muxerScript}\n;void (globalThis.krystaRecordingMuxer = Mediabunny);`
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function normalize(value: unknown, migrateLegacy = false): Settings | null {
   if (!value || typeof value !== "object") return null;
-  const raw = value as Partial<Settings>;
+  const { controllerButton, ...raw } = value as Partial<Settings> & {
+    controllerButton?: unknown;
+  };
+  const controllerCombo = normalizeRecordingControllerCombo(
+    raw.controllerCombo,
+    controllerButton
+  );
+  if (!controllerCombo) return null;
   const hotkey =
     migrateLegacy &&
     raw.hotkeyVersion === undefined &&
@@ -112,7 +162,7 @@ function normalize(value: unknown, migrateLegacy = false): Settings | null {
     ...raw,
     hotkey,
     hotkeyVersion: defaults.hotkeyVersion,
-    controllerButton: raw.controllerButton ?? defaults.controllerButton,
+    controllerCombo,
   };
   if (
     typeof s.enabled !== "boolean" ||
@@ -122,9 +172,7 @@ function normalize(value: unknown, migrateLegacy = false): Settings | null {
     !qualities.includes(s.quality) ||
     !frameRates.includes(s.fps) ||
     !limits.includes(s.limitGb) ||
-    !hotkeys.includes(s.hotkey) ||
-    (s.controllerButton !== "" &&
-      !SCREENSHOT_GAMEPAD_BUTTONS.includes(s.controllerButton))
+    !hotkeys.includes(s.hotkey)
   )
     return null;
   return {
@@ -163,7 +211,7 @@ let current: Active | null = null,
   retryAt = 0;
 let timer: ReturnType<typeof setInterval> | undefined;
 let controllerTimer: ReturnType<typeof setInterval> | undefined;
-let controllerButton: Settings["controllerButton"] = "";
+let controllerCombo: Settings["controllerCombo"] = [];
 let storageQueue: Promise<unknown> = Promise.resolve();
 let spaceCache: {
   dir: string;
@@ -298,10 +346,14 @@ export async function chooseRecordingFolder(reset = false) {
   const chosen = path.resolve(result.filePaths[0]);
   await saveSettings({ ...old, folder: chosen });
 }
-async function safeClip(id: unknown, dir: string) {
+async function safeClip(id: unknown, dir: string, format?: RecordingFormat) {
   if (!validId(id)) throw Error("Invalid recording id");
-  const file = path.join(dir, id + ".webm"),
-    stat = await fs.lstat(file);
+  let file = path.join(dir, `${id}.${format ?? "webm"}`);
+  const stat = await fs.lstat(file).catch((error: NodeJS.ErrnoException) => {
+    if (format || error.code !== "ENOENT") throw error;
+    file = path.join(dir, `${id}.mp4`);
+    return fs.lstat(file);
+  });
   if (!stat.isFile() || stat.isSymbolicLink() || stat.size > maxBytes)
     throw Error("Invalid recording");
   return { file, stat };
@@ -323,8 +375,10 @@ async function list(dir: string): Promise<Clip[]> {
         st = await fs.lstat(info);
       if (!st.isFile() || st.isSymbolicLink() || st.size > 65536) continue;
       const c = JSON.parse(await fs.readFile(info, "utf8")) as Clip;
+      const format = c.format ?? "webm";
       if (
         c.id !== id ||
+        !isRecordingFormat(format) ||
         typeof c.game !== "string" ||
         typeof c.achievement !== "string" ||
         !Number.isFinite(Date.parse(c.createdAt)) ||
@@ -333,7 +387,7 @@ async function list(dir: string): Promise<Clip[]> {
         typeof c.audio !== "boolean"
       )
         continue;
-      const { stat } = await safeClip(id, dir);
+      const { stat } = await safeClip(id, dir, format);
       clips.push({
         id,
         game: c.game,
@@ -342,6 +396,7 @@ async function list(dir: string): Promise<Clip[]> {
         duration: c.duration,
         audio: c.audio,
         size: stat.size,
+        format,
         before:
           typeof c.before === "number" && Number.isFinite(c.before)
             ? c.before
@@ -371,12 +426,19 @@ async function persist(
   )
     throw Error("Recording incomplete or too short");
   const bytes = Buffer.from(result.data, "base64");
+  const format = result.format ?? "webm";
   if (
     !bytes.length ||
     bytes.length > maxBytes ||
-    bytes.subarray(0, 4).toString("hex") !== "1a45dfa3"
+    !isRecordingFormat(format) ||
+    (format === "webm"
+      ? bytes.subarray(0, 4).toString("hex") !== "1a45dfa3"
+      : bytes.length < 16 ||
+        bytes.subarray(4, 8).toString("ascii") !== "ftyp" ||
+        bytes.readUInt32BE(0) < 16 ||
+        bytes.readUInt32BE(0) > bytes.length)
   )
-    throw Error("Invalid WebM recording");
+    throw Error("Invalid recording file");
   const dir = folder(a.prefs);
   const id = randomUUID();
   const clip: Clip = {
@@ -391,6 +453,7 @@ async function persist(
       ) / 10,
     audio: result.audio === true,
     size: bytes.length,
+    format,
     thumbnail: thumbnail(result.thumbnail) ? result.thumbnail : undefined,
   };
   await serializeStorage(async () => {
@@ -402,7 +465,7 @@ async function persist(
   });
 }
 async function writeClip(dir: string, clip: Clip, bytes: Uint8Array) {
-  const file = path.join(dir, clip.id + ".webm"),
+  const file = path.join(dir, `${clip.id}.${clip.format}`),
     info = path.join(dir, clip.id + ".json");
   let wroteVideo = false,
     wroteInfo = false;
@@ -477,6 +540,7 @@ export async function saveTrimmedRecording(
       duration: Math.round(duration * 10) / 10,
       audio,
       size: data.byteLength,
+      format: "webm",
       before:
         original.before === undefined
           ? undefined
@@ -547,6 +611,7 @@ async function openCapture(
       contextIsolation: true,
       nodeIntegration: false,
       backgroundThrottling: false,
+      autoplayPolicy: "no-user-gesture-required",
     },
   });
   const a: Active = {
@@ -623,11 +688,13 @@ async function openCapture(
       return null;
     }
     await Promise.race([
-      win.webContents.executeJavaScript(
-        "globalThis.krystaStart(" +
-          JSON.stringify({ ...prefs, maxBytes }) +
-          ")",
-        true
+      prepareNvidiaEncoder(win).then((preferNvidia) =>
+        win.webContents.executeJavaScript(
+          "globalThis.krystaStart(" +
+            JSON.stringify({ ...prefs, maxBytes, preferNvidia }) +
+            ")",
+          true
+        )
       ),
       new Promise<never>((_, reject) => {
         deadline = setTimeout(
@@ -721,7 +788,7 @@ async function startManualRecording(source: "keyboard" | "controller") {
     void showRecordingNotice(
       "started",
       source === "controller"
-        ? recordingControllerLabel(a.prefs.controllerButton)
+        ? recordingControllerLabel(a.prefs.controllerCombo)
         : keyboardHint
     );
   } catch (error) {
@@ -809,7 +876,8 @@ async function trigger(expected: string | null, names: string[]) {
     pendingKey = a.key;
     const result = await Promise.race([
       a.win.webContents.executeJavaScript(
-        "globalThis.krystaSave()"
+        "globalThis.krystaSave()",
+        true
       ) as Promise<Result>,
       new Promise<never>((_, reject) => {
         deadline = setTimeout(
@@ -930,19 +998,25 @@ export async function openRecordingsFolder() {
 }
 export { stopRecording, toggleManualRecording };
 
-function syncRecordingController(button: Settings["controllerButton"]) {
-  if (button === controllerButton) return;
+function syncRecordingController(combo: Settings["controllerCombo"]) {
+  if (isSameScreenshotGamepadCombo(combo, controllerCombo)) return;
   if (controllerTimer) clearInterval(controllerTimer);
   controllerTimer = undefined;
-  controllerButton = button;
-  if (!button) return;
+  controllerCombo = combo;
+  setControllerShortcutBinding("recording", combo);
+  if (!combo.length) return;
 
   let wasPressed: boolean | null = null;
   controllerTimer = setInterval(() => {
-    const pressed = NativeAddon.getWindowsGamepadButtonPressed(button);
+    const pressed = NativeAddon.getWindowsGamepadComboPressed(combo);
     const justPressed = wasPressed === false && pressed === true;
     wasPressed = pressed;
-    if (justPressed) void toggleManualRecording("controller");
+    if (justPressed) {
+      dispatchControllerShortcut("recording", () => {
+        void toggleManualRecording("controller");
+        return true;
+      });
+    }
   }, 24);
   controllerTimer.unref();
 }
@@ -951,7 +1025,7 @@ function syncRecordingMonitor() {
   if (process.platform !== "win32" || !app.isReady() || quitting) return;
   const running = hasTrackedGamesRunning();
   const active = preferences?.enabled && running ? preferences : null;
-  syncRecordingController(active?.controllerButton ?? "");
+  syncRecordingController(active?.controllerCombo ?? []);
   if (active) {
     if (!timer) {
       timer = setInterval(() => void reconcile(), 500);
@@ -984,7 +1058,7 @@ void app
 app.on("before-quit", () => {
   quitting = true;
   unsubscribe?.();
-  syncRecordingController("");
+  syncRecordingController([]);
   epoch++;
   if (timer) clearInterval(timer);
   if (registered) globalShortcut.unregister(registered);

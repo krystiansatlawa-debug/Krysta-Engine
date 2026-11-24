@@ -162,6 +162,10 @@ type HydraNativeModule = {
     preserveAnimation: boolean
   ) => Promise<NativeProcessSizedImageResponse>;
   listProcesses: () => NativeProcessPayload[];
+  requestWindowsBackgroundApplicationClose?: (
+    processId: number,
+    expectedPath: string
+  ) => boolean;
   getLinuxActiveWindow: () => NativeActiveWindowResponse | null;
   startScreenshotInput: (
     config: ScreenshotInputNativeConfig,
@@ -187,7 +191,9 @@ type HydraNativeModule = {
   isRtssOsdAvailable?: () => boolean;
   updateRtssOsd?: (processId: number) => boolean;
   getWindowsXboxGuidePressed?: () => boolean | null;
-  getWindowsGamepadButtonPressed?: (button: string) => boolean | null;
+  getWindowsGameBarControllerEnabled?: () => boolean;
+  setWindowsGameBarControllerEnabled?: (enabled: boolean) => boolean;
+  getWindowsGamepadComboPressed?: (buttons: readonly string[]) => boolean | null;
   minimizeWindowsGameWindow?: (windowHandle: string, processId: number) => boolean;
   restoreWindowsGameWindow?: (windowHandle: string, processId: number) => boolean;
   getLinuxWindowClientPid?: (windowId: string) => number | null;
@@ -531,6 +537,17 @@ export class NativeAddon {
     }
   }
 
+  public static requestWindowsBackgroundApplicationClose(
+    processId: number,
+    expectedPath: string
+  ): boolean {
+    if (process.platform !== "win32") return false;
+    return (
+      this.load().requestWindowsBackgroundApplicationClose?.(processId, expectedPath) ??
+      false
+    );
+  }
+
   public static listProcesses(): Promise<NativeProcessPayload[]> {
     return new Promise((resolve) => {
       try {
@@ -605,10 +622,10 @@ export class NativeAddon {
     }
   }
 
-  public static getWindowsGamepadButtonPressed(button: string) {
+  public static getWindowsGamepadComboPressed(buttons: readonly string[]) {
     if (process.platform !== "win32") return null;
     try {
-      return this.load().getWindowsGamepadButtonPressed?.(button) ?? null;
+      return this.load().getWindowsGamepadComboPressed?.(buttons) ?? null;
     } catch {
       return null;
     }
@@ -623,6 +640,16 @@ export class NativeAddon {
       logger.warn("Failed to read the Xbox Guide button", error);
       return null;
     }
+  }
+
+  public static getWindowsGameBarControllerEnabled() {
+    if (process.platform !== "win32") return null;
+    return this.load().getWindowsGameBarControllerEnabled?.() ?? null;
+  }
+
+  public static setWindowsGameBarControllerEnabled(enabled: boolean) {
+    if (process.platform !== "win32") return null;
+    return this.load().setWindowsGameBarControllerEnabled?.(enabled) ?? null;
   }
 
   public static setWindowsGameWindowMinimized(

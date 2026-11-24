@@ -1,4 +1,8 @@
-import { hasTrackedGamesRunning, onTrackedGamesRunningChange } from "./game-running-state";
+import {
+  isGameBoostBackgroundSyncPaused,
+  onGameBoostBackgroundSyncChange,
+  waitForGameBoostBackgroundSync,
+} from "./game-boost-background-sync";
 import { sleep } from "@main/helpers";
 import { DownloadManager } from "./download";
 import { gamesPlaytime, watchProcesses } from "./process-watcher";
@@ -18,32 +22,31 @@ const wrapInLoop = (
   const loop = async () => {
     // eslint-disable-next-line no-constant-condition
     while (true) {
+      if (deferDuringGame && isGameBoostBackgroundSyncPaused()) {
+        await waitForGameBoostBackgroundSync();
+        continue;
+      }
+
       try {
-        if (!deferDuringGame || !hasTrackedGamesRunning()) await fn();
+        await fn();
       } catch (error) {
         logger.error(
           `Error in loop: ${error instanceof Error ? error.stack : String(error)}`
         );
       }
 
-      if (deferDuringGame) {
-        // Wake deferred tasks promptly when the final tracked game exits.
+      if (!deferDuringGame) {
+        await sleep(interval);
+      } else if (!isGameBoostBackgroundSyncPaused()) {
         await new Promise<void>((resolve) => {
-          let wasRunning = hasTrackedGamesRunning();
           const finish = () => {
             clearTimeout(timer);
             unsubscribe();
             resolve();
           };
-          const unsubscribe = onTrackedGamesRunningChange(() => {
-            const running = hasTrackedGamesRunning();
-            if (wasRunning && !running) finish();
-            wasRunning = running;
-          });
           const timer = setTimeout(finish, interval);
+          const unsubscribe = onGameBoostBackgroundSyncChange(finish);
         });
-      } else {
-        await sleep(interval);
       }
     }
   };
@@ -53,7 +56,7 @@ const wrapInLoop = (
 export const startMainLoop = async () => {
   wrapInLoop(async () => {
     await watchProcesses();
-    if (!hasTrackedGamesRunning()) refreshQueuedStoryProgress();
+    refreshQueuedStoryProgress();
   }, INTERVALS.processWatcher);
   wrapInLoop(() => DownloadManager.watchDownloads(), INTERVALS.downloadWatcher);
   wrapInLoop(

@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, CheckboxField, SelectField } from "@renderer/components";
-import { SCREENSHOT_GAMEPAD_BUTTONS, recordingControllerLabel } from "@shared";
+import { SettingsControllerShortcut } from "./settings-screenshots-gamepad";
 
 type State = Awaited<ReturnType<typeof window.electron.krystaRecordingsState>>;
 type Settings = State["settings"];
 
 export function SettingsAchievementRecordings() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation("controller_shortcuts");
   const pl = i18n.language.startsWith("pl");
   const [state, setState] = useState<State | null>(null);
   const [busy, setBusy] = useState(false);
@@ -166,35 +166,14 @@ export function SettingsAchievementRecordings() {
             : "Hotkey unavailable. Choose another."}
         </small>
       )}
-      <SelectField
-        className="settings-screenshots__select"
-        label={
-          pl
-            ? "Przycisk pada do rozpoczęcia i zakończenia nagrywania"
-            : "Controller button to start and stop recording"
-        }
-        value={state?.settings.controllerButton ?? ""}
-        options={[
-          { key: "disabled", value: "", label: pl ? "Wyłączony" : "Disabled" },
-          ...SCREENSHOT_GAMEPAD_BUTTONS.map((button) => ({
-            key: button,
-            value: button,
-            label: recordingControllerLabel(button),
-          })),
-        ]}
+      <SettingsControllerShortcut
+        label={t("recording_label")}
+        hint={t("recording_hint")}
+        combo={state?.settings.controllerCombo ?? []}
         disabled={disabled || !state?.settings.enabled}
-        onChange={(event) => {
-          const button = SCREENSHOT_GAMEPAD_BUTTONS.find(
-            (value) => value === event.target.value
-          );
-          void update({ controllerButton: button ?? "" });
-        }}
+        onChange={(controllerCombo) => update({ controllerCombo })}
+        reset={{ label: t("clear"), buttons: [] }}
       />
-      <small>
-        {pl
-          ? "W grze naciśnij wybrany przycisk pada, aby rozpocząć nagranie. Naciśnij go ponownie, aby zapisać klip. Przycisk nadal działa w samej grze."
-          : "Press the chosen controller button in a game to start recording. Press it again to save the clip. The button continues to work in the game."}
-      </small>
       <CheckboxField
         label={pl ? "Nagrywaj dźwięk systemowy" : "Record system audio"}
         checked={state?.settings.audio ?? false}

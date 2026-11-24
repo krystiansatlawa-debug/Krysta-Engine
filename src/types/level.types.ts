@@ -266,6 +266,10 @@ export interface UserPreferences {
   hideLibraryAchievementProgress?: boolean;
   autoplayAnimatedArtwork?: boolean;
   persistFiltersAndSorting?: boolean;
+  gameBoostEnabled?: boolean;
+  gameBoostPauseBackgroundSync?: boolean;
+  gameBoostCloseApplications?: string[];
+  gameBoostRestoreApplications?: boolean;
   screenshotsEnabled?: boolean;
   screenshotsFolderPath?: string;
   screenshotHotkey?: ScreenshotHotkeyBinding;
