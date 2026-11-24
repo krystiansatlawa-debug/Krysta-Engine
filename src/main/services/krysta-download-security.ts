@@ -312,7 +312,7 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       if (inventory.suspiciousProperties.executableScripts) reasons.push("Wykryto skrypty wykonywalne; ich obecność nie przesądza o zagrożeniu.");
       if (inventory.archives) reasons.push("Wykryto archiwa; zawartość wymaga sprawdzenia po rozpakowaniu.");
       const level = high ? "high" : reasons.length ? "review" : "unverified";
-      if (!reasons.length) reasons.push("Brak potwierdzonego wyniku skanowania konkretnych plików.");
+      reasons.push("Brak potwierdzonego wyniku skanowania konkretnych plików; gra pozostaje niezweryfikowana.");
       scanPhases.set(scanKey, "integrity");
       const finalInventory = await inspectDownloadTree(base, target);
       if (finalInventory.fingerprint !== inventory.fingerprint) {
