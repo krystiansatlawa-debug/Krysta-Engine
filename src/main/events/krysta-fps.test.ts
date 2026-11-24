@@ -6,7 +6,7 @@ import test from "node:test";
 import { setImmediate } from "node:timers/promises";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
-import { PresentMonFps } from "../services/presentmon-fps.js";
+import { PresentMonFps, adaptiveFpsInterval } from "../services/presentmon-fps.js";
 
 const source = readFileSync(
   new URL("./krysta-fps.ts", import.meta.url),
@@ -131,7 +131,7 @@ function fixture(preference: {
         updateRtssOsd: (pid: number) => (rtss.push(pid), true),
       },
     },
-    "@main/services/presentmon-fps": { PresentMonFps },
+    "@main/services/presentmon-fps": { PresentMonFps, adaptiveFpsInterval },
   };
 
   runInNewContext(outputText, {
@@ -162,7 +162,7 @@ function fixture(preference: {
     },
     async focus(window: typeof game) {
       foreground = window;
-      const timer = [...timers].find(timer => timer.delay === 750) ?? [...timers].at(-1);
+      const timer = [...timers].at(-1);
       assert.ok(timer);
       timers.delete(timer);
       timer.callback();
