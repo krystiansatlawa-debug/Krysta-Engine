@@ -31,13 +31,13 @@ export function parseRockstarAwardedAchievements(
     if (!/^[a-zA-Z0-9_.:-]{1,128}$/.test(id)) continue;
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
     const award = raw as Record<string, unknown>;
-    if (award.achieved === false) continue;
+    if (award.achieved !== undefined && award.achieved !== true && award.achieved !== 1 && award.achieved !== "1" && award.achieved !== "true") continue;
     // In older responses the achieved flag was omitted. A valid
     // dateAchieved is required as evidence of a genuine unlock.
     const date = award.dateAchieved;
     if (typeof date !== "string" || !date.trim()) continue;
     const time = Date.parse(date);
-    if (!Number.isFinite(time)) continue;
+    if (!Number.isFinite(time) || time <= 0 || time > Date.now() + 86400000) continue;
     result.push({ id, unlockTime: time });
   }
   return result.sort((a, b) => (b.unlockTime ?? 0) - (a.unlockTime ?? 0));
