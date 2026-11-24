@@ -1,15 +1,15 @@
 import {
   GAMEPAD_REPEAT_INITIAL_DELAY,
   getGamepadRepeatInterval,
+} from "../helpers/gamepad-repeat";
+import {
   GamepadLayout,
   getGamepadLayout,
-} from "../helpers";
-import type {
-  GamepadAxisButtonMapping,
-  GamepadAxisTriggerMapping,
-  GamepadInputMapping,
-  GamepadPhysicalAxisMapping,
-} from "../helpers";
+  type GamepadAxisButtonMapping,
+  type GamepadAxisTriggerMapping,
+  type GamepadInputMapping,
+  type GamepadPhysicalAxisMapping,
+} from "../helpers/gamepad-layout";
 import {
   GamepadAxisType,
   GamepadButtonType,

@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
 import { HIDE_COMMUNITY_SCREENSHOTS_SETTING_ID } from "@shared";
 
@@ -48,7 +49,10 @@ import {
   NOTIFICATIONS_LIBRARY_ITEM_FOCUS_IDS,
 } from "./settings-navigation";
 
-import { ControllerSettingsSection } from "./controllers";
+import {
+  CONTROLLER_SETTINGS_REGION_ID,
+  ControllerSettingsSection,
+} from "./controllers";
 import "./page.scss";
 
 const ALL_SETTINGS_TABS = [
@@ -58,7 +62,7 @@ const ALL_SETTINGS_TABS = [
   { id: "content", label: "Content" },
   { id: "screenshots", label: "Screenshots" },
   { id: "big-picture", label: "Big Picture" },
-  { id: "controllers", label: "Kontrolery" },
+  { id: "controllers", label: "Controllers" },
   { id: "emulation", label: "Emulation" },
   { id: "integrations", label: "Integrations" },
   { id: "compatibility", label: "Compatibility" },
@@ -281,17 +285,20 @@ export default function Settings() {
     visibleTabs.length,
   ]);
 
+  const { t } = useTranslation("settings");
+  const controllerTitle = t("controller_configuration.title");
+
   const tabItems = useMemo(() => {
     return visibleTabs.map(
       (tab): TabsItem<SettingsTabId> => ({
         value: tab.id,
-        label: tab.label,
+        label: tab.id === "controllers" ? controllerTitle : tab.label,
       })
     );
-  }, [visibleTabs]);
+  }, [controllerTitle, visibleTabs]);
 
   const initialFocusTarget = useMemo<FocusOverrideTarget | null>(() => {
-    const platform = globalThis.window.electron.platform;
+    const platform = globalThis.window.electron?.platform;
 
     switch (selectedTab) {
       case "general":
@@ -335,6 +342,13 @@ export default function Settings() {
         return {
           type: "item",
           itemId: BIG_PICTURE_ITEM_FOCUS_IDS.enableVirtualKeyboard,
+        };
+      case "controllers":
+        return {
+          type: "region",
+          regionId: CONTROLLER_SETTINGS_REGION_ID,
+          entryDirection: "down",
+          preferRememberedFocus: true,
         };
       case "emulation":
         return isRetroArchEmulationDeepLink(search) ||

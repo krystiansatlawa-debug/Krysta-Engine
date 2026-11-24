@@ -5,7 +5,7 @@
 - Wspólna zakładka **Kontrolery** w zwykłej Kryście i Big Picture. Zapisane profile Xbox i DualSense pozwalają ustawić przypisania przycisków, prędkość kursora i martwą strefę dla każdego pada.
 - Opcjonalne sterowanie pulpitem Windows obejmuje kliknięcia, przewijanie oraz przeciąganie plików i okien. Moduł wstrzymuje sterowanie podczas śledzonej gry i wznawia je po jej zakończeniu.
 - Klawiaturę ekranową Windows można wywołać skrótem pada lub automatycznie po wejściu do obsługiwanego pola edycji. Profil pozwala przypisać zaznaczanie, kopiowanie i wklejanie.
-- Włączony moduł uruchamia się razem z Krystą i pracuje po zamknięciu okna do zasobnika. Można go wyłączyć z ustawień lub menu zasobnika.
+- Włączony moduł uruchamia się razem z Krystą i pracuje w zasobniku systemowym. Można go wyłączyć z ustawień lub menu zasobnika.
 
 ### Ekrany i dźwięk
 

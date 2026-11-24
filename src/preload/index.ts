@@ -2,6 +2,11 @@
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 import { contextBridge, ipcRenderer } from "electron";
 import { randomUUID } from "node:crypto";
+import type {
+  ControllerDisplayMode,
+  ControllerDisplaySettings,
+} from "../shared/controller-display";
+import type { WindowsDesktopControllerSettings } from "../shared/controller-desktop";
 
 import type {
   SystemPowerAction,
@@ -247,10 +252,34 @@ contextBridge.exposeInMainWorld("electron", {
   krystaFpsSetPosition: (position: "tl" | "tr" | "bl" | "br") =>
     ipcRenderer.invoke("krysta:fps-set-position", position),
   getControllerDesktopDisplays: () => ipcRenderer.invoke("getControllerDesktopDisplays"),
+  getWindowsControllerDisplays: () => ipcRenderer.invoke("getWindowsControllerDisplays"),
+  getControllerDisplaySettings: () => ipcRenderer.invoke("getControllerDisplaySettings"),
+  setControllerDisplaySettings: (patch: Partial<ControllerDisplaySettings>) =>
+    ipcRenderer.invoke("setControllerDisplaySettings", patch),
+  setControllerDisplayMode: (mode: ControllerDisplayMode, displayId?: string) =>
+    ipcRenderer.invoke("setControllerDisplayMode", mode, displayId),
+  onControllerDisplaySettingsChange: (callback: (settings: ControllerDisplaySettings) => void) => {
+    const listener = (_: Electron.IpcRendererEvent, settings: ControllerDisplaySettings) => callback(settings);
+    ipcRenderer.on("controller-display-settings-changed", listener);
+    return () => ipcRenderer.removeListener("controller-display-settings-changed", listener);
+  },
+  onControllerDisplaysChange: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("controller-displays-changed", listener);
+    return () => ipcRenderer.removeListener("controller-displays-changed", listener);
+  },
   moveControllerWindowToDisplay: (id: number) => ipcRenderer.invoke("moveControllerWindowToDisplay", id),
   getWindowsSonyBatteryLevels: () => ipcRenderer.invoke("getWindowsSonyBatteryLevels"),
   controllerPointerAction: (action: string, value: number) => ipcRenderer.invoke("controllerPointerAction", action, value),
-  setBackgroundControllerCursor: (enabled: boolean, slot: number, speed: number, deadZone: number) => ipcRenderer.invoke("setBackgroundControllerCursor", enabled, slot, speed, deadZone),
+  getDesktopControllerSettings: () => ipcRenderer.invoke("getDesktopControllerSettings"),
+  updateDesktopControllerSettings: (patch: Partial<WindowsDesktopControllerSettings>) =>
+    ipcRenderer.invoke("updateDesktopControllerSettings", patch),
+  getDesktopControllerDevices: () => ipcRenderer.invoke("getDesktopControllerDevices"),
+  onDesktopControllerSettingsChanged: (callback: (settings: WindowsDesktopControllerSettings) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, settings: WindowsDesktopControllerSettings) => callback(settings);
+    ipcRenderer.on("desktop-controller-settings-changed", listener);
+    return () => { ipcRenderer.removeListener("desktop-controller-settings-changed", listener); };
+  },
   moveControllerCursor: (dx: number, dy: number) => ipcRenderer.invoke("moveControllerCursor", dx, dy),
   getWindowsXboxBatteryLevels: () => ipcRenderer.invoke("getWindowsXboxBatteryLevels"),
   getWindowsGameBarControllerEnabled: () =>

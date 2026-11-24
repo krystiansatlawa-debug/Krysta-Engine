@@ -4,8 +4,14 @@ import { createRequire } from "node:module";
 import { Worker } from "node:worker_threads";
 
 import { app } from "electron";
+import type { WindowsDesktopControllerDevice } from "../../shared/controller-desktop";
 import type { ProcessPayload } from "./download/types";
 import type { EpicProcessNode } from "./epic/managed-process-tracker";
+
+import type {
+  ControllerDisplay,
+  ControllerDisplayMode,
+} from "../../shared/controller-display";
 import type {
   BuildLocalGameSnapshotInput,
   BuildLocalGameSnapshotPipelineInput,
@@ -28,6 +34,11 @@ import type {
 } from "@types";
 
 import { logger } from "./logger";
+
+interface WindowsDesktopControllerFrame extends WindowsDesktopControllerDevice {
+  axes: number[];
+  buttons: number;
+}
 
 type NativeProcessProfileImageResponse = {
   imagePath?: string;
@@ -183,6 +194,20 @@ type HydraNativeModule = {
     windowHandle: string,
     processId: number
   ) => string | null;
+  getWindowsControllerDisplays?: () => ControllerDisplay[];
+  getWindowsControllerDisplayMode?: () => ControllerDisplayMode | null;
+  switchWindowsControllerDisplay?: (
+    mode: ControllerDisplayMode,
+    id: string,
+    temporary: boolean
+  ) => boolean;
+  restoreWindowsControllerDisplay?: () => boolean;
+  getWindowsControllerAudioDefaults?: () => string[];
+  switchWindowsControllerHdmiAudio?: (
+    label: string,
+    singleDisplay: boolean
+  ) => boolean;
+  restoreWindowsControllerAudioDefaults?: (devices: string[]) => boolean;
   requestWindowsGameFullscreen?: (
     windowHandle: string,
     processId: number,
@@ -192,6 +217,11 @@ type HydraNativeModule = {
   updateRtssOsd?: (processId: number) => boolean;
   getWindowsSonyHidBatteries?: () => Promise<{ id: string; name: string; percent: number; charging: boolean }[]>;
   windowsControllerDesktopAction?: (action: string, value: number) => boolean;
+  pollWindowsDesktopControllers?: () => WindowsDesktopControllerFrame[];
+  stopWindowsDesktopControllerInput?: () => void;
+  listWindowsDesktopControllers?: () => Promise<WindowsDesktopControllerDevice[]>;
+  getWindowsDesktopEditableFocus?: () => Promise<string | null>;
+  showWindowsDesktopKeyboard?: () => boolean;
   getWindowsControllerAxes?: (index: number) => number[];
   moveWindowsControllerCursor?: (dx: number, dy: number) => boolean;
   getWindowsXboxBatteryLevel?: (index: number) => string | null;
@@ -640,6 +670,45 @@ export class NativeAddon {
     try { return await this.load().getWindowsSonyHidBatteries?.() ?? []; } catch { return []; }
   }
 
+  public static pollDesktopControllers(): WindowsDesktopControllerFrame[] {
+    if (process.platform !== "win32") return [];
+    try {
+      return this.load().pollWindowsDesktopControllers?.() ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  public static stopDesktopControllerInput() {
+    if (process.platform !== "win32" || !this.nativeModule) return;
+    this.nativeModule.stopWindowsDesktopControllerInput?.();
+  }
+
+  public static async listDesktopControllers(): Promise<WindowsDesktopControllerDevice[]> {
+    if (process.platform !== "win32") return [];
+    try {
+      return (await this.load().listWindowsDesktopControllers?.()) ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  public static async getDesktopEditableFocus(): Promise<string | null> {
+    try {
+      return (await this.load().getWindowsDesktopEditableFocus?.()) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  public static showDesktopKeyboard(): boolean {
+    try {
+      return this.load().showWindowsDesktopKeyboard?.() ?? false;
+    } catch {
+      return false;
+    }
+  }
+
   public static controllerDesktopAction(action: string, value: number): boolean {
     try { return this.load().windowsControllerDesktopAction?.(action, value) ?? false; } catch { return false; }
   }
@@ -713,6 +782,70 @@ export class NativeAddon {
     return mode === "windowed" || mode === "fullscreen" || mode === "exclusive"
       ? mode
       : null;
+  }
+
+  private static withWindowsControllerDisplay<T>(
+    fallback: T,
+    call: (addon: HydraNativeModule) => T | undefined | null
+  ): T {
+    if (process.platform !== "win32") return fallback;
+    try {
+      return call(this.load()) ?? fallback;
+    } catch (error) {
+      logger.warn("Windows controller display operation failed", error);
+      return fallback;
+    }
+  }
+
+  public static getWindowsControllerDisplays(): ControllerDisplay[] {
+    return this.withWindowsControllerDisplay([], (addon) =>
+      addon.getWindowsControllerDisplays?.()
+    );
+  }
+
+  public static getWindowsControllerDisplayMode(): ControllerDisplayMode | null {
+    return this.withWindowsControllerDisplay(null, (addon) =>
+      addon.getWindowsControllerDisplayMode?.()
+    );
+  }
+
+  public static switchWindowsControllerDisplay(
+    mode: ControllerDisplayMode,
+    id: string,
+    temporary: boolean
+  ): boolean {
+    return this.withWindowsControllerDisplay(false, (addon) =>
+      addon.switchWindowsControllerDisplay?.(mode, id, temporary)
+    );
+  }
+
+  public static restoreWindowsControllerDisplay(): boolean {
+    return this.withWindowsControllerDisplay(false, (addon) =>
+      addon.restoreWindowsControllerDisplay?.()
+    );
+  }
+
+  public static getWindowsControllerAudioDefaults(): string[] {
+    return this.withWindowsControllerDisplay([], (addon) =>
+      addon.getWindowsControllerAudioDefaults?.()
+    );
+  }
+
+  public static switchWindowsControllerHdmiAudio(
+    label: string,
+    singleDisplay: boolean
+  ): boolean {
+    return this.withWindowsControllerDisplay(false, (addon) =>
+      addon.switchWindowsControllerHdmiAudio?.(label, singleDisplay)
+    );
+  }
+
+  public static restoreWindowsControllerAudioDefaults(
+    devices: string[]
+  ): boolean {
+    return this.withWindowsControllerDisplay(false, (addon) =>
+      addon.restoreWindowsControllerAudioDefaults?.(devices)
+    );
   }
 
   public static requestWindowsGameFullscreen(

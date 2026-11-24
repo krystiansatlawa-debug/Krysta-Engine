@@ -41,6 +41,7 @@ import { t } from "i18next";
 import path from "node:path";
 import UserAgent from "user-agents";
 import { HydraApi } from "./hydra-api";
+import { ControllerDisplay } from "./controller-display";
 import { logger } from "./logger";
 import {
   isGameBoostBackgroundSyncPaused,
@@ -77,10 +78,16 @@ interface CreateMainWindowOptions {
   forceBigPicture?: boolean;
 }
 
+interface SystemTrayControllerOptions {
+  isDesktopControllerEnabled(): boolean;
+  setDesktopControllerEnabled(enabled: boolean): Promise<void>;
+}
+
 export class WindowManager {
   private static mainWindowInstance: Electron.BrowserWindow | null = null;
   private static gameLauncherWindowInstance: Electron.BrowserWindow | null =
     null;
+  private static systemTray: Tray | null = null;
   private static bigPicture: Electron.BrowserWindow | null = null;
   private static friendsWindow: Electron.BrowserWindow | null = null;
   private static markFriendsWindowReady: (() => void) | null = null;
@@ -612,6 +619,13 @@ export class WindowManager {
       })
       .catch(() => null);
 
+    await ControllerDisplay.openBigPicture();
+    const existingBigPicture = this.bigPictureWindow;
+    if (existingBigPicture) {
+      existingBigPicture.focus();
+      return;
+    }
+
     const mainWindow = this.mainWindow;
     const targetDisplay =
       mainWindow && !mainWindow.isDestroyed()
@@ -661,6 +675,7 @@ export class WindowManager {
 
     this.bigPicture.on("closed", () => {
       this.bigPicture = null;
+      ControllerDisplay.closeBigPicture();
       const main = this.mainWindow;
       if (main && !main.isDestroyed()) {
         this.restoreMainWindowAfterBigPictureCloses();
@@ -1638,7 +1653,11 @@ export class WindowManager {
     this.redirectToMainWindow(hash);
   }
 
-  public static async createSystemTray(language: string) {
+  public static async createSystemTray(
+    language: string,
+    controller: SystemTrayControllerOptions
+  ) {
+    if (this.systemTray) return;
     let tray: Tray;
 
     if (process.platform === "darwin") {
@@ -1652,6 +1671,7 @@ export class WindowManager {
     } else {
       tray = new Tray(trayIcon);
     }
+    this.systemTray = tray;
 
     const updateSystemTray = async () => {
       const games: Array<{ title: string; executablePath: string; lastTimePlayed: number }> = [];
@@ -1697,6 +1717,29 @@ export class WindowManager {
         {
           type: "separator",
         },
+        ...(process.platform === "win32"
+          ? [
+              {
+                label: t("desktop_controller", {
+                  ns: "system_tray",
+                  lng: language,
+                }),
+                type: "checkbox" as const,
+                checked: controller.isDesktopControllerEnabled(),
+                click: (item: MenuItem) => {
+                  void controller
+                    .setDesktopControllerEnabled(item.checked)
+                    .catch((error) => {
+                      item.checked = controller.isDesktopControllerEnabled();
+                      logger.error(
+                        "Could not update Windows desktop controller",
+                        error
+                      );
+                    });
+                },
+              },
+            ]
+          : []),
         {
           label: t("quit", {
             ns: "system_tray",

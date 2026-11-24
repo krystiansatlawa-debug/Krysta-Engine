@@ -2,6 +2,7 @@ mod active_window;
 mod background_application;
 mod cloud_save;
 mod constants;
+mod desktop_controller;
 mod desktop_duplication;
 mod in_place_extraction;
 mod kde_focus;
@@ -13,6 +14,10 @@ mod torrent;
 mod window_bounds;
 mod window_client;
 mod window_order;
+#[cfg(windows)]
+mod windows_controller_audio;
+#[cfg(windows)]
+mod windows_controller_display;
 mod xbox_guide;
 
 pub use cloud_save::hashing::{build_snapshot_aggregate_hash, hash_local_save_file};
@@ -741,8 +746,10 @@ pub fn windows_controller_desktop_action(action: String, value: i32) -> bool {
             "horizontalScroll" => vec![mouse(MOUSEEVENTF_HWHEEL, value.clamp(-3, 3) * 120)],
             "leftDown" => vec![mouse(MOUSEEVENTF_LEFTDOWN, 0)],
             "leftUp" => vec![mouse(MOUSEEVENTF_LEFTUP, 0)],
+            "leftClick" => vec![mouse(MOUSEEVENTF_LEFTDOWN, 0), mouse(MOUSEEVENTF_LEFTUP, 0)],
             "rightDown" => vec![mouse(MOUSEEVENTF_RIGHTDOWN, 0)],
             "rightUp" => vec![mouse(MOUSEEVENTF_RIGHTUP, 0)],
+            "rightClick" => vec![mouse(MOUSEEVENTF_RIGHTDOWN, 0), mouse(MOUSEEVENTF_RIGHTUP, 0)],
             "doubleClick" => vec![mouse(MOUSEEVENTF_LEFTDOWN, 0), mouse(MOUSEEVENTF_LEFTUP, 0), mouse(MOUSEEVENTF_LEFTDOWN, 0), mouse(MOUSEEVENTF_LEFTUP, 0)],
             "volumeUp" => vec![key(VK_VOLUME_UP, false), key(VK_VOLUME_UP, true)],
             "volumeDown" => vec![key(VK_VOLUME_DOWN, false), key(VK_VOLUME_DOWN, true)],
@@ -750,6 +757,10 @@ pub fn windows_controller_desktop_action(action: String, value: i32) -> bool {
             "minimize" => chord(VK_LWIN, VK_DOWN),
             "maximize" => chord(VK_LWIN, VK_UP),
             "showDesktop" => chord(VK_LWIN, 0x44),
+            "copy" => chord(VK_CONTROL, 0x43),
+            "cut" => chord(VK_CONTROL, 0x58),
+            "paste" => chord(VK_CONTROL, 0x56),
+            "selectAll" => chord(VK_CONTROL, 0x41),
             _ => return false,
         };
         unsafe { SendInput(inputs.len() as u32, inputs.as_ptr(), std::mem::size_of::<INPUT>() as i32) == inputs.len() as u32 }

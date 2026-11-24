@@ -4,11 +4,14 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/krysta-controller-validation.yml'
-      - 'src/shared/controller-desktop.ts'
-      - 'src/big-picture/**'
-      - 'src/main/events/windows-game-bar-controller.ts'
-      - 'native/hydra-native/**'
+      - ".github/workflows/krysta-controller-validation.yml"
+      - "src/big-picture/**"
+      - "src/controller-settings/**"
+      - "src/main/events/**/*controller*"
+      - "src/main/services/*controller*"
+      - "src/main/services/window-manager.ts"
+      - "src/shared/controller-*.ts"
+      - "native/hydra-native/**"
 permissions:
   contents: read
 concurrency:
@@ -22,10 +25,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22.21.0'
+          node-version: "22.21.0"
           cache: yarn
       - uses: dtolnay/rust-toolchain@stable
-      - run: yarn --frozen-lockfile
-      - run: yarn typecheck
-      - run: cargo check --manifest-path native/hydra-native/Cargo.toml
-      - run: node --import ./scripts/register-ts-node.mjs --test src/shared/controller-shortcut-recorder.test.ts src/main/services/game-running-state.test.ts
+      - name: Install dependencies and compile the native addon
+        run: yarn --frozen-lockfile
+      - name: Type-check both launchers and the native bridge
+        run: yarn typecheck
+      - name: Test controller and game lifecycle behavior
+        run: >
+          node --import ./scripts/register-ts-node.mjs --test
+          "src/shared/controller-*.test.ts"
+          "src/main/services/*controller*.test.ts"
+          src/main/services/game-running-state.test.ts
+          src/main/services/xbox-guide-window-toggle.test.ts
+          scripts/krysta-recording.test.mjs
