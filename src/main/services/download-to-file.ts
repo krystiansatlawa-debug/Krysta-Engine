@@ -26,6 +26,7 @@ export const downloadToFile = async (
   const lastModified = response.headers["last-modified"] ?? null;
   let received = 0;
   let lastEmit = 0;
+  let lastEmitAt = 0;
 
   const writer = fs.createWriteStream(dest);
 
@@ -39,13 +40,17 @@ export const downloadToFile = async (
     response.data.on("data", (chunk: Buffer) => {
       received += chunk.length;
       const done = total !== null && received >= total;
-      if (received - lastEmit >= PROGRESS_EMIT_BYTES || done) {
+      if ((received - lastEmit >= PROGRESS_EMIT_BYTES && Date.now() - lastEmitAt >= 200) || done) {
+        lastEmitAt = Date.now();
         lastEmit = received;
         onProgress(received, total);
       }
     });
     response.data.on("error", fail);
     writer.on("error", fail);
+    writer.on("finish", () => {
+      if (received !== lastEmit) onProgress(received, total);
+    });
     writer.on("close", resolve);
     response.data.pipe(writer);
   });
