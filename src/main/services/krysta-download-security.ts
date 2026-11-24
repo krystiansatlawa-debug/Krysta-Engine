@@ -10,6 +10,7 @@ import { logger } from "./logger";
 const run = promisify(execFile);
 const active = new Map<string, Promise<boolean>>();
 let historyQueue: Promise<void> = Promise.resolve();
+let scanQueue: Promise<unknown> = Promise.resolve();
 function recordSecurityDecision(fingerprint: string | null, level: string, reasons: string[]) {
   const entry = JSON.stringify({ schema: 1, timestamp: new Date().toISOString(), fingerprint, level, reasons, verified: false }) + "\n";
   const task = historyQueue.then(async () => {
@@ -198,7 +199,7 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
     // Recheck after extraction, even if another scan started meanwhile.
     return scanCompletedDownload(download, true);
   }
-  const task = (async () => {
+  const task = scanQueue.then(async () => {
     let inspectedFingerprint: string | null = null;
     try {
       const products = await detectRegisteredAntivirus();
@@ -285,7 +286,8 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       logger.warn("[Security Shield] Nie udało się zakończyć skanowania. Pliki pozostają niezweryfikowane.", error);
       return false;
     }
-  })();
+  });
+  scanQueue = task.catch(() => false);
   active.set(scanKey, task);
   try { return await task; } finally {
     if (active.get(scanKey) === task) active.delete(scanKey);
