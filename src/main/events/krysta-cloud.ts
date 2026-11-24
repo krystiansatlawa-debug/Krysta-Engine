@@ -1032,12 +1032,39 @@ async function compareSaves(
 ipcMain.handle(
   "krysta:cloud-compare",
   async (_e, shop: GameShop, id: string) => {
-    const { key, base, root } = await gameContext(shop, id);
+    const { key, base, root, provider, identity, remoteKey } = await gameContext(shop, id);
     return locked(key, async () => {
       if (isTrackedGameKeyRunning(key))
         throw Error("Close the game before comparing saves");
       const files = await discover(shop, id);
-      return compareSaves(base, root, files);
+      if (!provider || !identity) return compareSaves(base, root, files);
+      try {
+        const remote = (await listRemoteCloudSnapshots(provider, identity, remoteKey))[0];
+        if (!remote) return {state:"no-backup",localFiles:files.length,cloudFiles:0};
+        const result: Comparison = {state:"unavailable",version:remote.id,createdAt:remote.createdAt,localFiles:files.length,cloudFiles:remote.files.length};
+        if (!files.length || isTrackedGameKeyRunning(key)) return result;
+        await safeDirectory(root, base);
+        const temp = path.join(base, ".compare-" + randomUUID());
+        await fs.mkdir(temp);
+        try {
+          await downloadCloudSnapshot(provider, identity, remoteKey, remote.id, temp);
+          const locals = new Map(files.map(p => [comparablePath(p),p]));
+          let same = locals.size === remote.files.length;
+          for (const entry of remote.files) {
+            if (isTrackedGameKeyRunning(key)) return result;
+            const target = locals.get(comparablePath(entry.original));
+            if (!target) { same = false; continue; }
+            const before = await fs.lstat(target);
+            if (!before.isFile() || before.isSymbolicLink()) return result;
+            if (before.size !== entry.size || await fileHash(target) !== await fileHash(path.join(temp,entry.name))) same = false;
+            const after = await fs.lstat(target);
+            if (before.size !== after.size || before.mtimeMs !== after.mtimeMs) return result;
+          }
+          return {...result,state:same ? "same" : "different"};
+        } finally { await fs.rm(temp,{recursive:true,force:true}); }
+      } catch {
+        return {state:"unavailable",localFiles:files.length,cloudFiles:0};
+      }
     });
   }
 );
