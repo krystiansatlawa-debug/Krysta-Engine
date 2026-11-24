@@ -250,6 +250,7 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("getWindowsGameBarControllerEnabled"),
   setWindowsGameBarControllerEnabled: (enabled: boolean) =>
     ipcRenderer.invoke("setWindowsGameBarControllerEnabled", enabled),
+  krystaCloudMedia: (kind: string, enabled: boolean) => ipcRenderer.invoke("krysta:cloud-media", kind, enabled),
   krystaCloudAuto: (enabled: boolean) =>
     ipcRenderer.invoke("krysta:cloud-auto", enabled),
   krystaCloudSyncBeforeLaunch: (enabled: boolean) =>
