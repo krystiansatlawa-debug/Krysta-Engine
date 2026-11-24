@@ -1,5 +1,5 @@
 import { hasTrackedGamesRunning, onTrackedGamesRunningChange } from "../services/game-running-state";
-import { screen, BrowserWindow } from "electron";
+import { app, screen, BrowserWindow } from "electron";
 import { NativeAddon } from "@main/services/native-addon";
 import { registerEvent } from "./register-event";
 
@@ -126,4 +126,45 @@ registerEvent("controllerPointerAction", (_event, action: string, value: number)
     return down && up;
   }
   return false;
+});
+
+
+// Explicit opt-in; background polling is independent of window focus.
+let desktopPoll: ReturnType<typeof setInterval> | undefined;
+let desktopOwner: Electron.WebContents | undefined;
+const stopDesktopPolling = () => {
+  if (desktopPoll) clearInterval(desktopPoll);
+  desktopPoll = undefined;
+  desktopOwner = undefined;
+  releaseControllerButtons();
+};
+app.on("before-quit", stopDesktopPolling);
+registerEvent("setBackgroundControllerCursor", (event, enabled: unknown, slot: unknown, speed: unknown, deadZone: unknown) => {
+  if (process.platform !== "win32" || typeof enabled !== "boolean") return false;
+  if (!enabled) { stopDesktopPolling(); return true; }
+  if (typeof slot !== "number" || !Number.isInteger(slot) || slot < 0 || slot > 3 ||
+      typeof speed !== "number" || !Number.isFinite(speed) || speed < 1 || speed > 40 ||
+      typeof deadZone !== "number" || !Number.isFinite(deadZone) || deadZone < 0 || deadZone > 0.9) return false;
+  stopDesktopPolling();
+  desktopOwner = event.sender;
+  const owner = event.sender;
+  owner.once("destroyed", () => { if (desktopOwner === owner) stopDesktopPolling(); });
+  let armed = false;
+  const axis = (value: number) => {
+    const normalized = Math.max(-1, Math.min(1, value / 32767));
+    return Math.abs(normalized) <= deadZone ? 0 : Math.round(Math.sign(normalized) * (Math.abs(normalized) - deadZone) / (1 - deadZone) * speed);
+  };
+  desktopPoll = setInterval(() => {
+    if (hasTrackedGamesRunning()) { armed = false; return; }
+    const frame = NativeAddon.getControllerAxes(slot);
+    if (frame.length !== 5) { armed = false; return; }
+    const [x, y] = frame;
+    if (!armed) {
+      armed = Math.abs(x) <= 32767 * Math.max(deadZone, 0.15) && Math.abs(y) <= 32767 * Math.max(deadZone, 0.15) && frame[4] === 0;
+      return;
+    }
+    const dx = axis(x), dy = axis(y);
+    if (dx || dy) NativeAddon.moveControllerCursor(dx, dy);
+  }, 32);
+  return true;
 });
