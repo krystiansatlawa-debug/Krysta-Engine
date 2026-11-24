@@ -103,7 +103,8 @@
           recorder.onstop = () =>
             resolve(Math.max(0, (performance.now() - s.start) / 1000));
         });
-        recorder.start(1000);
+        // Batch chunks to reduce renderer wakeups during gameplay.
+        recorder.start(2000);
         return s;
       }
       function discard(s) {
