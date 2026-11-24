@@ -8,7 +8,6 @@ import {
   parseEpicManagedObjectId,
 } from "../epic/managed-ipc-contract";
 import { assertTrustedEpicSender } from "../epic/assert-trusted-sender";
-import { ControllerDisplay } from "@main/services/controller-display";
 
 const openGame = async (
   event: Electron.IpcMainInvokeEvent,
@@ -24,7 +23,6 @@ const openGame = async (
     objectId = parseEpicManagedObjectId(objectId);
   }
   if (!(await syncKrystaCloudBeforeLaunch(shop, objectId))) return;
-  ControllerDisplay.prepareGameLaunch();
   if (shop === "custom" && /^ubisoft-\d+$/.test(objectId)) {
     await launchUbisoft(objectId.slice(8));
     return;

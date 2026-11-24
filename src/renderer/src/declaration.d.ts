@@ -1,14 +1,5 @@
 import type { AuthPage, Downloader } from "@shared";
 import type {
-  ControllerDisplay,
-  ControllerDisplayMode,
-  ControllerDisplaySettings,
-} from "../../shared/controller-display";
-import type {
-  WindowsDesktopControllerDevice,
-  WindowsDesktopControllerSettings,
-} from "../../shared/controller-desktop";
-import type {
   LocalScreenshot,
   LocalScreenshotDraft,
   LocalScreenshotUploadOptions,
@@ -334,22 +325,6 @@ declare global {
     krystaFpsSetPosition: (
       position: "tl" | "tr" | "bl" | "br"
     ) => Promise<"tl" | "tr" | "bl" | "br">;
-    getControllerDesktopDisplays: () => Promise<{ id: number; label: string; primary: boolean; width: number; height: number; scaleFactor: number }[]>;
-    getWindowsControllerDisplays: () => Promise<ControllerDisplay[]>;
-    getControllerDisplaySettings: () => Promise<ControllerDisplaySettings>;
-    setControllerDisplaySettings: (patch: Partial<ControllerDisplaySettings>) => Promise<ControllerDisplaySettings>;
-    setControllerDisplayMode: (mode: ControllerDisplayMode, displayId?: string) => Promise<boolean>;
-    onControllerDisplaySettingsChange: (callback: (settings: ControllerDisplaySettings) => void) => () => void;
-    onControllerDisplaysChange: (callback: () => void) => () => void;
-    moveControllerWindowToDisplay: (id: number) => Promise<boolean>;
-    getWindowsSonyBatteryLevels: () => Promise<{ id: string; name: string; percent: number; charging?: boolean }[]>;
-    controllerPointerAction: (action: string, value: number) => Promise<boolean>;
-    getDesktopControllerSettings: () => Promise<WindowsDesktopControllerSettings>;
-    updateDesktopControllerSettings: (patch: Partial<WindowsDesktopControllerSettings>) => Promise<WindowsDesktopControllerSettings>;
-    getDesktopControllerDevices: () => Promise<WindowsDesktopControllerDevice[]>;
-    onDesktopControllerSettingsChanged: (callback: (settings: WindowsDesktopControllerSettings) => void) => () => void;
-    moveControllerCursor: (dx: number, dy: number) => Promise<boolean>;
-    getWindowsXboxBatteryLevels: () => Promise<(string | null)[]>;
     getWindowsGameBarControllerEnabled: () => Promise<boolean | null>;
     setWindowsGameBarControllerEnabled: (
       enabled: boolean

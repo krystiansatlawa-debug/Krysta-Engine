@@ -29,7 +29,6 @@ import {
 } from "../../../hooks";
 import {
   useNavigationStore,
-  useGamepadStore,
   useInputModeStore,
   useVirtualKeyboardStore,
 } from "../../../stores";
@@ -48,7 +47,7 @@ type VirtualKeyboardKey =
   | { type: "cursor-left"; label: string }
   | { type: "cursor-right"; label: string };
 
-type VirtualKeyboardLayer = "alphabetic" | "symbols" | "polish";
+type VirtualKeyboardLayer = "alphabetic" | "symbols";
 type VirtualKeyboardLayoutMode = "floating" | "avoiding";
 
 type VirtualKeyboardLayoutKey = VirtualKeyboardKey & {
@@ -163,19 +162,12 @@ const SYMBOLS_KEY_LAYOUT: VirtualKeyboardLayoutKey[] = [
     row: 4,
     column: index + 1,
   })),
-  { type: "toggle-layer", label: "PL", row: 5, column: 1, columnSpan: 2 },
+  { type: "toggle-layer", label: "ABC", row: 5, column: 1, columnSpan: 2 },
   { type: "space", label: "Space", row: 5, column: 3, columnSpan: 7 },
   { type: "cursor-left", label: "←", row: 5, column: 10 },
   { type: "cursor-right", label: "→", row: 5, column: 11 },
 ];
 
-const POLISH_KEY_LAYOUT: VirtualKeyboardLayoutKey[] = ALPHABETIC_KEY_LAYOUT.map((key) => {
-  if (key.type === "toggle-layer") return { ...key, label: "ABC" };
-  if (key.type !== "character") return key;
-  const letters: Record<string, string> = { a: "ą", c: "ć", e: "ę", l: "ł", n: "ń", o: "ó", s: "ś", x: "ź", z: "ż" };
-  const value = letters[key.value] ?? key.value;
-  return { ...key, value, label: value };
-});
 function getKeyId(key: VirtualKeyboardKey) {
   if (key.type === "character") {
     return `big-picture-virtual-keyboard-key-${key.value}`;
@@ -210,7 +202,7 @@ function getKeyShortcutLabel(
 ) {
   if (key.type === "backspace") return "X";
   if (key.type === "space") return "Y";
-  if (key.type === "shift" && layer !== "symbols") return "L3";
+  if (key.type === "shift" && layer === "alphabetic") return "L3";
   if (key.type === "toggle-layer") return "R3";
   if (key.type === "enter") return "RT";
   if (key.type === "cursor-left") return "LB";
@@ -713,19 +705,6 @@ function VirtualKeyboardScreenActions({
 }
 
 export function VirtualKeyboardProvider() {
-  const [appearance, setAppearance] = useState(() => {
-    try {
-      const p = JSON.parse(localStorage.getItem("krysta-keyboard-appearance") ?? "{}");
-      return { size: Math.max(0.7, Math.min(1, Number(p.size) || 1)), opacity: Math.max(0.5, Math.min(1, Number(p.opacity) || 1)), top: p.top === true, feedback: p.feedback === true };
-    } catch { return { size: 1, opacity: 1, top: false, feedback: false }; }
-  });
-  useEffect(() => {
-    try { localStorage.setItem("krysta-keyboard-appearance", JSON.stringify(appearance)); } catch { /* session only */ }
-  }, [appearance]);
-  const sonyPad = useGamepadStore((state) => {
-    const pad = state.connectedGamepads.find((p) => p.index === state.activeGamepadIndex) ?? state.connectedGamepads[0];
-    return /dualsense|dualshock|playstation|sony/i.test(`${pad?.name ?? ""} ${pad?.layout ?? ""}`);
-  });
   const [target, setTarget] = useState<EditableTarget | null>(null);
   const [isShiftActive, setIsShiftActive] = useState(false);
   const [layer, setLayer] = useState<VirtualKeyboardLayer>("alphabetic");
@@ -899,7 +878,7 @@ export function VirtualKeyboardProvider() {
 
   const toggleLayer = useCallback(() => {
     const activeLayout =
-      layer === "polish" ? POLISH_KEY_LAYOUT : layer === "alphabetic" ? ALPHABETIC_KEY_LAYOUT : SYMBOLS_KEY_LAYOUT;
+      layer === "alphabetic" ? ALPHABETIC_KEY_LAYOUT : SYMBOLS_KEY_LAYOUT;
     const activeKey = findLayoutKeyById(activeLayout, currentFocusId);
 
     pendingLayerFocusPositionRef.current = activeKey
@@ -913,7 +892,7 @@ export function VirtualKeyboardProvider() {
 
     setLayer((currentLayer) => {
       const nextLayer =
-        currentLayer === "alphabetic" ? "symbols" : currentLayer === "symbols" ? "polish" : "alphabetic";
+        currentLayer === "alphabetic" ? "symbols" : "alphabetic";
 
       if (nextLayer === "symbols") {
         setIsShiftActive(false);
@@ -934,7 +913,7 @@ export function VirtualKeyboardProvider() {
   }, [insertText, pulseKey]);
 
   const hotkeyShift = useCallback(() => {
-    if (layer === "symbols") return;
+    if (layer !== "alphabetic") return;
 
     pulseKey(getKeyId({ type: "shift", label: "Shift" }));
     setIsShiftActive((current) => !current);
@@ -1442,7 +1421,7 @@ export function VirtualKeyboardProvider() {
   }, [currentFocusId, target]);
 
   const keyLayout =
-    layer === "polish" ? POLISH_KEY_LAYOUT : layer === "alphabetic" ? ALPHABETIC_KEY_LAYOUT : SYMBOLS_KEY_LAYOUT;
+    layer === "alphabetic" ? ALPHABETIC_KEY_LAYOUT : SYMBOLS_KEY_LAYOUT;
   const navigationOverridesByKeyId = useMemo(
     () => getVirtualKeyboardNavigationOverrides(keyLayout),
     [keyLayout]
@@ -1503,7 +1482,6 @@ export function VirtualKeyboardProvider() {
               <motion.aside
                 ref={keyboardRef}
                 className="virtual-keyboard"
-                style={{ width: `${appearance.size * 100}%`, opacity: appearance.opacity, ...(appearance.top ? { position: "fixed", top: 16, left: "50%", translate: "-50% 0" } : {}) }}
                 role="dialog"
                 aria-label="Virtual keyboard"
                 initial={{ y: 32, scale: 0.98 }}
@@ -1511,7 +1489,6 @@ export function VirtualKeyboardProvider() {
                 exit={{ y: 24, scale: 0.98 }}
                 transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
               >
-                <details><summary>Ustawienia klawiatury</summary><label>Rozmiar <input type="range" min={70} max={100} value={Math.round(appearance.size * 100)} onChange={e => setAppearance(p => ({...p, size: Number(e.target.value) / 100}))} /></label><label>Przezroczystość <input type="range" min={50} max={100} value={Math.round(appearance.opacity * 100)} onChange={e => setAppearance(p => ({...p, opacity: Number(e.target.value) / 100}))} /></label><label><input type="checkbox" checked={appearance.top} onChange={e => setAppearance(p => ({...p, top: e.target.checked}))} /> U góry</label><label><input type="checkbox" checked={appearance.feedback} onChange={e => setAppearance(p => ({...p, feedback: e.target.checked}))} /> Wibracje przy pisaniu</label></details>
                 <GridFocusGroup
                   regionId={VIRTUAL_KEYBOARD_REGION_ID}
                   className="virtual-keyboard__keys"
@@ -1527,13 +1504,11 @@ export function VirtualKeyboardProvider() {
                     const keyId = getKeyId(key);
                     const label =
                       key.type === "character" &&
-                      layer !== "symbols" &&
+                      layer === "alphabetic" &&
                       isShiftActive
                         ? key.label.toUpperCase()
                         : key.label;
-                    const xboxLabel = getKeyShortcutLabel(key, layer);
-                    const sonyLabels: Record<string, string> = { X: "□", Y: "△", RT: "R2", LB: "L1", RB: "R1" };
-                    const shortcutLabel = sonyPad && xboxLabel ? sonyLabels[xboxLabel] ?? xboxLabel : xboxLabel;
+                    const shortcutLabel = getKeyShortcutLabel(key, layer);
 
                     return (
                       <Button
@@ -1554,7 +1529,7 @@ export function VirtualKeyboardProvider() {
                         }
                         data-pulsing={pulsingKeyId === keyId || undefined}
                         onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => { handleKey(key); if (appearance.feedback) useGamepadStore.getState().playFeedback("navigation"); }}
+                        onClick={() => handleKey(key)}
                       >
                         <span className="virtual-keyboard__key-label">
                           {label}

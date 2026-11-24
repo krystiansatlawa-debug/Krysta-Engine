@@ -1,15 +1,15 @@
 import {
   GAMEPAD_REPEAT_INITIAL_DELAY,
   getGamepadRepeatInterval,
-} from "../helpers/gamepad-repeat";
-import {
   GamepadLayout,
   getGamepadLayout,
-  type GamepadAxisButtonMapping,
-  type GamepadAxisTriggerMapping,
-  type GamepadInputMapping,
-  type GamepadPhysicalAxisMapping,
-} from "../helpers/gamepad-layout";
+} from "../helpers";
+import type {
+  GamepadAxisButtonMapping,
+  GamepadAxisTriggerMapping,
+  GamepadInputMapping,
+  GamepadPhysicalAxisMapping,
+} from "../helpers";
 import {
   GamepadAxisType,
   GamepadButtonType,
@@ -93,7 +93,6 @@ export class GamepadService {
   private isPolling = false;
   private animationFrameId: number | null = null;
   private activeGamepadIndex: number | null = null;
-  private preferredGamepadIndex: number | null = null;
   private lastActiveGamepadSwitchTime = 0;
   private lastGamepadActivityTime = 0;
   private hasPendingActiveGamepadChange = false;
@@ -138,7 +137,6 @@ export class GamepadService {
     if (!this.isWindowAvailable()) return;
 
     this.setupListeners();
-    if (globalThis.navigator.getGamepads?.().some((pad) => pad?.connected)) this.startPolling();
   }
 
   private isWindowAvailable() {
@@ -224,7 +222,6 @@ export class GamepadService {
   private readonly handleGamepadDisconnection = (event: GamepadEvent) => {
     const gamepad = event.gamepad;
 
-    if (this.preferredGamepadIndex === gamepad.index) this.preferredGamepadIndex = null;
     this.gamepads.delete(gamepad.index);
     this.gamepadStates.delete(gamepad.index);
 
@@ -248,25 +245,16 @@ export class GamepadService {
   private pollGamepads() {
     const gamepads = globalThis.navigator.getGamepads();
 
-    for (const [index, previous] of this.gamepads) {
-      const current = gamepads[index];
-      if (!current?.connected || current.id !== previous.id) {
-        this.handleGamepadDisconnection({ gamepad: previous } as GamepadEvent);
-      }
-    }
     for (const gamepad of gamepads) {
-      if (!gamepad?.connected) continue;
+      if (!gamepad) continue;
 
       this.gamepads.set(gamepad.index, gamepad);
       this.updateGamepadState(gamepad.index, gamepad);
     }
 
-    if (this.gamepads.size > 0) {
-      this.isPolling = true;
-      this.animationFrameId = globalThis.requestAnimationFrame(() => this.pollGamepads());
-    } else {
-      this.stopPolling();
-    }
+    this.animationFrameId = globalThis.requestAnimationFrame(() =>
+      this.pollGamepads()
+    );
   }
 
   private startPolling() {
@@ -1278,22 +1266,7 @@ export class GamepadService {
     return false;
   }
 
-  public setPreferredGamepadIndex(index: number | null): void {
-    if (index !== null && !this.gamepads.has(index)) return;
-    this.preferredGamepadIndex = index;
-    this.clearAllTimers();
-    this.recentAcceptedInputs = [];
-    if (index !== null) this.setActiveGamepadIndex(index);
-    this.notifyStateChange();
-  }
-
-  public getPreferredGamepadIndex(): number | null {
-    return this.preferredGamepadIndex;
-  }
-
   public setActiveGamepadIndex(index: number | null): void {
-    if (index !== null && !this.gamepads.has(index)) return;
-    if (this.preferredGamepadIndex !== null && index !== this.preferredGamepadIndex) return;
     if (this.activeGamepadIndex === index) return;
 
     this.activeGamepadIndex = index;
@@ -1356,15 +1329,14 @@ export class GamepadService {
     const activeGamepad = this.gamepads.get(gamepadIndex);
 
     if (!activeGamepad?.vibrationActuator) return;
-    if (![duration, weakMagnitude, strongMagnitude].every(Number.isFinite)) return;
 
     try {
-      void activeGamepad.vibrationActuator.playEffect("dual-rumble", {
+      activeGamepad.vibrationActuator.playEffect("dual-rumble", {
         startDelay: 0,
-        duration: Math.max(0, Math.min(1000, duration)),
+        duration: duration,
         weakMagnitude: Math.max(0, Math.min(1, weakMagnitude)),
         strongMagnitude: Math.max(0, Math.min(1, strongMagnitude)),
-      }).catch(() => undefined);
+      });
     } catch (error) {
       console.error("Error ao tentar vibrar o controle:", error);
     }
@@ -1499,9 +1471,6 @@ export class GamepadService {
     }
   ): GamepadInputEventMeta {
     const previousActiveGamepadIndex = this.activeGamepadIndex;
-    if (this.preferredGamepadIndex !== null && gamepadIndex !== this.preferredGamepadIndex) {
-      return { status: "ignored-inactive", accepted: false, activeGamepadIndex: this.activeGamepadIndex, previousActiveGamepadIndex };
-    }
 
     if (previousActiveGamepadIndex === gamepadIndex) {
       this.recordAcceptedInput(gamepadIndex, options.input, options.now);

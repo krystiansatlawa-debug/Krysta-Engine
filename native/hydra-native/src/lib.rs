@@ -2,7 +2,6 @@ mod active_window;
 mod background_application;
 mod cloud_save;
 mod constants;
-mod desktop_controller;
 mod desktop_duplication;
 mod in_place_extraction;
 mod kde_focus;
@@ -14,10 +13,6 @@ mod torrent;
 mod window_bounds;
 mod window_client;
 mod window_order;
-#[cfg(windows)]
-mod windows_controller_audio;
-#[cfg(windows)]
-mod windows_controller_display;
 mod xbox_guide;
 
 pub use cloud_save::hashing::{build_snapshot_aggregate_hash, hash_local_save_file};
@@ -109,11 +104,6 @@ pub fn get_windows_foreground_window() -> Option<NativeForegroundWindow> {
 #[napi]
 pub fn request_windows_background_application_close(process_id: u32, expected_path: String) -> bool {
     background_application::request_close(process_id, &expected_path)
-}
-
-#[napi]
-pub fn get_windows_xbox_battery_level(index: u32) -> Option<String> {
-    xbox_guide::battery_level(index)
 }
 
 #[napi]
@@ -701,158 +691,4 @@ pub fn decrypt_ps4_pkg_sectors(
 ) -> napi::Result<()> {
     ps4_xts::decrypt_sectors(&tweak_key, &data_key, &mut data, first_sector as u64)
         .map_err(Error::from_reason)
-}
-
-#[napi]
-pub fn move_windows_controller_cursor(dx: i32, dy: i32) -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{SendInput, INPUT, INPUT_MOUSE, MOUSEEVENTF_MOVE};
-        let mut input: INPUT = unsafe { std::mem::zeroed() };
-        input.r#type = INPUT_MOUSE;
-        input.Anonymous.mi.dx = dx.clamp(-40, 40);
-        input.Anonymous.mi.dy = dy.clamp(-40, 40);
-        input.Anonymous.mi.dwFlags = MOUSEEVENTF_MOVE;
-        unsafe { SendInput(1, &input, std::mem::size_of::<INPUT>() as i32) == 1 }
-    }
-    #[cfg(not(target_os = "windows"))]
-    { let _ = (dx, dy); false }
-}
-
-#[napi]
-pub fn windows_controller_desktop_action(action: String, value: i32) -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        use windows_sys::Win32::UI::Input::KeyboardAndMouse::*;
-        fn mouse(flags: u32, data: i32) -> INPUT {
-            let mut input: INPUT = unsafe { std::mem::zeroed() };
-            input.r#type = INPUT_MOUSE;
-            input.Anonymous.mi.dwFlags = flags;
-            input.Anonymous.mi.mouseData = data as u32;
-            input
-        }
-        fn key(vk: u16, up: bool) -> INPUT {
-            let mut input: INPUT = unsafe { std::mem::zeroed() };
-            input.r#type = INPUT_KEYBOARD;
-            input.Anonymous.ki.wVk = vk;
-            input.Anonymous.ki.dwFlags = if up { KEYEVENTF_KEYUP } else { 0 };
-            input
-        }
-        fn chord(modifier: u16, vk: u16) -> Vec<INPUT> {
-            vec![key(modifier, false), key(vk, false), key(vk, true), key(modifier, true)]
-        }
-        let inputs = match action.as_str() {
-            "scroll" => vec![mouse(MOUSEEVENTF_WHEEL, value.clamp(-3, 3) * 120)],
-            "horizontalScroll" => vec![mouse(MOUSEEVENTF_HWHEEL, value.clamp(-3, 3) * 120)],
-            "leftDown" => vec![mouse(MOUSEEVENTF_LEFTDOWN, 0)],
-            "leftUp" => vec![mouse(MOUSEEVENTF_LEFTUP, 0)],
-            "leftClick" => vec![mouse(MOUSEEVENTF_LEFTDOWN, 0), mouse(MOUSEEVENTF_LEFTUP, 0)],
-            "rightDown" => vec![mouse(MOUSEEVENTF_RIGHTDOWN, 0)],
-            "rightUp" => vec![mouse(MOUSEEVENTF_RIGHTUP, 0)],
-            "rightClick" => vec![mouse(MOUSEEVENTF_RIGHTDOWN, 0), mouse(MOUSEEVENTF_RIGHTUP, 0)],
-            "doubleClick" => vec![mouse(MOUSEEVENTF_LEFTDOWN, 0), mouse(MOUSEEVENTF_LEFTUP, 0), mouse(MOUSEEVENTF_LEFTDOWN, 0), mouse(MOUSEEVENTF_LEFTUP, 0)],
-            "volumeUp" => vec![key(VK_VOLUME_UP, false), key(VK_VOLUME_UP, true)],
-            "volumeDown" => vec![key(VK_VOLUME_DOWN, false), key(VK_VOLUME_DOWN, true)],
-            "switchWindow" => chord(VK_MENU, VK_TAB),
-            "minimize" => chord(VK_LWIN, VK_DOWN),
-            "maximize" => chord(VK_LWIN, VK_UP),
-            "showDesktop" => chord(VK_LWIN, 0x44),
-            "copy" => chord(VK_CONTROL, 0x43),
-            "cut" => chord(VK_CONTROL, 0x58),
-            "paste" => chord(VK_CONTROL, 0x56),
-            "selectAll" => chord(VK_CONTROL, 0x41),
-            _ => return false,
-        };
-        unsafe { SendInput(inputs.len() as u32, inputs.as_ptr(), std::mem::size_of::<INPUT>() as i32) == inputs.len() as u32 }
-    }
-    #[cfg(not(target_os = "windows"))]
-    { let _ = (action, value); false }
-}
-
-#[napi(object)]
-pub struct SonyControllerBattery {
-    pub id: String,
-    pub name: String,
-    pub percent: u32,
-    pub charging: bool,
-}
-
-#[napi]
-pub async fn get_windows_sony_hid_batteries() -> Vec<SonyControllerBattery> {
-    #[cfg(windows)]
-    {
-        tokio::task::spawn_blocking(|| {
-            let Ok(api) = hidapi::HidApi::new() else { return Vec::new(); };
-            let mut rows = Vec::new();
-            for info in api.device_list().filter(|d| d.vendor_id() == 0x054c && matches!(d.product_id(), 0x0ce6 | 0x0df2) && d.usage_page() == 1 && d.usage() == 5).take(8) {
-                let Ok(device) = info.open_device(&api) else { continue; };
-                let mut report = [0u8; 128];
-                let Ok(len) = device.read_timeout(&mut report, 150) else { continue; };
-                let status = match (report[0], len) {
-                    (0x01, 64) => report[53],
-                    (0x31, 78) => report[54],
-                    _ => continue,
-                };
-                let level = status & 0x0f;
-                let state = status >> 4;
-                if level > 10 || state > 2 { continue; }
-                rows.push(SonyControllerBattery {
-                    id: info.path().to_string_lossy().into_owned(),
-                    name: if info.product_id() == 0x0df2 { "DualSense Edge".into() } else { "DualSense".into() },
-                    percent: if state == 2 { 100 } else { u32::from(level) * 10 },
-                    charging: state == 1,
-                });
-            }
-            rows
-        }).await.unwrap_or_default()
-    }
-    #[cfg(not(windows))]
-    { Vec::new() }
-}
-
-/** USB DualSense adaptive trigger feedback. Does not claim audio-based haptics.
- * Only a single unambiguous controller is targeted. */
-#[napi]
-pub async fn set_dualsense_usb_trigger_feedback(strength: u32) -> bool {
-    #[cfg(windows)]
-    {
-        if strength > 8 { return false; }
-        tokio::task::spawn_blocking(move || {
-            let Ok(api) = hidapi::HidApi::new() else { return false; };
-            let mut devices = api.device_list().filter(|d| d.vendor_id() == 0x054c && matches!(d.product_id(), 0x0ce6 | 0x0df2) && d.usage_page() == 1 && d.usage() == 5);
-            let Some(info) = devices.next() else { return false; };
-            if devices.next().is_some() { return false; }
-            let Ok(device) = info.open_device(&api) else { return false; };
-            let mut input = [0u8; 128];
-            if device.read_timeout(&mut input, 150).ok() != Some(64) || input[0] != 1 { return false; }
-            let mut output = [0u8; 48];
-            output[0] = 2;
-            output[1] = 0x0c;
-            for offset in [11usize, 22usize] {
-                output[offset] = if strength == 0 { 0x05 } else { 0x01 };
-                output[offset + 1] = 32;
-                output[offset + 2] = (strength * 24) as u8;
-            }
-            device.write(&output).ok() == Some(output.len())
-        }).await.unwrap_or(false)
-    }
-    #[cfg(not(windows))]
-    { let _ = strength; false }
-}
-
-
-/// Poll XInput independently of renderer focus. No input injection here.
-#[napi]
-pub fn get_windows_controller_axes(index: u32) -> Vec<i32> {
-    #[cfg(target_os = "windows")]
-    {
-        use windows_sys::Win32::UI::Input::XboxController::{XInputGetState, XINPUT_STATE};
-        if index >= 4 { return vec![]; }
-        let mut state: XINPUT_STATE = unsafe { std::mem::zeroed() };
-        if unsafe { XInputGetState(index, &mut state) } != 0 { return vec![]; }
-        let pad = state.Gamepad;
-        return vec![pad.sThumbLX as i32, -(pad.sThumbLY as i32), pad.sThumbRX as i32, -(pad.sThumbRY as i32), pad.wButtons as i32];
-    }
-    #[cfg(not(target_os = "windows"))]
-    { let _ = index; vec![] }
 }

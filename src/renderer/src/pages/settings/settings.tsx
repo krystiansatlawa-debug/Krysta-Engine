@@ -30,7 +30,6 @@ import { SettingsContextScreenshots } from "./settings-context-screenshots";
 import { SettingsContextIntegrations } from "./settings-context-integrations";
 import { SettingsContextCompatibility } from "./settings-context-compatibility";
 import { SettingsContextBigPicture } from "./settings-context-big-picture";
-import { SettingsContextControllers } from "./settings-context-controllers";
 import { SettingsContextEmulation } from "./emulation/settings-context-emulation";
 
 const BASIC_SETTINGS = new Set([
@@ -39,7 +38,6 @@ const BASIC_SETTINGS = new Set([
   "downloads",
   "krysta_updates",
   "screenshots",
-  "controllers",
   "notifications",
   "krysta_cloud",
   "integrations",
@@ -110,11 +108,6 @@ export default function Settings() {
         id: "game" as const,
         label: t("krysta_game_category", { defaultValue: "Game" }),
         searchLabel: t("game_boost_heading"),
-        icon: <Gamepad2 size={16} />,
-      },
-      {
-        id: "controllers" as const,
-        label: t("controller_configuration.title"),
         icon: <Gamepad2 size={16} />,
       },
       {
@@ -211,10 +204,6 @@ export default function Settings() {
             if (selectedCategoryId === "krysta_cloud")
               return <SettingsContextKrystaCloud />;
             if (selectedCategoryId === "game") return <SettingsContextGame />;
-
-            if (selectedCategoryId === "controllers") {
-              return <SettingsContextControllers />;
-            }
 
             if (selectedCategoryId === "screenshots") {
               return <SettingsContextScreenshots />;

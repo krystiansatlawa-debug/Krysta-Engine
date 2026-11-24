@@ -67,7 +67,6 @@ import {
 } from "./services/epic";
 import { removeAppImageLibraryPath } from "./helpers/remove-appimage-library-path";
 import { shutdownGameBoost } from "./services/game-boost";
-import { DesktopController } from "./services/desktop-controller";
 
 if (process.platform === "linux") removeAppImageLibraryPath();
 
@@ -223,10 +222,6 @@ const initializeApp = async () => {
 
   // Suspend can outlive the 60s stall watchdog; reconnect right away instead
   powerMonitor.on("suspend", suspendEpicPlaytime);
-  if (process.platform === "win32") {
-    powerMonitor.on("suspend", () => DesktopController.suspend());
-    powerMonitor.on("resume", () => DesktopController.resume());
-  }
   powerMonitor.on("resume", () => {
     resumeEpicPlaytime();
     SSEClient.reconnectNow();
@@ -243,12 +238,6 @@ const initializeApp = async () => {
 
   if (language) i18n.changeLanguage(language);
 
-  if (process.platform === "win32") {
-    await DesktopController.start().catch((error) => {
-      logger.warn("Windows desktop controller initialization failed", error);
-    });
-  }
-
   // Check if starting from a "run" deep link - don't show main window in that case
   const deepLinkArg = process.argv.find((arg) =>
     arg.startsWith("hydralauncher://")
@@ -263,12 +252,7 @@ const initializeApp = async () => {
     if (!forceBigPicture) void restoreSocialWindows();
   }
 
-  void WindowManager.createSystemTray(language || "en", {
-    isDesktopControllerEnabled: () => DesktopController.getSettings().enabled,
-    setDesktopControllerEnabled: async (enabled) => {
-      await DesktopController.updateSettings({ enabled });
-    },
-  }).catch((error) => logger.warn("Could not create the system tray", error));
+  WindowManager.createSystemTray(language || "en");
 
   if (deepLinkArg) {
     handleDeepLinkPath(deepLinkArg);
@@ -502,7 +486,6 @@ app.on("before-quit", async (e) => {
     DownloadOrchestrator.cancelPendingDebridPreparations();
     PowerSaveBlockerManager.reset();
     ScreenshotInputService.shutdown();
-    DesktopController.stop();
     try {
       await DownloadManager.pauseDownload();
     } catch (error) {

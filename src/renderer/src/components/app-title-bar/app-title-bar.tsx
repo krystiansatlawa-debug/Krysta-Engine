@@ -1,6 +1,6 @@
-import { useState, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { RefreshCw, Film, Monitor } from "lucide-react";
+import { RefreshCw, Film } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   DashIcon,
@@ -46,14 +46,6 @@ export function AppTitleBar({
 }: Readonly<AppTitleBarProps>) {
   const { t, i18n } = useTranslation(["header", "sidebar"]);
   const location = useLocation();
-  const [displays, setDisplays] = useState<Awaited<ReturnType<typeof window.electron.getControllerDesktopDisplays>> | null>(null);
-  const [displayError, setDisplayError] = useState(false);
-  const toggleDisplays = async () => {
-    if (displays !== null) { setDisplays(null); return; }
-    setDisplayError(false);
-    try { setDisplays(await window.electron.getControllerDesktopDisplays()); }
-    catch { setDisplayError(true); setDisplays([]); }
-  };
   const updatesSelected =
     location.pathname === "/library" &&
     new URLSearchParams(location.search).get("collection") ===
@@ -118,13 +110,6 @@ export function AppTitleBar({
           <Film size={17} />
           <span>{pl ? "Nagrania" : "Recordings"}</span>
         </NavLink>
-        {platform === "win32" && <div style={{ position: "relative", WebkitAppRegion: "no-drag" } as CSSProperties}>
-          <button type="button" title={pl ? "Wybierz ekran" : "Choose display"} aria-label={pl ? "Wybierz ekran" : "Choose display"} aria-expanded={displays !== null} onClick={() => void toggleDisplays()} style={{ background: "transparent", border: 0, color: "inherit", cursor: "pointer", padding: 6 }}><Monitor size={17} /></button>
-          {displays !== null && <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 1000, minWidth: 220, background: "#20232a", color: "#fff", borderRadius: 8, padding: 8, boxShadow: "0 4px 16px #0008" }}>
-            {displays.map((display) => <button key={display.id} type="button" style={{ display: "block", width: "100%", textAlign: "left", padding: 8, color: "inherit", background: "transparent", border: 0, cursor: "pointer" }} onClick={async () => { try { if (await window.electron.moveControllerWindowToDisplay(display.id)) setDisplays(null); else setDisplayError(true); } catch { setDisplayError(true); } }}>{display.label} · {display.width}×{display.height}{display.primary ? " ★" : ""}</button>)}
-            {displayError && <span role="alert">{pl ? "Nie udało się przełączyć ekranu" : "Display switch failed"}</span>}
-          </div>}
-        </div>}
         <Link
           to="/library?collection=__krysta_updates__"
           className={updatesSelected ? "active" : ""}

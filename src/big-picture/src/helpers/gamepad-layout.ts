@@ -276,13 +276,8 @@ const GAMEPAD_LAYOUTS: GamepadLayout[] = [
     mappings: LINUX_XINPUT_MAPPINGS,
   },
   {
-    name: "DualSense Controller",
-    idPatterns: [/dualsense/i, /054c.*(?:0ce6|0df2)/i],
-    mappings: PLAYSTATION_GAMEPAD_MAPPINGS,
-  },
-  {
     name: "Xbox Controller",
-    idPatterns: [/xbox/i, /xinput/i, /microsoft/i, /xbox 360/i, /045e.*(?:02ea|02fd|0b12|0b13|0b20|0b22)/i],
+    idPatterns: [/xbox/i, /xinput/i, /microsoft/i, /xbox 360/i],
     mappings: STANDARD_GAMEPAD_MAPPINGS,
   },
   {
@@ -352,14 +347,9 @@ export const getGamepadLayout = (gamepad: globalThis.Gamepad) => {
       isLayoutAvailableForPlatform(layout, platform) &&
       layout.idPatterns.some((pattern: RegExp) => pattern.test(gamepad.id))
     ) {
-      if (gamepad.mapping === "standard" && layout.platforms?.includes("linux")) {
-        return { ...layout, mappings: STANDARD_GAMEPAD_MAPPINGS };
-      }
       return layout;
     }
   }
-
-  if (gamepad.mapping === "standard" && STANDARD_GAMEPAD_LAYOUT) return STANDARD_GAMEPAD_LAYOUT;
 
   if (platform === "linux" && LINUX_STANDARD_GAMEPAD_LAYOUT) {
     return LINUX_STANDARD_GAMEPAD_LAYOUT;

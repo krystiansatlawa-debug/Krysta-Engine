@@ -9,7 +9,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { FocusItem, HorizontalFocusGroup, Typography } from "../../components";
 import { IS_DESKTOP } from "../../constants";
@@ -17,7 +16,6 @@ import { useNavigationScreenActions } from "../../hooks";
 import type { FocusOverrides } from "../../services";
 import {
   useNavigationHistoryStore,
-  useGamepadStore,
   useNavigationStore,
   useVirtualKeyboardStore,
 } from "../../stores";
@@ -42,184 +40,6 @@ const useCurrentPageTitle = () => {
 
 function Header() {
   const navigate = useNavigate();
-  const connectedPads = useGamepadStore((state) => state.connectedGamepads);
-  const profile = useGamepadStore((state) => state.activeProfile);
-  const activePadIndex = useGamepadStore((state) => state.activeGamepadIndex);
-  const { t } = useTranslation("settings");
-  useEffect(() => {
-    if (
-      !IS_DESKTOP ||
-      window.electron.platform !== "win32" ||
-      !profile.enabled ||
-      activePadIndex === null
-    )
-      return;
-    let pending = false;
-    let armed = false;
-    let previous: boolean[] = [];
-    let lastScroll = 0;
-    const timer = window.setInterval(() => {
-      if (pending) return;
-      if (!document.hasFocus()) {
-        if (armed)
-          void window.electron
-            .controllerPointerAction("releaseAll", 0)
-            .catch(() => undefined);
-        armed = false;
-        return;
-      }
-      const pad = navigator.getGamepads()[activePadIndex];
-      if (!pad?.connected) {
-        if (armed)
-          void window.electron
-            .controllerPointerAction("releaseAll", 0)
-            .catch(() => undefined);
-        armed = false;
-        return;
-      }
-      const x = pad.axes[0] ?? 0,
-        y = pad.axes[1] ?? 0;
-      const buttons = Array.from(pad.buttons, (button) => button.pressed);
-      const rx = pad.axes[2] ?? 0,
-        ry = pad.axes[3] ?? 0;
-      if (!armed) {
-        armed =
-          [x, y, rx, ry].every((v) => Math.abs(v) <= profile.deadZone) &&
-          !buttons.some(Boolean);
-        previous = buttons;
-        return;
-      }
-      const pressed = (index: number) => buttons[index] && !previous[index];
-      const actions: [string, number][] = [];
-      for (const [side, index] of [
-        ["left", profile.bindings.left ?? 0],
-        ["right", profile.bindings.right ?? 1],
-      ] as const) {
-        if (Boolean(buttons[index]) !== Boolean(previous[index]))
-          actions.push([side + (buttons[index] ? "Down" : "Up"), 0]);
-      }
-      for (const [action, index] of [
-        ["volumeDown", 4],
-        ["volumeUp", 5],
-        ["switchWindow", 3],
-        ["minimize", 13],
-        ["maximize", 12],
-      ] as const) {
-        if (pressed(profile.bindings[action] ?? index))
-          actions.push([action, 0]);
-      }
-      if (pressed(profile.bindings.doubleClick ?? 2))
-        actions.push(["doubleClick", 0]);
-      previous = buttons;
-      if (Date.now() - lastScroll >= 100) {
-        if (Math.abs(ry) > profile.deadZone)
-          actions.push(["scroll", -Math.sign(ry)]);
-        if (Math.abs(rx) > profile.deadZone)
-          actions.push(["horizontalScroll", Math.sign(rx)]);
-        lastScroll = Date.now();
-      }
-      const axis = (v: number) =>
-        Math.abs(v) <= profile.deadZone
-          ? 0
-          : Math.round(v * profile.cursorSpeed);
-      const dx = axis(x),
-        dy = axis(y);
-      if (!dx && !dy && !actions.length) return;
-      pending = true;
-      void Promise.all([
-        ...(dx || dy ? [window.electron.moveControllerCursor(dx, dy)] : []),
-        ...actions.map(([action, value]) =>
-          window.electron.controllerPointerAction(action, value)
-        ),
-      ])
-        .then((results) => {
-          if (results.some((ok) => !ok)) armed = false;
-        })
-        .catch(() => {
-          armed = false;
-        })
-        .finally(() => {
-          pending = false;
-        });
-    }, 32);
-    return () => {
-      window.clearInterval(timer);
-      void window.electron
-        .controllerPointerAction("releaseAll", 0)
-        .catch(() => undefined);
-    };
-  }, [
-    activePadIndex,
-    profile.enabled,
-    profile.cursorSpeed,
-    profile.deadZone,
-    profile.bindings,
-  ]);
-  const [battery, setBattery] = useState<string[]>([]);
-  const padIdentity = connectedPads
-    .map((pad) => `${pad.index}:${pad.name}:${pad.layout}`)
-    .join("|");
-  const hasXbox = connectedPads.some((pad) =>
-    /xbox|xinput/i.test(`${pad.name} ${pad.layout}`)
-  );
-  const hasSony = connectedPads.some((pad) =>
-    /dualsense|dualshock|playstation|sony/i.test(`${pad.name} ${pad.layout}`)
-  );
-  useEffect(() => {
-    setBattery([]);
-    if (!IS_DESKTOP || (!hasXbox && !hasSony)) return;
-    let cancelled = false;
-    let pending = false;
-    const refresh = async () => {
-      if (pending) return;
-      pending = true;
-      try {
-        const [xbox, sony] = await Promise.all([
-          hasXbox
-            ? window.electron.getWindowsXboxBatteryLevels().catch(() => [])
-            : Promise.resolve([]),
-          hasSony
-            ? window.electron.getWindowsSonyBatteryLevels().catch(() => [])
-            : Promise.resolve([]),
-        ]);
-        const labels: Record<string, string> = {
-          wired: "Przewodowy",
-          empty: "Rozładowana",
-          low: "Niska",
-          medium: "Średnia",
-          full: "Pełna",
-        };
-        const rows = xbox.flatMap((level, index) =>
-          level && labels[level] ? [`Xbox ${index + 1}: ${labels[level]}`] : []
-        );
-        const seen = new Set<string>();
-        for (const device of sony) {
-          if (
-            !device.id ||
-            seen.has(device.id) ||
-            !Number.isFinite(device.percent) ||
-            device.percent < 0 ||
-            device.percent > 100
-          )
-            continue;
-          seen.add(device.id);
-          rows.push(
-            `${device.name || "PlayStation"}: ${device.percent}%${device.charging ? " ⚡ Ładowanie" : device.percent <= 20 ? " · Niska bateria" : ""}`
-          );
-        }
-        if (!cancelled) setBattery(rows);
-      } finally {
-        pending = false;
-      }
-    };
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 15000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [hasXbox, hasSony, padIdentity]);
-  const batteryLabel = battery.length ? battery.join(" · ") : "Niedostępna";
   const { pathname } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const pageTitle = useCurrentPageTitle();
@@ -482,29 +302,6 @@ function Header() {
             </button>
           </FocusItem>
 
-          {connectedPads.length > 0 && (
-            <FocusItem id="header-controller-settings" asChild>
-              <button
-                type="button"
-                className="header__action"
-                onClick={() =>
-                  navigate(
-                    `${IS_DESKTOP ? "/big-picture" : ""}/settings?tab=controllers`
-                  )
-                }
-              >
-                {t("controller_configuration.title")}
-              </button>
-            </FocusItem>
-          )}
-          {connectedPads.length > 0 && (
-            <span
-              className="header__controller-battery"
-              title="Poziom baterii kontrolera"
-            >
-              🔋 {batteryLabel}
-            </span>
-          )}
           <form
             ref={searchRef}
             role="search"
