@@ -15,6 +15,7 @@ export function SettingsGameBoost() {
     enabled,
     closeApplications,
     restoreApplications,
+    minimizeAfterGame,
   } = getGameBoostPreferences(preferences);
   const [candidates, setCandidates] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -92,6 +93,12 @@ export function SettingsGameBoost() {
 
       {window.electron.platform === "win32" && (
         <>
+          <CheckboxField
+            label={t("game_boost_minimize_after_game", { defaultValue: "Minimalizuj wszystkie okna po zakończeniu gry" })}
+            checked={minimizeAfterGame}
+            disabled={!enabled || busy}
+            onChange={(event) => void save({ gameBoostMinimizeAfterGame: event.currentTarget.checked })}
+          />
           <h4>{t("game_boost_background_apps")}</h4>
           <p>{t("game_boost_background_apps_hint")}</p>
           <Button theme="outline" disabled={busy} onClick={() => void apply(async () => setCandidates(await window.electron.listGameBoostCandidates()))}>
