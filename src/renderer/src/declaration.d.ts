@@ -1822,6 +1822,7 @@ declare global {
     ) => () => Electron.IpcRenderer;
     openFolder: (folderPath: string) => Promise<string>;
     isPortableVersion: boolean;
+    listGameBoostCandidates: () => Promise<string[]>;
     showOpenDialog: (
       options: Electron.OpenDialogOptions
     ) => Promise<Electron.OpenDialogReturnValue>;
