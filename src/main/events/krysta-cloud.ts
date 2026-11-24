@@ -23,6 +23,7 @@ import {
 import {
   directCloudIdentity,
   uploadAchievementBackup,
+  uploadGoogleMedia,
   uploadCloudSnapshot,
   listRemoteCloudSnapshots,
   downloadCloudSnapshot,
@@ -30,12 +31,17 @@ import {
 import { AchievementMemoryStore } from "@main/services/achievements/achievement-memory-store";
 import type { AutomaticGameStoryProgress, GameStoryProgress, GameShop } from "@types";
 
+import { getLocalScreenshots } from "@main/services/screenshots";
+import { recordingState, readRecording } from "@main/services/krysta-recordings";
+
 type Provider = "google" | "synology" | "local" | "hydra";
 type Config = {
   provider: Provider;
   folder?: string;
   autoBackup?: boolean;
   syncBeforeLaunch?: boolean;
+  backupScreenshots?: boolean;
+  backupRecordings?: boolean;
 };
 type Entry = { id: string; createdAt: string; files: number };
 async function config(): Promise<Config> {
@@ -700,6 +706,52 @@ async function backupSettingsToGoogle(expected: Config, signal: AbortSignal) {
     await achievementBackupState.put(stateKey, hash);
   } finally { settingsBackupBusy = false; }
 }
+let mediaBusy = false;
+async function backupMediaToGoogle(c: Config, signal: AbortSignal) {
+  if (mediaBusy || c.provider !== "google" || !c.autoBackup || (!c.backupScreenshots && !c.backupRecordings)) return;
+  mediaBusy = true;
+  try {
+    const identity = await directCloudIdentity("google");
+    const allowed = async (kind: "backupScreenshots" | "backupRecordings") => {
+      await waitForGameBoostBackgroundSync(signal);
+      const latest = await config();
+      return !signal.aborted && !gamesPlaytime.size && latest.provider === "google" && latest.autoBackup && latest[kind] === true;
+    };
+    const send = async (name: string, bytes: Uint8Array) => {
+      const hash = createHash("sha256").update(bytes).digest("hex");
+      const key = "media:" + identity + ":" + hash;
+      if (await achievementBackupState.get(key).catch(() => undefined)) return;
+      await uploadGoogleMedia(identity, name, bytes, hash, AbortSignal.any([signal, AbortSignal.timeout(120000)]));
+      await achievementBackupState.put(key, hash);
+    };
+    if (c.backupScreenshots && await allowed("backupScreenshots")) {
+      for (const shot of await getLocalScreenshots()) {
+        if (!await allowed("backupScreenshots")) break;
+        const ext = path.extname(shot.path).toLowerCase();
+        if (![".png",".jpg",".jpeg",".webp"].includes(ext)) continue;
+        const st = await fs.lstat(shot.path).catch(() => null);
+        if (!st?.isFile() || st.isSymbolicLink() || st.size > 16 * 1024 ** 2) continue;
+        const bytes = await fs.readFile(shot.path);
+        if (await allowed("backupScreenshots")) await send("Krysta-screenshot-" + shot.clientId + ext, bytes);
+      }
+    }
+    if (c.backupRecordings && await allowed("backupRecordings")) {
+      for (const clip of (await recordingState()).clips) {
+        if (!await allowed("backupRecordings")) break;
+        if (clip.size > 96 * 1024 ** 2) continue;
+        const bytes = await readRecording(clip.id);
+        if (await allowed("backupRecordings")) await send("Krysta-recording-" + clip.id + "." + clip.format, bytes);
+      }
+    }
+  } finally { mediaBusy = false; }
+}
+ipcMain.handle("krysta:cloud-media", async (_e, kind: unknown, enabled: unknown) => {
+  if ((kind !== "backupScreenshots" && kind !== "backupRecordings") || typeof enabled !== "boolean") throw Error("Invalid media setting");
+  const c = await config();
+  if (c.provider !== "google") throw Error("Select Google Drive");
+  if (enabled) await directCloudIdentity("google");
+  return save({...c, [kind]: enabled});
+});
 type AutoResult = {
   state: "saved" | "skipped" | "error";
   at: string;
@@ -786,6 +838,7 @@ onTrackedGamesRunningChange(() => {
         await backupSettingsToGoogle(c, controller.signal).catch(() => {
           void publishKrystaNotification("KRYSTA_ERROR", game.title, "Kopia ustawień Google Drive nie powiodła się").catch(() => {});
         });
+        await backupMediaToGoogle(c, controller.signal).catch(() => {});
         autoResults.set(key, {
           state: done ? "saved" : "skipped",
           at: new Date().toISOString(),
