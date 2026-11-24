@@ -53,20 +53,35 @@ function Header() {
     if (!profile.enabled || activePadIndex === null) return;
     let pending = false;
     let armed = false;
+    let previous: boolean[] = [];
+    let lastScroll = 0;
     const timer = window.setInterval(() => {
       if (pending || !document.hasFocus()) { armed = false; return; }
       const pad = navigator.getGamepads()[activePadIndex];
       if (!pad?.connected) { armed = false; return; }
       const x = pad.axes[0] ?? 0, y = pad.axes[1] ?? 0;
-      if (!armed) { armed = Math.abs(x) <= profile.deadZone && Math.abs(y) <= profile.deadZone; return; }
+      const buttons = Array.from(pad.buttons, (button) => button.pressed);
+      const rx = pad.axes[2] ?? 0, ry = pad.axes[3] ?? 0;
+      if (!armed) { armed = [x,y,rx,ry].every(v => Math.abs(v) <= profile.deadZone) && !buttons.some(Boolean); previous = buttons; return; }
+      const pressed = (index: number) => buttons[index] && !previous[index];
+      const actions: [string, number][] = [];
+      if (pressed(profile.bindings.left ?? 0)) actions.push(["leftClick", 0]);
+      if (pressed(profile.bindings.right ?? 1)) actions.push(["rightClick", 0]);
+      if (pressed(profile.bindings.doubleClick ?? 2)) actions.push(["doubleClick", 0]);
+      previous = buttons;
+      if (Date.now() - lastScroll >= 100) {
+        if (Math.abs(ry) > profile.deadZone) actions.push(["scroll", -Math.sign(ry)]);
+        if (Math.abs(rx) > profile.deadZone) actions.push(["horizontalScroll", Math.sign(rx)]);
+        lastScroll = Date.now();
+      }
       const axis = (v: number) => Math.abs(v) <= profile.deadZone ? 0 : Math.round(v * profile.cursorSpeed);
       const dx = axis(x), dy = axis(y);
-      if (!dx && !dy) return;
+      if (!dx && !dy && !actions.length) return;
       pending = true;
-      void window.electron.moveControllerCursor(dx, dy).then((ok) => { if (!ok) armed = false; }).catch(() => { armed = false; }).finally(() => { pending = false; });
+      void Promise.all([...(dx || dy ? [window.electron.moveControllerCursor(dx, dy)] : []), ...actions.map(([action, value]) => window.electron.controllerPointerAction(action, value))]).then((results) => { if (results.some(ok => !ok)) armed = false; }).catch(() => { armed = false; }).finally(() => { pending = false; });
     }, 32);
     return () => window.clearInterval(timer);
-  }, [activePadIndex, profile.enabled, profile.cursorSpeed, profile.deadZone]);
+  }, [activePadIndex, profile.enabled, profile.cursorSpeed, profile.deadZone, profile.bindings]);
   const [battery, setBattery] = useState<string[]>([]);
   const padIdentity = connectedPads.map((pad) => `${pad.index}:${pad.name}:${pad.layout}`).join("|");
   const hasXbox = connectedPads.some((pad) => /xbox|xinput/i.test(`${pad.name} ${pad.layout}`));
