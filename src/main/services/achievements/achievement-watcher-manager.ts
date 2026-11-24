@@ -323,8 +323,6 @@ export class AchievementWatcherManager {
 
     const game = await gamesSublevel.get(gameKey).catch(() => null);
     if (!game || game.isDeleted) return;
-
-    if (isGameBoostBackgroundSyncPaused() && !isTrackedGameKeyRunning(levelKeys.game(game.shop, game.objectId))) continue;
     const gameAchievementFiles = await collectGameAchievementFiles(game, {
       includeSteamCache: await getEnableSteamAchievements(),
       awaitGameDirectoryLocations: true,
