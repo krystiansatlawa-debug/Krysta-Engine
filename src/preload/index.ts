@@ -246,6 +246,7 @@ contextBridge.exposeInMainWorld("electron", {
   krystaFpsPosition: () => ipcRenderer.invoke("krysta:fps-position"),
   krystaFpsSetPosition: (position: "tl" | "tr" | "bl" | "br") =>
     ipcRenderer.invoke("krysta:fps-set-position", position),
+  getWindowsSonyBatteryLevels: () => ipcRenderer.invoke("getWindowsSonyBatteryLevels"),
   getWindowsXboxBatteryLevels: () => ipcRenderer.invoke("getWindowsXboxBatteryLevels"),
   getWindowsGameBarControllerEnabled: () =>
     ipcRenderer.invoke("getWindowsGameBarControllerEnabled"),
