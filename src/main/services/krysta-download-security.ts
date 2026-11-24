@@ -254,16 +254,16 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       if (inventory.archives) reasons.push("Wykryto archiwa; zawartość wymaga sprawdzenia po rozpakowaniu.");
       const level = high ? "high" : reasons.length ? "review" : "unverified";
       if (!reasons.length) reasons.push("Brak potwierdzonego wyniku skanowania konkretnych plików.");
+      const finalInventory = await inspectDownloadTree(base, target);
+      if (finalInventory.fingerprint !== inventory.fingerprint) {
+        await recordSecurityDecision(inspectedFingerprint, high ? "high" : "unverified", [...reasons, "Zawartość zmieniła się podczas skanowania; wynik unieważniony."]);
+        logger.warn("[Security Shield] Download contents changed during antivirus scan; verdict invalidated");
+        return false;
+      }
       await recordSecurityDecision(inventory.fingerprint, level, reasons);
       logger.info("[Security Shield] Ocena zagrożenia:", { level, reasons, verified: false, disclaimer: "Nawet pomyślne skanowanie nie gwarantuje bezpieczeństwa plików." });
       if (report.enabled !== true || report.realtime !== true || report.signaturesOutOfDate !== false || report.recentDetections !== 0) {
         logger.warn("[Security Shield] Defender reported detections or protection is not fully available");
-        return false;
-      }
-      const finalInventory = await inspectDownloadTree(base, target);
-      if (finalInventory.fingerprint !== inventory.fingerprint) {
-        await recordSecurityDecision(inspectedFingerprint, "unverified", ["Zawartość zmieniła się podczas skanowania; wynik unieważniony."]);
-        logger.warn("[Security Shield] Download contents changed during antivirus scan; verdict invalidated");
         return false;
       }
       logger.info("[Security Shield] Defender reported no new detections; scan-specific verdict remains unverified");
