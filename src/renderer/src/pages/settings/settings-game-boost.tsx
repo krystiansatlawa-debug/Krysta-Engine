@@ -16,6 +16,7 @@ export function SettingsGameBoost() {
     closeApplications,
     restoreApplications,
   } = getGameBoostPreferences(preferences);
+  const [candidates, setCandidates] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,6 +94,12 @@ export function SettingsGameBoost() {
         <>
           <h4>{t("game_boost_background_apps")}</h4>
           <p>{t("game_boost_background_apps_hint")}</p>
+          <Button theme="outline" disabled={busy} onClick={() => void apply(async () => setCandidates(await window.electron.listGameBoostCandidates()))}>
+            {t("game_boost_scan_apps", { defaultValue: "Detect running applications / Wykryj działające aplikacje" })}
+          </Button>
+          {candidates.filter(exe => !closeApplications.some(p => p.toLowerCase() === exe.toLowerCase())).map(exe => (
+            <Button key={exe} theme="outline" disabled={busy || closeApplications.length >= MAX_GAME_BOOST_APPLICATIONS} onClick={() => void save({ gameBoostCloseApplications: [...closeApplications, exe] })}>{exe}</Button>
+          ))}
           {closeApplications.map((application) => (
             <TextField
               key={application}
