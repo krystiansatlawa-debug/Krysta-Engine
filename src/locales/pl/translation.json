@@ -427,6 +427,7 @@
     "story_progress_from_achievements": "Etap kampanii potwierdzony przez osiągnięcia na koncie",
     "story_progress_confirmed_chapter": "Ukończono rozdział {{chapter}} z {{total}}",
     "story_progress_confirmed_finale": "Osiągnięcia na koncie potwierdzają finał kampanii.",
+    "story_progress_achievement_review": "Zapis wskazuje ukończenie fabuły, ale Krysta nie potwierdziła osiągnięcia finałowego. Sprawdź synchronizację osiągnięć; nie każda gra ma takie osiągnięcie.",
     "story_progress_diagnostic_heading": "Diagnostyka zapisu",
     "story_progress_diagnostic_not-found": "Nie znaleziono zapisu. Zapisz grę lokalnie lub wskaż folder zapisów.",
     "story_progress_diagnostic_unreadable": "Odczyt nie powiódł się. Sprawdź dostęp do folderu i spróbuj ponownie.",
