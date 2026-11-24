@@ -163,15 +163,18 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       if (!systemRoot || !path.isAbsolute(systemRoot)) return false;
       const powershell = path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
       const signatureSummary: Record<string, number> = {};
+      const publishers = new Set<string>();
       for (const candidate of inventory.signatureCandidates) {
         try {
-          const result = await run(powershell, ["-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference=\'Stop\'; (Get-AuthenticodeSignature -LiteralPath $env:KRYSTA_SIGNATURE_PATH).Status.ToString()"], { windowsHide: true, timeout: 15000, maxBuffer: 16384, env: {...process.env, KRYSTA_SIGNATURE_PATH: candidate} });
-          const status = result.stdout.trim();
+          const result = await run(powershell, ["-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference=\'Stop\'; $s=Get-AuthenticodeSignature -LiteralPath $env:KRYSTA_SIGNATURE_PATH; [pscustomobject]@{status=$s.Status.ToString();publisher=$s.SignerCertificate.Subject} | ConvertTo-Json -Compress"], { windowsHide: true, timeout: 15000, maxBuffer: 16384, env: {...process.env, KRYSTA_SIGNATURE_PATH: candidate} });
+          const observation = JSON.parse(result.stdout.trim()) as {status?: string; publisher?: string};
+          const status = observation.status ?? "Unknown";
+          if (status === "Valid" && typeof observation.publisher === "string") publishers.add(observation.publisher.slice(0, 300));
           const key = ["Valid", "NotSigned", "HashMismatch", "NotTrusted", "UnknownError", "NotSupportedFileFormat", "Incompatible"].includes(status) ? status : "Unknown";
           signatureSummary[key] = (signatureSummary[key] ?? 0) + 1;
         } catch { signatureSummary.Unknown = (signatureSummary.Unknown ?? 0) + 1; }
       }
-      logger.info("[Security Shield] Authenticode observations (not a malware verdict):", signatureSummary);
+      logger.info("[Security Shield] Authenticode observations (not a malware verdict):", signatureSummary, [...publishers]);
       const { stdout } = await run(powershell, ["-NoProfile", "-NonInteractive", "-Command",
         "$ErrorActionPreference='Stop'; $s=Get-MpComputerStatus; if (-not $s.AntivirusEnabled -or -not $s.AMServiceEnabled) { throw 'Defender unavailable' }; $before=Get-Date; Start-MpScan -ScanType CustomScan -ScanPath $env:KRYSTA_SCAN_PATH -ErrorAction Stop; $after=Get-MpComputerStatus; $detections=@(Get-MpThreatDetection -ErrorAction Stop | Where-Object { $_.InitialDetectionTime -ge $before }); [pscustomobject]@{ enabled=[bool]$after.AntivirusEnabled; realtime=[bool]$after.RealTimeProtectionEnabled; signaturesOutOfDate=[bool]$after.DefenderSignaturesOutOfDate; recentDetections=$detections.Count } | ConvertTo-Json -Compress"],
         { windowsHide: true, timeout: 2 * 60 * 60 * 1000, maxBuffer: 1024 * 1024, env: {...process.env, KRYSTA_SCAN_PATH: target} });
