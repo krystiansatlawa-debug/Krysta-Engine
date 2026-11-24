@@ -105,6 +105,11 @@ async function tokenRequest(params: Record<string, string>) {
     body: new URLSearchParams(params),
     signal: AbortSignal.timeout(30000),
     redirect: "error",
+  }).catch((error: unknown) => {
+    const name = error instanceof Error ? error.name : "";
+    throw Error(name === "TimeoutError" || name === "AbortError"
+      ? "Google OAuth: przekroczono czas połączenia. Spróbuj ponownie."
+      : "Google OAuth: nie można połączyć się z serwerem Google. Sprawdź internet, DNS i zaporę.");
   });
   if (!r.ok) {
     // Only show recognized error codes, never Google response text, authorization codes or secrets.
@@ -115,7 +120,8 @@ async function tokenRequest(params: Record<string, string>) {
   return (await r.json()) as { access_token?: string; refresh_token?: string };
 }
 ipcMain.handle("krysta:cloud-account-status", async () => {
-  const c = await read();
+  const c = await read().catch(() => null);
+  if (!c) return { google: false, synology: false, googleConfigured: false, credentialError: "Nie można odczytać zaszyfrowanych danych konta. Sprawdź profil Windows i zabezpieczenia systemu." };
   let configured = !!getSavedClient(c);
   if (!configured) {
     try {
@@ -143,6 +149,7 @@ async function probeGoogleDrive(accessToken: string) {
   await probe.body?.cancel();
   if (!probe.ok)
     throw Error(
+      (probe.status === 401 ? "Google Drive: sesja wygasła. Połącz konto ponownie. " : probe.status === 429 ? "Google Drive: limit zapytań. Spróbuj później. " : probe.status >= 500 ? "Google Drive: chwilowa awaria serwera. " : "") +
       "Google Drive: dostęp do plików niedostępny (HTTP " +
         probe.status +
         "). Sprawdź Drive API i uprawnienia aplikacji. / Drive access unavailable."
