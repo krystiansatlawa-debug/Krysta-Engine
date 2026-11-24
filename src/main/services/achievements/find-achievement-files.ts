@@ -6,6 +6,7 @@ import { achievementsLogger } from "../logger";
 import { SystemPath } from "../system-path";
 import { getSteamLocation, getSteamUsersIds } from "../steam";
 import { Wine } from "../wine";
+import { refreshAchievementCatalogue, getRemoteAchievementAliases } from "./achievement-catalogue-update";
 
 const getAppDataPath = () => {
   if (process.platform === "win32") {
@@ -249,12 +250,9 @@ export const getEmulatorSaveFolders = (winePrefixPath = "") =>
   );
 
 export const getAlternativeObjectIds = (objectId: string) => {
-  // Dishonored
-  if (objectId === "205100") {
-    return ["205100", "217980", "31292"];
-  }
-
-  return [objectId];
+  refreshAchievementCatalogue();
+  const builtIn = objectId === "205100" ? ["217980", "31292"] : [];
+  return [...new Set([objectId, ...builtIn, ...getRemoteAchievementAliases(objectId)])];
 };
 
 export const findAchievementFiles = (game: Game) => {
