@@ -46,6 +46,8 @@ const fileStats: Map<string, number> = new Map();
 const fltFiles: Map<string, Set<string>> = new Map();
 const processingGameKeys = new Set<string>();
 const lastRecoveryScan = new Map<string, number>();
+const previouslyRunningGames = new Set<string>();
+const pendingExitRecovery = new Map<string, number>();
 const RECOVERY_INTERVAL_MS = 5 * 60_000;
 const ACTIVE_RECOVERY_INTERVAL_MS = 30_000;
 
@@ -195,12 +197,21 @@ const processChangedAchievementFiles = async (
 
   try {
     const changedFiles = achievementFiles.filter(hasAchievementFileChanged);
-    const recoveryInterval = isTrackedGameKeyRunning(gameKey) ? ACTIVE_RECOVERY_INTERVAL_MS : RECOVERY_INTERVAL_MS;
+    const running = isTrackedGameKeyRunning(gameKey);
+    if (running) {
+      previouslyRunningGames.add(gameKey);
+      pendingExitRecovery.delete(gameKey);
+    } else if (previouslyRunningGames.delete(gameKey)) {
+      pendingExitRecovery.set(gameKey, Date.now() + 3000);
+    }
+    const exitRecoveryDue = !running && pendingExitRecovery.has(gameKey) && Date.now() >= pendingExitRecovery.get(gameKey)!;
+    const recoveryInterval = running ? ACTIVE_RECOVERY_INTERVAL_MS : RECOVERY_INTERVAL_MS;
     const recoveryDue = Date.now() - (lastRecoveryScan.get(gameKey) ?? 0) >= recoveryInterval;
-    if (recoveryDue && achievementFiles.length) {
+    if ((recoveryDue || exitRecoveryDue) && achievementFiles.length) {
       const recovered = achievementFiles.flatMap((file) => parseAchievementFile(file.filePath, file.type));
       const count = await mergeDetectedAchievements(game, recovered);
       lastRecoveryScan.set(gameKey, Date.now());
+      if (exitRecoveryDue) pendingExitRecovery.delete(gameKey);
       return count;
     }
 
@@ -269,6 +280,8 @@ export class AchievementWatcherManager {
     void achievementSyncWorker.trigger();
     this.alreadySyncedGames.clear();
     lastRecoveryScan.clear();
+    previouslyRunningGames.clear();
+    pendingExitRecovery.clear();
     AchievementMemoryStore.clear();
     UnlockedAchievementsCache.clear();
     CombinedAchievementsRequests.clear();
