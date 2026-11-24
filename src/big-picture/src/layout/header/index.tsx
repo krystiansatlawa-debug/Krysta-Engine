@@ -45,12 +45,18 @@ function Header() {
   const [battery, setBattery] = useState<string | null>(null);
   const padIdentity = connectedPads.map((pad) => `${pad.index}:${pad.name}:${pad.layout}`).join("|");
   const singleXbox = connectedPads.length === 1 && /xbox|xinput/i.test(connectedPads[0].layout);
+  const singleSony = connectedPads.length === 1 && /dualsense|dualshock|playstation|sony/i.test(`${connectedPads[0].name} ${connectedPads[0].layout}`);
   useEffect(() => {
     setBattery(null);
-    if (!IS_DESKTOP || !singleXbox) return;
+    if (!IS_DESKTOP || (!singleXbox && !singleSony)) return;
     let cancelled = false;
     const refresh = async () => {
       try {
+        if (singleSony) {
+          const rows = await window.electron.getWindowsSonyBatteryLevels();
+          if (!cancelled) setBattery(rows.length === 1 && /dualsense|wireless controller/i.test(rows[0].name) ? `${rows[0].percent}%` : null);
+          return;
+        }
         const levels = (await window.electron.getWindowsXboxBatteryLevels()).filter(Boolean);
         if (!cancelled) setBattery(levels.length === 1 ? levels[0] : null);
       } catch {
@@ -60,8 +66,8 @@ function Header() {
     void refresh();
     const timer = window.setInterval(() => void refresh(), 15000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [singleXbox, padIdentity]);
-  const batteryLabel = ({ wired: "Przewodowy", empty: "Rozładowana", low: "Niska", medium: "Średnia", full: "Pełna" } as Record<string, string>)[battery ?? ""] ?? "Niedostępna";
+  }, [singleXbox, singleSony, padIdentity]);
+  const batteryLabel = ({ wired: "Przewodowy", empty: "Rozładowana", low: "Niska", medium: "Średnia", full: "Pełna" } as Record<string, string>)[battery ?? ""] ?? (battery?.endsWith("%") ? battery : "Niedostępna");
   const { pathname } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const pageTitle = useCurrentPageTitle();
