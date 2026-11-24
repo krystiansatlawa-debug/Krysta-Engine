@@ -17,6 +17,7 @@ import { getRecompilationSaveRules } from "@main/services/cloud-save/recompilati
 import { waitForGameBoostBackgroundSync } from "@main/services/game-boost-background-sync";
 import {
   gamesPlaytime,
+  hasTrackedGamesRunning,
   onTrackedGamesRunningChange,
   isTrackedGameKeyRunning,
 } from "@main/services/game-running-state";
@@ -715,7 +716,7 @@ async function backupMediaToGoogle(c: Config, signal: AbortSignal) {
     const allowed = async (kind: "backupScreenshots" | "backupRecordings") => {
       await waitForGameBoostBackgroundSync(signal);
       const latest = await config();
-      return !signal.aborted && !gamesPlaytime.size && latest.provider === "google" && latest.autoBackup && latest[kind] === true;
+      return !signal.aborted && !hasTrackedGamesRunning() && latest.provider === "google" && latest.autoBackup && latest[kind] === true;
     };
     const send = async (name: string, bytes: Uint8Array) => {
       const hash = createHash("sha256").update(bytes).digest("hex");
@@ -838,7 +839,9 @@ onTrackedGamesRunningChange(() => {
         await backupSettingsToGoogle(c, controller.signal).catch(() => {
           void publishKrystaNotification("KRYSTA_ERROR", game.title, "Kopia ustawień Google Drive nie powiodła się").catch(() => {});
         });
-        await backupMediaToGoogle(c, controller.signal).catch(() => {});
+        await backupMediaToGoogle(c, controller.signal).catch(() => {
+          if (!controller.signal.aborted) void publishKrystaNotification("KRYSTA_ERROR", game.title, "Kopia multimediów Google Drive nie powiodła się").catch(() => {});
+        });
         autoResults.set(key, {
           state: done ? "saved" : "skipped",
           at: new Date().toISOString(),
