@@ -231,11 +231,10 @@ const initializeApp = async () => {
     });
   });
 
-  const language = await db
-    .get<string, string>(levelKeys.language, {
-      valueEncoding: "utf8",
-    })
-    .catch(() => "en");
+  const [language] = await Promise.all([
+    db.get<string, string>(levelKeys.language, { valueEncoding: "utf8" }).catch(() => "en"),
+    loadSocialWindowsBounds(),
+  ]);
 
   if (language) i18n.changeLanguage(language);
 
@@ -244,8 +243,6 @@ const initializeApp = async () => {
     arg.startsWith("hydralauncher://")
   );
   const forceBigPicture = process.argv.includes("--big-picture");
-
-  await loadSocialWindowsBounds();
 
   if (
     !process.argv.includes("--hidden") &&
