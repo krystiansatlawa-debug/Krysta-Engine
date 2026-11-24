@@ -1,5 +1,6 @@
 import { lstat, open, readdir } from "node:fs/promises";
 import path from "node:path";
+import { findStoryMission } from "../../shared/story-mission-catalogue";
 import { storyGameTitleCandidates } from "../../shared/story-game-identity";
 import type { AutomaticGameStoryProgress, Game, StorySaveStatus } from "@types";
 import {
@@ -207,7 +208,7 @@ export function parseRockstarStoryHeader(
 
   const normalized = saveTitle.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "");
   const summaries = source === "rdr2" ? rdrSummaries : gtaSummaries;
-  return { percent, saveTitle, summaryKey: summaries.get(normalized) };
+  return { percent, saveTitle: findStoryMission(source, saveTitle)?.title ?? saveTitle, summaryKey: summaries.get(normalized) };
 }
 
 export function parseCyberpunkStoryMetadata(json: string): SaveDetails | null {
