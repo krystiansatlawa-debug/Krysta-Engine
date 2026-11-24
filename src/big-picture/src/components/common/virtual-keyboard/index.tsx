@@ -47,7 +47,7 @@ type VirtualKeyboardKey =
   | { type: "cursor-left"; label: string }
   | { type: "cursor-right"; label: string };
 
-type VirtualKeyboardLayer = "alphabetic" | "symbols";
+type VirtualKeyboardLayer = "alphabetic" | "symbols" | "polish";
 type VirtualKeyboardLayoutMode = "floating" | "avoiding";
 
 type VirtualKeyboardLayoutKey = VirtualKeyboardKey & {
@@ -162,12 +162,19 @@ const SYMBOLS_KEY_LAYOUT: VirtualKeyboardLayoutKey[] = [
     row: 4,
     column: index + 1,
   })),
-  { type: "toggle-layer", label: "ABC", row: 5, column: 1, columnSpan: 2 },
+  { type: "toggle-layer", label: "PL", row: 5, column: 1, columnSpan: 2 },
   { type: "space", label: "Space", row: 5, column: 3, columnSpan: 7 },
   { type: "cursor-left", label: "←", row: 5, column: 10 },
   { type: "cursor-right", label: "→", row: 5, column: 11 },
 ];
 
+const POLISH_KEY_LAYOUT: VirtualKeyboardLayoutKey[] = ALPHABETIC_KEY_LAYOUT.map((key) => {
+  if (key.type === "toggle-layer") return { ...key, label: "ABC" };
+  if (key.type !== "character") return key;
+  const letters: Record<string, string> = { a: "ą", c: "ć", e: "ę", l: "ł", n: "ń", o: "ó", s: "ś", x: "ź", z: "ż" };
+  const value = letters[key.value] ?? key.value;
+  return { ...key, value, label: value };
+});
 function getKeyId(key: VirtualKeyboardKey) {
   if (key.type === "character") {
     return `big-picture-virtual-keyboard-key-${key.value}`;
@@ -878,7 +885,7 @@ export function VirtualKeyboardProvider() {
 
   const toggleLayer = useCallback(() => {
     const activeLayout =
-      layer === "alphabetic" ? ALPHABETIC_KEY_LAYOUT : SYMBOLS_KEY_LAYOUT;
+      layer === "polish" ? POLISH_KEY_LAYOUT : layer === "alphabetic" ? ALPHABETIC_KEY_LAYOUT : SYMBOLS_KEY_LAYOUT;
     const activeKey = findLayoutKeyById(activeLayout, currentFocusId);
 
     pendingLayerFocusPositionRef.current = activeKey
@@ -892,7 +899,7 @@ export function VirtualKeyboardProvider() {
 
     setLayer((currentLayer) => {
       const nextLayer =
-        currentLayer === "alphabetic" ? "symbols" : "alphabetic";
+        currentLayer === "alphabetic" ? "symbols" : currentLayer === "symbols" ? "polish" : "alphabetic";
 
       if (nextLayer === "symbols") {
         setIsShiftActive(false);
@@ -913,7 +920,7 @@ export function VirtualKeyboardProvider() {
   }, [insertText, pulseKey]);
 
   const hotkeyShift = useCallback(() => {
-    if (layer !== "alphabetic") return;
+    if (layer === "symbols") return;
 
     pulseKey(getKeyId({ type: "shift", label: "Shift" }));
     setIsShiftActive((current) => !current);
@@ -1421,7 +1428,7 @@ export function VirtualKeyboardProvider() {
   }, [currentFocusId, target]);
 
   const keyLayout =
-    layer === "alphabetic" ? ALPHABETIC_KEY_LAYOUT : SYMBOLS_KEY_LAYOUT;
+    layer === "polish" ? POLISH_KEY_LAYOUT : layer === "alphabetic" ? ALPHABETIC_KEY_LAYOUT : SYMBOLS_KEY_LAYOUT;
   const navigationOverridesByKeyId = useMemo(
     () => getVirtualKeyboardNavigationOverrides(keyLayout),
     [keyLayout]
@@ -1504,7 +1511,7 @@ export function VirtualKeyboardProvider() {
                     const keyId = getKeyId(key);
                     const label =
                       key.type === "character" &&
-                      layer === "alphabetic" &&
+                      layer !== "symbols" &&
                       isShiftActive
                         ? key.label.toUpperCase()
                         : key.label;
