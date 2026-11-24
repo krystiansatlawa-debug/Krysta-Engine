@@ -288,9 +288,11 @@ function refresh(key: string, scan: PendingScan) {
 
     const catalogue = getGameCatalogueIdentity(game);
     const next: CompletedScan = {
-      automatic: current.automatic,
+      // A failed scan is not evidence that the player's campaign was reset.
+      // Preserve the last successful snapshot, but report the current scan status.
+      automatic: current.automatic ?? previous.automatic,
       status: current.status,
-      lastSaveAt: current.lastSaveAt,
+      lastSaveAt: current.lastSaveAt ?? previous.lastSaveAt,
       readerVersion: storyReaderVersion,
       scannedAt: Date.now(),
       ...((catalogue.shop !== game.shop ||
