@@ -89,7 +89,7 @@ const findRelativeFiles = async (bases: string[]) => {
   return achievementFiles;
 };
 
-const findSteamSettingsFiles = async (steamSettingsDirectories: string[]) => {
+const findSteamSettingsFiles = async (steamSettingsDirectories: string[], allowedObjectIds?: readonly string[]) => {
   const achievementFiles: AchievementFile[] = [];
 
   await Promise.all(
@@ -99,6 +99,7 @@ const findSteamSettingsFiles = async (steamSettingsDirectories: string[]) => {
       for (const entry of entries ?? []) {
         if (!entry.isDirectory()) continue;
         if (!OBJECT_ID_DIR_PATTERN.test(entry.name)) continue;
+        if (allowedObjectIds && !allowedObjectIds.includes(entry.name)) continue;
 
         const filePath = path.join(
           steamSettingsDirectory,
@@ -119,12 +120,12 @@ const findSteamSettingsFiles = async (steamSettingsDirectories: string[]) => {
 export const findAchievementFilesInLocations = async ({
   bases,
   steamSettingsDirectories,
-}: GameDirectoryLocations): Promise<AchievementFile[]> => {
+}: GameDirectoryLocations, allowedObjectIds?: readonly string[]): Promise<AchievementFile[]> => {
   if (!bases.length && !steamSettingsDirectories.length) return [];
 
   const [relativeFiles, steamSettingsFiles] = await Promise.all([
     findRelativeFiles(bases),
-    findSteamSettingsFiles(steamSettingsDirectories),
+    findSteamSettingsFiles(steamSettingsDirectories, allowedObjectIds),
   ]);
 
   return [...relativeFiles, ...steamSettingsFiles];
