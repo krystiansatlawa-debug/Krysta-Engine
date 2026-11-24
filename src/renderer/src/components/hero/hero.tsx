@@ -21,6 +21,11 @@ export function Hero({
     () => featuredCache.get(language) ?? []
   );
   const [active, setActive] = useState(0);
+  const [campaignIndex, setCampaignIndex] = useState(0);
+  const [campaignHover, setCampaignHover] = useState(false);
+  const [campaignFocus, setCampaignFocus] = useState(false);
+  const [campaignPlay, setCampaignPlay] = useState(() => !window.matchMedia(motionPreference).matches);
+  const [failedCampaignImages, setFailedCampaignImages] = useState<Set<string>>(() => new Set());
   const [preview, setPreview] = useState<string>();
   const [play, setPlay] = useState(
     () => !window.matchMedia(motionPreference).matches
@@ -32,7 +37,30 @@ export function Hero({
     value: ShopDetailsWithAssets;
   }>();
 
-  const campaign = featured[0] ?? alternatives[0];
+  const campaignGames = Array.from(new Map(
+    [...featured, ...alternatives].filter((game) => {
+      const image = game.libraryHeroImageUrl ?? game.libraryImageUrl;
+      return image && !failedCampaignImages.has(image);
+    }).map((game) => [`${game.shop}:${game.objectId}`, game])
+  ).values()).slice(0, 8);
+  const campaignCount = campaignGames.length;
+  const campaign = campaignGames[campaignIndex % Math.max(campaignCount, 1)];
+  const moveCampaign = (direction: number) => {
+    if (campaignCount > 1) setCampaignIndex((index) => (index % campaignCount + direction + campaignCount) % campaignCount);
+  };
+  useEffect(() => {
+    if (campaignCount < 2 || !campaignPlay || campaignHover || campaignFocus || !visible) return;
+    const timer = window.setTimeout(() => setCampaignIndex((index) => (index + 1) % campaignCount), rotationInterval);
+    return () => window.clearTimeout(timer);
+  }, [campaignIndex, campaignCount, campaignPlay, campaignHover, campaignFocus, visible]);
+  useEffect(() => {
+    const media = window.matchMedia(motionPreference);
+    const change = (event: MediaQueryListEvent) => {
+      if (event.matches) setCampaignPlay(false);
+    };
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  }, []);
   const games = Array.from(
     new Map(
       [...alternatives, ...featured].map((game) => [
@@ -43,8 +71,8 @@ export function Hero({
   )
     .sort(
       (first, second) =>
-        Number(first.objectId === campaign?.objectId) -
-        Number(second.objectId === campaign?.objectId)
+        Number(first.objectId === (featured[0] ?? alternatives[0])?.objectId) -
+        Number(second.objectId === (featured[0] ?? alternatives[0])?.objectId)
     )
     .slice(0, 8);
   const selected = games[active % Math.max(games.length, 1)];
@@ -57,6 +85,7 @@ export function Hero({
 
   useEffect(() => {
     let current = true;
+    setFeatured(featuredCache.get(language) ?? []);
     window.electron.hydraApi
       .get<TrendingGame[]>("/catalogue/featured", {
         params: { language },
@@ -129,12 +158,17 @@ export function Hero({
   return (
     <>
       {campaign && banner && (
+        <div className="catalogue-campaign-rotator"
+          onPointerEnter={() => setCampaignHover(true)}
+          onPointerLeave={() => setCampaignHover(false)}
+          onFocus={() => setCampaignFocus(true)}
+          onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setCampaignFocus(false); }}>
         <Link
           className="catalogue-campaign"
           to={campaign.uri}
           aria-label={campaign.title}
         >
-          <img src={banner} alt="" />
+          <img key={banner} src={banner} alt="" onError={() => setFailedCampaignImages((images) => new Set([...images, banner]))} />
           <span className="catalogue-campaign__name">
             {campaign.logoImageUrl ? (
               <img src={campaign.logoImageUrl} alt={campaign.title} />
@@ -143,6 +177,13 @@ export function Hero({
             )}
           </span>
         </Link>
+        {campaignCount > 1 && <div className="catalogue-campaign-rotator__controls">
+          <button type="button" aria-label={pl ? "Poprzednia gra" : "Previous game"} onClick={() => moveCampaign(-1)}><ChevronLeftIcon size={20} /></button>
+          <span aria-live="off">{campaignIndex % campaignCount + 1} / {campaignCount}</span>
+          <button type="button" aria-label={pl ? "Następna gra" : "Next game"} onClick={() => moveCampaign(1)}><ChevronRightIcon size={20} /></button>
+          <button type="button" onClick={() => setCampaignPlay((value) => !value)}>{campaignPlay ? (pl ? "Wstrzymaj" : "Pause") : (pl ? "Wznów" : "Resume")}</button>
+        </div>}
+        </div>
       )}
 
       <section
