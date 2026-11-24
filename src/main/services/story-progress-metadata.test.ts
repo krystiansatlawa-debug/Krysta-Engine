@@ -260,3 +260,12 @@ test("reads explicit main mission completion lists without counting side quests"
   assert.equal(result?.completedMissions, 1);
   assert.equal(result?.totalMissions, 2);
 });
+
+ test("derives campaign percentage only with valid main mission totals", () => {
+  const read = (completed: number, total: number) => parseGenericStoryMetadata(JSON.stringify({ campaign: { completedMissions: completed, totalMissions: total } }));
+  assert.equal(read(1, 3)?.percent, 33.33);
+  assert.equal(read(0, 3)?.percent, 0);
+  assert.equal(read(3, 3)?.percent, 100);
+  assert.equal(read(4, 3)?.percent, null);
+  assert.equal(read(0, 0)?.percent, null);
+});
