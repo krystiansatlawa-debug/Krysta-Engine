@@ -88,3 +88,19 @@ registerEvent("moveControllerCursor", (_event, dx: number, dy: number) => {
   if (process.platform !== "win32" || hasTrackedGamesRunning() || !Number.isInteger(dx) || !Number.isInteger(dy) || Math.abs(dx) > 40 || Math.abs(dy) > 40) return false;
   return NativeAddon.moveControllerCursor(dx, dy);
 });
+
+registerEvent("controllerPointerAction", (_event, action: string, value: number) => {
+  if (process.platform !== "win32" || hasTrackedGamesRunning()) return false;
+  if (action === "scroll" || action === "horizontalScroll") {
+    if (!Number.isInteger(value) || Math.abs(value) > 3) return false;
+    return NativeAddon.controllerDesktopAction(action, value);
+  }
+  if (action === "doubleClick") return NativeAddon.controllerDesktopAction(action, 0);
+  if (action === "leftClick" || action === "rightClick") {
+    const side = action === "leftClick" ? "left" : "right";
+    const down = NativeAddon.controllerDesktopAction(side + "Down", 0);
+    const up = NativeAddon.controllerDesktopAction(side + "Up", 0);
+    return down && up;
+  }
+  return false;
+});
