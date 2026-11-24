@@ -21,6 +21,7 @@ import type {
   ShopDetailsWithAssets,
 } from "@types";
 
+import { CataloguePersonalization } from "./catalogue-personalization";
 import { CatalogueCategories } from "./catalogue-categories";
 import { CatalogueWishlistButton } from "./catalogue-wishlist";
 
@@ -48,6 +49,8 @@ export default function CatalogueDiscover() {
   };
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const library = useAppSelector(state => state.library.value);
+  const owned = useMemo(() => new Set(library.filter(g => !g.isDeleted).flatMap(g => [`${g.shop}:${g.objectId}`, ...(g.catalogueGame ? [`${g.catalogueGame.shop}:${g.catalogueGame.objectId}`] : [])])), [library]);
   const mode = useAppSelector((state) => state.catalogueSearch.mode);
   const [results, setResults] = useState<ShelfResults>({});
   const [attempt, setAttempt] = useState(0);
@@ -247,6 +250,7 @@ export default function CatalogueDiscover() {
                         )}
                         <span>
                           <strong>{game.title}</strong>
+                          {owned.has(gameKey(game)) && <small>{pl ? "W bibliotece" : "In library"}</small>}
                           {"genres" in game && game.genres?.length > 0 && (
                             <small>{game.genres.slice(0, 3).join(", ")}</small>
                           )}
@@ -298,6 +302,7 @@ export default function CatalogueDiscover() {
         )}
       </section>
 
+      <CataloguePersonalization />
       {recent.length > 0 && <section className="catalogue-discover__shelf catalogue-store-width">
         <header className="catalogue-discover__heading"><h2>{pl ? "Ostatnio przeglądane" : "Recently viewed"}</h2><Button theme="outline" size="small" onClick={() => { setRecent([]); try { localStorage.removeItem("krysta-catalogue-recent"); } catch {} }}>{pl ? "Wyczyść" : "Clear"}</Button></header>
         <div className="catalogue-discover__games">{recent.map(game => <article className="catalogue-discover__game" key={gameKey(game)}><Link to={buildGameDetailsPath(game)} onClick={() => remember(game)}>{game.libraryImageUrl && <img src={game.libraryImageUrl} alt="" loading="lazy" />}<span><strong>{game.title}</strong></span></Link></article>)}</div>

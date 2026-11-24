@@ -14,6 +14,16 @@ export interface SearchSuggestion {
   source: "library" | "catalogue";
 }
 
+const normalizeTitle = (value: string) => value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+function editDistance(a: string, b: string) {
+  let row = Array.from({length: b.length+1}, (_, i) => i);
+  for (let i=1;i<=a.length;i++) {
+    const next = [i];
+    for(let j=1;j<=b.length;j++) next.push(Math.min(next[j-1]+1,row[j]+1,row[j-1]+Number(a[i-1]!==b[j-1])));
+    row=next;
+  }
+  return row[b.length];
+}
 export function useSearchSuggestions(
   query: string,
   isOnLibraryPage: boolean,
@@ -30,7 +40,7 @@ export function useSearchSuggestions(
       library
         .filter((game) => Boolean(game.title))
         .map((game) => ({
-          titleLower: game.title.toLowerCase(),
+          titleLower: normalizeTitle(game.title),
           game,
         })),
     [library]
@@ -38,7 +48,7 @@ export function useSearchSuggestions(
 
   const getLibrarySuggestions = useCallback(
     (searchQuery: string, limit: number = 3): SearchSuggestion[] => {
-      const normalizedQuery = searchQuery.trim().toLowerCase();
+      const normalizedQuery = normalizeTitle(searchQuery.trim());
       if (normalizedQuery.length < 2) return [];
 
       const matches: SearchSuggestion[] = [];
@@ -46,7 +56,7 @@ export function useSearchSuggestions(
       for (const { game, titleLower } of librarySearchIndex) {
         if (matches.length >= limit) break;
 
-        if (titleLower.includes(normalizedQuery)) {
+        if (titleLower.includes(normalizedQuery) || (normalizedQuery.length >= 4 && normalizedQuery.length <= 40 && titleLower.split(/\s+/).some(word => Math.abs(word.length-normalizedQuery.length)<=2 && editDistance(word,normalizedQuery)<= (normalizedQuery.length>=7?2:1)))) {
           matches.push({
             title: game.title,
             objectId: game.objectId,
@@ -139,6 +149,7 @@ export function useSearchSuggestions(
         );
 
         cacheRef.current.set(cacheKey, catalogueSuggestions);
+        if (cacheRef.current.size > 40) { const oldest = cacheRef.current.keys().next().value; if (oldest !== undefined) cacheRef.current.delete(oldest); }
         setSuggestions(catalogueSuggestions);
       } catch (error) {
         if (!abortController.signal.aborted) {
@@ -188,5 +199,6 @@ export function useSearchSuggestions(
     debouncedFetchCatalogue,
   ]);
 
-  return { suggestions, isLoading };
+  const combined = useMemo(() => enabled && !isOnLibraryPage ? Array.from(new Map([...suggestions, ...getLibrarySuggestions(query, 3)].map(game => [`${game.shop}:${game.objectId}`, game])).values()).slice(0,6) : suggestions, [enabled, isOnLibraryPage, suggestions, query, getLibrarySuggestions]);
+  return { suggestions: combined, isLoading };
 }
