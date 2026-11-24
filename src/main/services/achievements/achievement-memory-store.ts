@@ -42,6 +42,15 @@ export const withSteamAchievementCatalogue = (
   steamCatalogue: SteamAchievement[],
   unlockedAchievements: UnlockedAchievement[]
 ): AchievementMemoryEntry => {
+  // A partial Steam refresh must not erase previously confirmed unlocks.
+  const merged = new Map<string, UnlockedAchievement>();
+  for (const item of [...(current?.unlockedAchievements ?? []), ...unlockedAchievements]) {
+    const key = item.name?.trim().toUpperCase();
+    if (!key || !Number.isFinite(item.unlockTime) || item.unlockTime <= 0) continue;
+    const previous = merged.get(key);
+    if (!previous || item.unlockTime < previous.unlockTime) merged.set(key, item);
+  }
+  unlockedAchievements = [...merged.values()];
   if (current?.language !== undefined && current.achievements.length > 0) {
     return { ...current, unlockedAchievements };
   }
