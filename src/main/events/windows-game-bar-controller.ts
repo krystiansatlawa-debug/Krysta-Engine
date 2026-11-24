@@ -1,3 +1,4 @@
+import { screen } from "electron";
 import { NativeAddon } from "@main/services/native-addon";
 import { registerEvent } from "./register-event";
 
@@ -37,4 +38,16 @@ registerEvent("getWindowsSonyBatteryLevels", async () => {
       catch { resolve([]); }
     });
   });
+});
+
+registerEvent("getControllerDesktopDisplays", () => {
+  const primary = screen.getPrimaryDisplay().id;
+  return screen.getAllDisplays().map((display) => ({
+    id: display.id,
+    label: display.label || `Ekran ${display.id}`,
+    primary: display.id === primary,
+    width: display.size.width,
+    height: display.size.height,
+    scaleFactor: display.scaleFactor,
+  }));
 });
