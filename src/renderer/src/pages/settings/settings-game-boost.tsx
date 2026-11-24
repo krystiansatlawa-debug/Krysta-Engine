@@ -13,7 +13,6 @@ export function SettingsGameBoost() {
   const preferences = useAppSelector((state) => state.userPreferences.value);
   const {
     enabled,
-    pauseBackgroundSync,
     closeApplications,
     restoreApplications,
   } = getGameBoostPreferences(preferences);
@@ -88,16 +87,7 @@ export function SettingsGameBoost() {
           void save({ gameBoostEnabled: event.currentTarget.checked })
         }
       />
-      <CheckboxField
-        label={t("game_boost_pause_sync")}
-        checked={pauseBackgroundSync}
-        disabled={!enabled || busy}
-        onChange={(event) =>
-          void save({
-            gameBoostPauseBackgroundSync: event.currentTarget.checked,
-          })
-        }
-      />
+      <p>{t("game_boost_pause_sync")}</p>
 
       {window.electron.platform === "win32" && (
         <>
