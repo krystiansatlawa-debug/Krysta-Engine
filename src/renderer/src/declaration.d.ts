@@ -329,6 +329,7 @@ declare global {
     moveControllerWindowToDisplay: (id: number) => Promise<boolean>;
     getWindowsSonyBatteryLevels: () => Promise<{ id: string; name: string; percent: number; charging?: boolean }[]>;
     controllerPointerAction: (action: string, value: number) => Promise<boolean>;
+    setBackgroundControllerCursor: (enabled: boolean, slot: number, speed: number, deadZone: number) => Promise<boolean>;
     moveControllerCursor: (dx: number, dy: number) => Promise<boolean>;
     getWindowsXboxBatteryLevels: () => Promise<(string | null)[]>;
     getWindowsGameBarControllerEnabled: () => Promise<boolean | null>;
