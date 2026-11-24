@@ -19,7 +19,7 @@ interface ControllerButtonGlyphProps {
 export function ControllerButtonGlyph({ button, className }: Readonly<ControllerButtonGlyphProps>) {
   const playStation = useGamepadStore((state) => {
     const pad = state.connectedGamepads.find((item) => item.index === state.activeGamepadIndex) ?? state.connectedGamepads[0];
-    return /playstation|dualsense|dualshock/i.test(pad?.layout ?? "");
+    return /playstation|dualsense|dualshock/i.test(`${pad?.layout ?? ""} ${pad?.name ?? ""}`);
   });
   const glyph = GLYPHS[button][playStation ? 1 : 0];
   return (
