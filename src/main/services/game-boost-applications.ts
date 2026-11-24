@@ -67,6 +67,10 @@ export class GameBoostApplications {
     }
   }
 
+  async waitForIdle() {
+    await this.tail;
+  }
+
   async shutdown() {
     this.sync(false, [], this.restore);
     await this.tail;
