@@ -42,6 +42,12 @@ const useCurrentPageTitle = () => {
 function Header() {
   const navigate = useNavigate();
   const connectedPads = useGamepadStore((state) => state.connectedGamepads);
+  const preferredPad = useGamepadStore((state) => state.preferredGamepadIndex);
+  const selectPad = useGamepadStore((state) => state.selectGamepad);
+  const profile = useGamepadStore((state) => state.activeProfile);
+  const saveProfile = useGamepadStore((state) => state.saveProfile);
+  const activePadIndex = useGamepadStore((state) => state.activeGamepadIndex);
+  const activePad = connectedPads.find((pad) => pad.index === activePadIndex);
   const [battery, setBattery] = useState<string[]>([]);
   const padIdentity = connectedPads.map((pad) => `${pad.index}:${pad.name}:${pad.layout}`).join("|");
   const hasXbox = connectedPads.some((pad) => /xbox|xinput/i.test(`${pad.name} ${pad.layout}`));
@@ -337,6 +343,7 @@ function Header() {
             </button>
           </FocusItem>
 
+          {connectedPads.length > 0 && <details style={{ position: "relative" }}><summary>Kontrolery</summary><div style={{ position: "absolute", zIndex: 100, background: "#20232a", padding: 12, minWidth: 220 }}><label>Aktywny pad <select value={preferredPad ?? ""} onChange={(event) => selectPad(event.target.value === "" ? null : Number(event.target.value))}><option value="">Automatycznie</option>{connectedPads.map((pad) => <option key={pad.index} value={pad.index}>{pad.name}</option>)}</select></label>{activePad && <><label style={{ display: "block" }}><input type="checkbox" checked={profile.vibration} onChange={(event) => saveProfile(activePad.name, activePad.layout, { ...profile, vibration: event.target.checked })} /> Wibracje</label><button type="button" disabled={!profile.vibration} onClick={() => useGamepadStore.getState().getService().vibrate(180, 0.4, 0.4, activePad.index)}>Sprawdź wibracje</button></>}</div></details>}
           {connectedPads.length > 0 && <span className="header__controller-battery" title="Poziom baterii kontrolera">🔋 {batteryLabel}</span>}
           <form
             ref={searchRef}
