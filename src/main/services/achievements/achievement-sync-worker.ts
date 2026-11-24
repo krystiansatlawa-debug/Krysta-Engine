@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from "node:crypto";
+import { net } from "electron";
 import type {
   GameShop,
   UnlockedAchievement,
@@ -190,7 +191,7 @@ export class AchievementSyncWorker {
   }
 
   private async run() {
-    while (HydraApi.getAuthContext()) {
+    while (HydraApi.getAuthContext() && net.isOnline()) {
       const item = (await this.records()).find(
         (row) => !row.terminal && row.nextAttemptAt <= Date.now()
       );
@@ -314,7 +315,9 @@ export class AchievementSyncWorker {
     this.stop();
     const items = (await this.records()).filter((item) => !item.terminal);
     if (!items.length) return;
-    const at = Math.min(...items.map((item) => item.nextAttemptAt));
+    const at = net.isOnline()
+      ? Math.min(...items.map((item) => item.nextAttemptAt))
+      : Date.now() + 30_000;
     this.timer = setTimeout(
       () => {
         this.timer = null;
