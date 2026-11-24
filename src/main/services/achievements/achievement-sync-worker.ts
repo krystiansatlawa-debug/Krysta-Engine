@@ -90,9 +90,8 @@ const fingerprintOf = (remoteId: string, achievements: UnlockedAchievement[]) =>
   JSON.stringify([
     remoteId,
     achievements
-      .map(toAchievementSyncEntry)
-      .map((entry) => ({ ...entry, name: entry.name.toUpperCase() }))
-      .toSorted((a, b) => a.name.localeCompare(b.name)),
+      .map((achievement) => { const entry = toAchievementSyncEntry(achievement); return { ...entry, name: entry.name.toUpperCase() }; })
+      .sort((a, b) => a.name.localeCompare(b.name)),
   ]);
 
 export class AchievementSyncWorker {
@@ -316,7 +315,7 @@ export class AchievementSyncWorker {
     const items = (await this.records()).filter((item) => !item.terminal);
     if (!items.length) return;
     const at = net.isOnline()
-      ? Math.min(...items.map((item) => item.nextAttemptAt))
+      ? items.reduce((earliest, item) => Math.min(earliest, item.nextAttemptAt), Infinity)
       : Date.now() + 30_000;
     this.timer = setTimeout(
       () => {
