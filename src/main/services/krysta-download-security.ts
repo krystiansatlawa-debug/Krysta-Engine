@@ -286,7 +286,7 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
           reputationLevels.push(assessment.level);
           if (reputation.status === "reported") checkedDigests.add(digest);
           if (assessment.level === "ambiguous") {
-            const recheck = await recheckAmbiguousReputation(digest, reputation);
+            const recheck = await recheckAmbiguousReputation(digest, reputation).catch(() => ({ initial: reputation, repeated: null }));
             if (recheck.repeated) reputationLevels.push(assessReputation(recheck.repeated).level);
             logger.info("[Security Shield] Ponowna weryfikacja; pierwotne wykrycie pozostaje w ocenie:", digest, recheck);
           }
