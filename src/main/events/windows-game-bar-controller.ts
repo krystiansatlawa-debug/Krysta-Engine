@@ -14,3 +14,7 @@ registerEvent("setWindowsGameBarControllerEnabled", (_, enabled: unknown) => {
 
   return NativeAddon.setWindowsGameBarControllerEnabled(enabled);
 });
+
+registerEvent("getWindowsXboxBatteryLevels", () =>
+  Array.from({ length: 4 }, (_, index) => NativeAddon.getWindowsXboxBatteryLevel(index))
+);
