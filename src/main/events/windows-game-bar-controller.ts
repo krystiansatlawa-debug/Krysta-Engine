@@ -24,6 +24,8 @@ registerEvent("getWindowsXboxBatteryLevels", () =>
  * Do not infer a battery level from a missing property. */
 registerEvent("getWindowsSonyBatteryLevels", async () => {
   if (process.platform !== "win32") return [];
+  const hid = await NativeAddon.getWindowsSonyHidBatteries();
+  if (hid.length) return hid;
   const { execFile } = await import("node:child_process");
   const script = [
     "$ErrorActionPreference = 'SilentlyContinue'",
