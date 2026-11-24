@@ -1,5 +1,5 @@
 name: Krysta Release
-# Rebuild 1.0.24 after nullable timestamp and database encoding fixes.
+# Rebuild 1.0.24 after achievement diagnostics signature fix.
 on:
   workflow_dispatch:
   push:
