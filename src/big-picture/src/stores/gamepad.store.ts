@@ -18,6 +18,7 @@ export interface GamepadState {
 
   preferredGamepadIndex: number | null;
   selectGamepad: (index: number | null) => void;
+  playFeedback: (effect: "navigation" | "confirm" | "notification") => void;
   profiles: Record<string, ControllerProfile>;
   activeProfile: ControllerProfile;
   saveProfile: (name: string, layout: string, profile: ControllerProfile) => void;
@@ -56,6 +57,13 @@ export const useGamepadStore = create<GamepadState>((set, get) => {
   };
 
   return {
+    playFeedback: (effect) => {
+      const state = get();
+      if (!state.activeProfile.vibration || state.activeGamepadIndex === null) return;
+      const patterns = { navigation: [35, 0.12, 0.04], confirm: [85, 0.25, 0.55], notification: [180, 0.6, 0.25] } as const;
+      const [duration, weak, strong] = patterns[effect];
+      state.getService().vibrate(duration, weak, strong, state.activeGamepadIndex);
+    },
     preferredGamepadIndex: null,
     selectGamepad: (index) => {
       if (index !== null && !get().connectedGamepads.some((pad) => pad.index === index)) return;
