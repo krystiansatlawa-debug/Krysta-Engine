@@ -1,5 +1,5 @@
 name: Krysta Release
-# Build and publish Achievements 2.0 after regression tests.
+# Combined Achievements 2.0 and Cloud Sync 2.0 release 1.0.24.
 on:
   workflow_dispatch:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: krysta-release
+  group: krysta-release-1-0-24
   cancel-in-progress: true
 
 jobs:
