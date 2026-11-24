@@ -828,3 +828,20 @@ pub async fn set_dualsense_usb_trigger_feedback(strength: u32) -> bool {
     #[cfg(not(windows))]
     { let _ = strength; false }
 }
+
+
+/// Poll XInput independently of renderer focus. No input injection here.
+#[napi]
+pub fn get_windows_controller_axes(index: u32) -> Vec<i32> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::UI::Input::XboxController::{XInputGetState, XINPUT_STATE};
+        if index >= 4 { return vec![]; }
+        let mut state: XINPUT_STATE = unsafe { std::mem::zeroed() };
+        if unsafe { XInputGetState(index, &mut state) } != 0 { return vec![]; }
+        let pad = state.Gamepad;
+        return vec![pad.sThumbLX as i32, -(pad.sThumbLY as i32), pad.sThumbRX as i32, -(pad.sThumbRY as i32), pad.wButtons as i32];
+    }
+    #[cfg(not(target_os = "windows"))]
+    { let _ = index; vec![] }
+}
