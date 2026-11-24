@@ -145,7 +145,8 @@ export function AchievementsContent({
   isComparing,
   onComparingChange,
 }: AchievementsContentProps) {
-  const { t } = useTranslation("achievement");
+  const { t, i18n } = useTranslation("achievement");
+  const pl = i18n.language.startsWith("pl");
   const { gameTitle, objectId, shop, game, shopDetails, achievements } =
     useContext(gameDetailsContext);
   const dispatch = useAppDispatch();
@@ -153,6 +154,20 @@ export function AchievementsContent({
   const { userDetails, hasActiveSubscription } = useUserDetails();
   const { showHydraCloudModal } = useSubscription();
   const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
+  const [diagnostic, setDiagnostic] = useState<{ key: string; message: string } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const diagnosticKey = `${shop}:${objectId}`;
+  const checkAchievements = async () => {
+    if (!shop || !objectId || checking) return;
+    setChecking(true);
+    try {
+      const rows = await window.electron.getUnlockedAchievements(objectId, shop, true);
+      const count = rows.filter((row) => row.unlocked).length;
+      setDiagnostic({ key: diagnosticKey, message: rows.length ? (pl ? `Potwierdzone osiągnięcia: ${count}/${rows.length}. Brakujące trofea mogą wymagać synchronizacji konta lub zapisu gry.` : `Confirmed achievements: ${count}/${rows.length}. Missing trophies may require account or save synchronization.`) : (pl ? "Nie zwrócono katalogu osiągnięć. Gra może nie być obsługiwana lub dane są niedostępne." : "No achievement catalogue returned. The game may be unsupported or data unavailable.") });
+    } catch {
+      setDiagnostic({ key: diagnosticKey, message: pl ? "Odczyt nie powiódł się. Sprawdź połączenie konta i spróbuj ponownie." : "Read failed. Check account connection and retry." });
+    } finally { setChecking(false); }
+  };
 
   const handleCompareClick = () => {
     if (!isComparing && !hasActiveSubscription) {
@@ -296,6 +311,12 @@ export function AchievementsContent({
           />
         )}
 
+        {!otherUser && shop === "steam" && (
+          <div>
+            <Button theme="outline" disabled={checking} onClick={() => void checkAchievements()}>{pl ? "Synchronizuj i diagnozuj osiągnięcia" : "Sync and diagnose achievements"}</Button>
+            {diagnostic?.key === diagnosticKey && <p role="status">{diagnostic.message}</p>}
+          </div>
+        )}
         {!otherUser && (
           <AchievementList
             scrollElement={scrollElement}
