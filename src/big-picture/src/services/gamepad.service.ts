@@ -137,6 +137,7 @@ export class GamepadService {
     if (!this.isWindowAvailable()) return;
 
     this.setupListeners();
+    if (globalThis.navigator.getGamepads?.().some((pad) => pad?.connected)) this.startPolling();
   }
 
   private isWindowAvailable() {
@@ -245,16 +246,25 @@ export class GamepadService {
   private pollGamepads() {
     const gamepads = globalThis.navigator.getGamepads();
 
+    for (const [index, previous] of this.gamepads) {
+      const current = gamepads[index];
+      if (!current?.connected || current.id !== previous.id) {
+        this.handleGamepadDisconnection({ gamepad: previous } as GamepadEvent);
+      }
+    }
     for (const gamepad of gamepads) {
-      if (!gamepad) continue;
+      if (!gamepad?.connected) continue;
 
       this.gamepads.set(gamepad.index, gamepad);
       this.updateGamepadState(gamepad.index, gamepad);
     }
 
-    this.animationFrameId = globalThis.requestAnimationFrame(() =>
-      this.pollGamepads()
-    );
+    if (this.gamepads.size > 0) {
+      this.isPolling = true;
+      this.animationFrameId = globalThis.requestAnimationFrame(() => this.pollGamepads());
+    } else {
+      this.stopPolling();
+    }
   }
 
   private startPolling() {
