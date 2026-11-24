@@ -1,5 +1,5 @@
 name: Krysta Release
-# Build and publish Krysta 1.0.22 with Game Boost.
+# Build and publish Krysta 1.0.22 with Game Boost (recording format type fix).
 on:
   workflow_dispatch:
   push:
