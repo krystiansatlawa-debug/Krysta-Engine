@@ -251,24 +251,6 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       inspectedFingerprint = inventory.fingerprint;
       logger.info("[Security Shield] Download tree inventory:", inventory);
       if (inventory.suspiciousProperties.misleadingExtensions || inventory.suspiciousProperties.bidiNames || inventory.disguisedExecutables) logger.warn("[Security Shield] Wykryto podejrzane właściwości nazw lub formatów plików; wymagana dodatkowa weryfikacja.");
-      scanPhases.set(scanKey, "reputation");
-      const reputationLevels: string[] = [];
-      const checkedDigests = new Set<string>();
-      if (process.env.KRYSTA_VIRUSTOTAL_ENABLED === "1") {
-        for (const digest of inventory.reputationCandidates) {
-          const reputation = await lookupFileReputation(digest);
-          const assessment = assessReputation(reputation);
-          reputationLevels.push(assessment.level);
-          if (reputation.status === "reported") checkedDigests.add(digest);
-          if (assessment.level === "ambiguous") {
-            const recheck = await recheckAmbiguousReputation(digest, reputation);
-            if (recheck.repeated) reputationLevels.push(assessReputation(recheck.repeated).level);
-            logger.info("[Security Shield] Ponowna weryfikacja; pierwotne wykrycie pozostaje w ocenie:", digest, recheck);
-          }
-          logger.info("[Security Shield] Hash reputation observation:", digest, reputation, assessment);
-          if (reputation.status === "deferred" || reputation.status === "unavailable") break;
-        }
-      }
       const systemRoot = process.env.SystemRoot;
       if (!systemRoot || !path.isAbsolute(systemRoot)) {
         await recordSecurityDecision(inspectedFingerprint, "unverified", ["Nie znaleziono środowiska systemowego Windows."]);
@@ -294,6 +276,24 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
         "$ErrorActionPreference='Stop'; $s=Get-MpComputerStatus; if (-not $s.AntivirusEnabled -or -not $s.AMServiceEnabled) { throw 'Defender unavailable' }; $before=Get-Date; Start-MpScan -ScanType CustomScan -ScanPath $env:KRYSTA_SCAN_PATH -ErrorAction Stop; $after=Get-MpComputerStatus; $detections=@(Get-MpThreatDetection -ErrorAction Stop | Where-Object { $_.InitialDetectionTime -ge $before }); [pscustomobject]@{ enabled=[bool]$after.AntivirusEnabled; realtime=[bool]$after.RealTimeProtectionEnabled; signaturesOutOfDate=[bool]$after.DefenderSignaturesOutOfDate; recentDetections=$detections.Count } | ConvertTo-Json -Compress"],
         { windowsHide: true, timeout: 2 * 60 * 60 * 1000, maxBuffer: 1024 * 1024, env: {...process.env, KRYSTA_SCAN_PATH: target} });
       const report = JSON.parse(stdout.trim()) as { enabled?: boolean; realtime?: boolean; signaturesOutOfDate?: boolean; recentDetections?: number };
+      scanPhases.set(scanKey, "reputation");
+      const reputationLevels: string[] = [];
+      const checkedDigests = new Set<string>();
+      if (process.env.KRYSTA_VIRUSTOTAL_ENABLED === "1") {
+        for (const digest of inventory.reputationCandidates) {
+          const reputation = await lookupFileReputation(digest);
+          const assessment = assessReputation(reputation);
+          reputationLevels.push(assessment.level);
+          if (reputation.status === "reported") checkedDigests.add(digest);
+          if (assessment.level === "ambiguous") {
+            const recheck = await recheckAmbiguousReputation(digest, reputation);
+            if (recheck.repeated) reputationLevels.push(assessReputation(recheck.repeated).level);
+            logger.info("[Security Shield] Ponowna weryfikacja; pierwotne wykrycie pozostaje w ocenie:", digest, recheck);
+          }
+          logger.info("[Security Shield] Hash reputation observation:", digest, reputation, assessment);
+          if (reputation.status === "deferred" || reputation.status === "unavailable") break;
+        }
+      }
       const reasons: string[] = [];
       const high = (typeof report.recentDetections === "number" && report.recentDetections > 0) || reputationLevels.includes("high");
       if (reputationLevels.includes("high")) reasons.push("Raport reputacji pliku zawiera wykrycia wielu silników.");
