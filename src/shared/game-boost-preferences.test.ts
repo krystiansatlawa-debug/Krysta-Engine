@@ -23,7 +23,7 @@ test("explicit Game Boost preferences are preserved", () => {
     }),
     {
       enabled: false,
-      pauseBackgroundSync: false,
+      pauseBackgroundSync: true,
       closeApplications: [executable],
       restoreApplications: false,
     }
