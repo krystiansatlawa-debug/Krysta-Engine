@@ -35,10 +35,13 @@ export class PresentMonFps {
     const ms = Number(row[columns.time + offset]);
     if (!address || !Number.isFinite(ms) || ms <= 0 || ms > 10000) return;
 
-    const sample = this.samples.get(address) ?? { totalMs: 0, frames: 0 };
-    sample.totalMs += ms;
-    sample.frames++;
-    this.samples.set(address, sample);
+    const sample = this.samples.get(address);
+    if (sample) {
+      sample.totalMs += ms;
+      sample.frames++;
+    } else {
+      this.samples.set(address, { totalMs: ms, frames: 1 });
+    }
   }
 
   takeFps() {
