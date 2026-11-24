@@ -36,7 +36,8 @@ Gałąź `krysta-1.0.27`, punkt wyjścia `aa8cabc6de627020e8b8a6dc0c9b09f01dc045
 ## Weryfikacja
 
 - [Text Integrity dla punktu wyjścia](https://github.com/krystiansatlawa-debug/Krysta-Engine/actions/runs/45479834689) — zakończona pomyślnie.
-- [Windows Controller Validation dla punktu wyjścia](https://github.com/krystiansatlawa-debug/Krysta-Engine/actions/runs/45479834548) oraz [Build dla punktu wyjścia](https://github.com/krystiansatlawa-debug/Krysta-Engine/actions/runs/45479834672) — uruchomione.
+- [Build dla punktu wyjścia](https://github.com/krystiansatlawa-debug/Krysta-Engine/actions/runs/45479834672) — kompilacje Windows i Linux zakończone pomyślnie.
+- [Windows Controller Validation dla punktu wyjścia](https://github.com/krystiansatlawa-debug/Krysta-Engine/actions/runs/45479834548) — krok `cargo check` zakończył się błędem, bo nie przekazano `HYDRA_TORRENT_LIB_DIR`. Wersja 1.0.27 używa skryptu kompilacji dodatku, który przygotowuje ten katalog.
 - Fizyczne kontrolery Xbox i DualSense, monitor/TV HDMI oraz rzeczywiste zużycie RAM i CPU — niezweryfikowane.
 
 ## Wznowienie pracy

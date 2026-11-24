@@ -18,7 +18,30 @@ const url =
 const bytes = "sample installer bytes";
 const digest = "sha256:" + createHash("sha256").update(bytes).digest("hex");
 
-async function fixture(t: TestContext, blockFirstDownload = false) {
+function releaseCandidate(tagName: string, releaseName: string) {
+  const installer = `krysta-launcher-${tagName.slice(1)}-setup.exe`;
+  return {
+    name: releaseName,
+    tag_name: tagName,
+    assets: [
+      {
+        name: installer,
+        digest,
+        size: bytes.length,
+        browser_download_url: `https://github.com/krystiansatlawa-debug/Krysta-Engine/releases/download/${tagName}/${installer}`,
+      },
+    ],
+  };
+}
+
+async function fixture(
+  t: TestContext,
+  {
+    automatic = true,
+    blockFirstDownload = false,
+    releases = [releaseCandidate(tag, "Krysta Launcher 1.0.3")],
+  } = {}
+) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "krysta-update-test-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   let running = false;
@@ -28,7 +51,7 @@ async function fixture(t: TestContext, blockFirstDownload = false) {
   const dependencies: Record<string, unknown> = {
     "@main/services/krysta-settings-recovery": {
       readKrystaSettings: async () => ({
-        automatic: true,
+        automatic,
         notifications: false,
       }),
     },
@@ -53,15 +76,7 @@ async function fixture(t: TestContext, blockFirstDownload = false) {
   const fetchMock = async (input: string | URL, options: RequestInit) => {
     const address = String(input);
     if (address.startsWith("https://api.github.com/"))
-      return Response.json([
-        {
-          name: "Krysta Launcher 1.0.3",
-          tag_name: tag,
-          assets: [
-            { name, digest, size: bytes.length, browser_download_url: url },
-          ],
-        },
-      ]);
+      return Response.json(releases);
     assert.equal(address, url);
     const signal = options.signal!;
     requests.push(signal);
@@ -141,7 +156,7 @@ test("defers a Krysta installer download until the running game closes", async (
 });
 
 test("aborts the pending installer on game start and retries after exit", async (t) => {
-  const f = await fixture(t, true);
+  const f = await fixture(t, { blockFirstDownload: true });
   await f.check();
   await until(() => f.requests.length === 1);
   f.gameRunning(true);
@@ -153,4 +168,33 @@ test("aborts the pending installer on game start and retries after exit", async 
   await until(() => f.status() === "ready");
   assert.equal(f.requests.length, 2);
   assert.deepEqual(await fs.readdir(f.cache), [name]);
+});
+
+test("selects the newest stable Krysta Engine or Launcher release", async (t) => {
+  const draft = {
+    ...releaseCandidate("v1.0.30", "Krysta Engine 1.0.30"),
+    draft: true,
+  };
+  const prerelease = {
+    ...releaseCandidate("v1.0.29", "Krysta Launcher 1.0.29"),
+    prerelease: true,
+  };
+  const f = await fixture(t, {
+    automatic: false,
+    releases: [
+      releaseCandidate("v1.0.26", "Krysta Launcher 1.0.26"),
+      releaseCandidate("v1.0.28", "Hydra Launcher 1.0.28"),
+      draft,
+      releaseCandidate("v1.0.27", "Krysta Engine 1.0.27 – Kontrolery"),
+      prerelease,
+    ],
+  });
+  const result = (await f.check()) as {
+    krysta: { tag: string } | null;
+    krystaNew: boolean | null;
+  };
+
+  assert.equal(result.krysta?.tag, "v1.0.27");
+  assert.equal(result.krystaNew, true);
+  assert.equal(f.status(), "manual");
 });
