@@ -7,6 +7,26 @@ import { logger } from "./logger";
 
 const run = promisify(execFile);
 const active = new Map<string, Promise<boolean>>();
+export async function detectRegisteredAntivirus(): Promise<{ name: string; productState: number | null }[] | null> {
+  if (process.platform !== "win32") return null;
+  const root = process.env.SystemRoot;
+  if (!root || !path.isAbsolute(root)) return null;
+  try {
+    const { stdout } = await run(path.join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), [
+      "-NoProfile", "-NonInteractive", "-Command",
+      "$ErrorActionPreference='Stop'; $items=@(Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct | Select-Object displayName,productState); ConvertTo-Json -InputObject $items -Compress"
+    ], { windowsHide: true, timeout: 15000, maxBuffer: 256 * 1024 });
+    const rows: unknown = JSON.parse(stdout.trim());
+    if (!Array.isArray(rows)) return null;
+    return rows.filter((row) => row && typeof row.displayName === "string").map((row) => ({
+      name: String(row.displayName).slice(0, 200),
+      productState: Number.isInteger(row.productState) ? row.productState : null
+    }));
+  } catch {
+    return null;
+  }
+}
+
 export async function scanCompletedDownload(download: Download): Promise<boolean> {
   if (process.platform !== "win32") return false;
   if (!download.folderName || !download.downloadPath) return false;
@@ -18,6 +38,9 @@ export async function scanCompletedDownload(download: Download): Promise<boolean
   if (existing) return existing;
   const task = (async () => {
     try {
+      const products = await detectRegisteredAntivirus();
+      logger.info("[Security Shield] Registered antivirus products:", products === null ? "unknown" : products.map((product) => product.name));
+      // Registration alone does not establish active protection or a clean scan.
       const stat = await fs.lstat(target);
       if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile())) return false;
       const systemRoot = process.env.SystemRoot;
