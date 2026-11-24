@@ -905,3 +905,21 @@ export async function uploadAchievementBackup(identity: string, payload: string,
   const result = await response.json() as { id?: string };
   if (!result.id) throw Error("Google Drive backup ID missing");
 }
+
+export async function uploadGoogleMedia(identity: string, name: string, bytes: Uint8Array, hash: string, signal: AbortSignal) {
+  const g = (await read()).google;
+  if (!g || await directCloudIdentity("google") !== identity || signal.aborted) throw Error("Cloud account changed or cancelled");
+  if (bytes.byteLength > 96 * 1024 ** 2 || !/^[a-f0-9]{64}$/.test(hash)) throw Error("Invalid media");
+  const token = await getGoogleAccessToken(g);
+  const auth = { Authorization: "Bearer " + token.access_token };
+  const q = "trashed = false and appProperties has { key='krystaMediaHash' and value='" + hash + "' }";
+  const lookup = await fetch("https://www.googleapis.com/drive/v3/files?" + new URLSearchParams({q, fields:"files(id)",pageSize:"1"}), {headers:auth,signal,redirect:"error"});
+  if (!lookup.ok) throw Error("Google media lookup failed");
+  if (((await lookup.json()) as {files?: {id:string}[]}).files?.length) return;
+  const boundary = "krysta_" + randomBytes(18).toString("hex");
+  const body = Buffer.concat([Buffer.from("--"+boundary+"\r\nContent-Type: application/json\r\n\r\n"+JSON.stringify({name,appProperties:{krystaMediaHash:hash,krystaKind:"media-v1"}})+"\r\n--"+boundary+"\r\nContent-Type: application/octet-stream\r\n\r\n"),bytes,Buffer.from("\r\n--"+boundary+"--\r\n")]);
+  if (signal.aborted || await directCloudIdentity("google") !== identity) throw Error("Cloud account changed or cancelled");
+  const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",{method:"POST",headers:{...auth,"Content-Type":"multipart/related; boundary="+boundary},body:new Uint8Array(body),signal,redirect:"error"});
+  if (!response.ok) throw Error("Google media upload failed ("+response.status+")");
+  if (!((await response.json()) as {id?:string}).id) throw Error("Missing media ID");
+}
