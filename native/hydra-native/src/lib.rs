@@ -757,3 +757,44 @@ pub fn windows_controller_desktop_action(action: String, value: i32) -> bool {
     #[cfg(not(target_os = "windows"))]
     { let _ = (action, value); false }
 }
+
+#[napi(object)]
+pub struct SonyControllerBattery {
+    pub id: String,
+    pub name: String,
+    pub percent: u32,
+    pub charging: bool,
+}
+
+#[napi]
+pub async fn get_windows_sony_hid_batteries() -> Vec<SonyControllerBattery> {
+    #[cfg(windows)]
+    {
+        tokio::task::spawn_blocking(|| {
+            let Ok(api) = hidapi::HidApi::new() else { return Vec::new(); };
+            let mut rows = Vec::new();
+            for info in api.device_list().filter(|d| d.vendor_id() == 0x054c && matches!(d.product_id(), 0x0ce6 | 0x0df2) && d.usage_page() == 1 && d.usage() == 5).take(8) {
+                let Ok(device) = info.open_device(&api) else { continue; };
+                let mut report = [0u8; 128];
+                let Ok(len) = device.read_timeout(&mut report, 150) else { continue; };
+                let status = match (report[0], len) {
+                    (0x01, 64) => report[53],
+                    (0x31, 78) => report[54],
+                    _ => continue,
+                };
+                let level = status & 0x0f;
+                let state = status >> 4;
+                if level > 10 || state > 2 { continue; }
+                rows.push(SonyControllerBattery {
+                    id: info.path().to_string_lossy().into_owned(),
+                    name: if info.product_id() == 0x0df2 { "DualSense Edge".into() } else { "DualSense".into() },
+                    percent: if state == 2 { 100 } else { u32::from(level) * 10 },
+                    charging: state == 1,
+                });
+            }
+            rows
+        }).await.unwrap_or_default()
+    }
+    #[cfg(not(windows))]
+    { Vec::new() }
+}
