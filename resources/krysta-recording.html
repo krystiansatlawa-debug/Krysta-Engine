@@ -24,7 +24,7 @@
         finishTimer = null;
       let chosenMime = "";
       async function chooseMime() {
-        const candidates = ["vp8", "vp9"].filter((codec) =>
+        const candidates = ["h264", "vp8", "vp9"].filter((codec) =>
           MediaRecorder.isTypeSupported(
             "video/webm;codecs=" + codec + (config.audio ? ",opus" : "")
           )
@@ -49,8 +49,9 @@
             /* encoder reporting is optional */
           }
         }
-        return candidates.length
-          ? "video/webm;codecs=" + candidates[0] + (config.audio ? ",opus" : "")
+        const fallback = candidates.find((codec) => codec !== "h264");
+        return fallback
+          ? "video/webm;codecs=" + fallback + (config.audio ? ",opus" : "")
           : MediaRecorder.isTypeSupported("video/webm")
             ? "video/webm"
             : "";
@@ -102,7 +103,7 @@
           recorder.onstop = () =>
             resolve(Math.max(0, (performance.now() - s.start) / 1000));
         });
-        recorder.start(500);
+        recorder.start(1000);
         return s;
       }
       function discard(s) {
