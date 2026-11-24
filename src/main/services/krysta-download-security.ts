@@ -12,6 +12,12 @@ const active = new Map<string, Promise<boolean>>();
 let historyQueue: Promise<void> = Promise.resolve();
 let scanQueue: Promise<unknown> = Promise.resolve();
 let runningScans = 0;
+const scanPhases = new Map<string, string>();
+export function getSecurityScanPhase(download: Download): string {
+  if (!download.downloadPath || !download.folderName) return "unverified";
+  const target = path.resolve(download.downloadPath, download.folderName);
+  return scanPhases.get(process.platform === "win32" ? target.toLowerCase() : target) ?? "unverified";
+}
 export function getSecurityScanQueueStatus() {
   return { running: runningScans, queued: Math.max(0, active.size - runningScans), total: active.size };
 }
@@ -203,8 +209,10 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
     // Recheck after extraction, even if another scan started meanwhile.
     return scanCompletedDownload(download, true);
   }
+  scanPhases.set(scanKey, "queued");
   const task = scanQueue.then(async () => {
     runningScans++;
+    scanPhases.set(scanKey, "inventory");
     let inspectedFingerprint: string | null = null;
     try {
       const products = await detectRegisteredAntivirus();
@@ -214,6 +222,7 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       inspectedFingerprint = inventory.fingerprint;
       logger.info("[Security Shield] Download tree inventory:", inventory);
       if (inventory.suspiciousProperties.misleadingExtensions || inventory.suspiciousProperties.bidiNames || inventory.disguisedExecutables) logger.warn("[Security Shield] Wykryto podejrzane właściwości nazw lub formatów plików; wymagana dodatkowa weryfikacja.");
+      scanPhases.set(scanKey, "reputation");
       const reputationLevels: string[] = [];
       const checkedDigests = new Set<string>();
       if (process.env.KRYSTA_VIRUSTOTAL_ENABLED === "1") {
@@ -237,6 +246,7 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
         return false;
       }
       const powershell = path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+      scanPhases.set(scanKey, "signatures");
       const signatureSummary: Record<string, number> = {};
       const publishers = new Set<string>();
       for (const candidate of inventory.signatureCandidates) {
@@ -250,6 +260,7 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
         } catch { signatureSummary.Unknown = (signatureSummary.Unknown ?? 0) + 1; }
       }
       logger.info("[Security Shield] Authenticode observations (not a malware verdict):", signatureSummary, [...publishers]);
+      scanPhases.set(scanKey, "antivirus");
       const { stdout } = await run(powershell, ["-NoProfile", "-NonInteractive", "-Command",
         "$ErrorActionPreference='Stop'; $s=Get-MpComputerStatus; if (-not $s.AntivirusEnabled -or -not $s.AMServiceEnabled) { throw 'Defender unavailable' }; $before=Get-Date; Start-MpScan -ScanType CustomScan -ScanPath $env:KRYSTA_SCAN_PATH -ErrorAction Stop; $after=Get-MpComputerStatus; $detections=@(Get-MpThreatDetection -ErrorAction Stop | Where-Object { $_.InitialDetectionTime -ge $before }); [pscustomobject]@{ enabled=[bool]$after.AntivirusEnabled; realtime=[bool]$after.RealTimeProtectionEnabled; signaturesOutOfDate=[bool]$after.DefenderSignaturesOutOfDate; recentDetections=$detections.Count } | ConvertTo-Json -Compress"],
         { windowsHide: true, timeout: 2 * 60 * 60 * 1000, maxBuffer: 1024 * 1024, env: {...process.env, KRYSTA_SCAN_PATH: target} });
@@ -271,6 +282,7 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       if (inventory.archives) reasons.push("Wykryto archiwa; zawartość wymaga sprawdzenia po rozpakowaniu.");
       const level = high ? "high" : reasons.length ? "review" : "unverified";
       if (!reasons.length) reasons.push("Brak potwierdzonego wyniku skanowania konkretnych plików.");
+      scanPhases.set(scanKey, "integrity");
       const finalInventory = await inspectDownloadTree(base, target);
       if (finalInventory.fingerprint !== inventory.fingerprint) {
         await recordSecurityDecision(inspectedFingerprint, high ? "high" : "unverified", [...reasons, "Zawartość zmieniła się podczas skanowania; wynik unieważniony."]);
@@ -292,6 +304,7 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       return false;
     } finally {
       runningScans--;
+      scanPhases.delete(scanKey);
     }
   });
   scanQueue = task.catch(() => false);
