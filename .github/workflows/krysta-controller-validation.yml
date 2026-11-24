@@ -1,0 +1,31 @@
+name: Krysta Controller Validation
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/krysta-controller-validation.yml'
+      - 'src/shared/controller-desktop.ts'
+      - 'src/big-picture/**'
+      - 'src/main/events/windows-game-bar-controller.ts'
+      - 'native/hydra-native/**'
+permissions:
+  contents: read
+concurrency:
+  group: krysta-controller-validation
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.21.0'
+          cache: yarn
+      - uses: dtolnay/rust-toolchain@stable
+      - run: yarn --frozen-lockfile
+      - run: yarn typecheck
+      - run: cargo check --manifest-path native/hydra-native/Cargo.toml
+      - run: node --import ./scripts/register-ts-node.mjs --test src/shared/controller-shortcut-recorder.test.ts src/main/services/game-running-state.test.ts
