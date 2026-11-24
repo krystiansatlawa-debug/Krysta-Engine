@@ -246,6 +246,8 @@ contextBridge.exposeInMainWorld("electron", {
   krystaFpsPosition: () => ipcRenderer.invoke("krysta:fps-position"),
   krystaFpsSetPosition: (position: "tl" | "tr" | "bl" | "br") =>
     ipcRenderer.invoke("krysta:fps-set-position", position),
+  getControllerDesktopDisplays: () => ipcRenderer.invoke("getControllerDesktopDisplays"),
+  moveControllerWindowToDisplay: (id: number) => ipcRenderer.invoke("moveControllerWindowToDisplay", id),
   getWindowsSonyBatteryLevels: () => ipcRenderer.invoke("getWindowsSonyBatteryLevels"),
   getWindowsXboxBatteryLevels: () => ipcRenderer.invoke("getWindowsXboxBatteryLevels"),
   getWindowsGameBarControllerEnabled: () =>
