@@ -93,6 +93,10 @@ export function GameStoryProgress({
     automatic?.completedMissions !== undefined
       ? null
       : milestone;
+  const possibleMissingFinale = automaticStatus === "ready" &&
+    automatic?.progressKind === "story" &&
+    automatic.percent === 100 &&
+    milestone?.finale !== true;
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [reload, setReload] = useState(0);
@@ -319,6 +323,9 @@ export function GameStoryProgress({
                 {t(`story_progress_status_${automaticStatus}`)}
               </p>
             )}
+            {possibleMissingFinale && (
+              <p role="status">{t("story_progress_achievement_review")}</p>
+            )}
             <details className="game-story-progress__options">
               <summary>{t("story_progress_save_options")}</summary>
               <div role="status">
@@ -362,20 +369,20 @@ export function GameStoryProgress({
             )}
           </div>
         )}
-        {accountMilestone && !loading && (
+        {(accountMilestone || milestone?.finale) && !loading && (
           <div className="game-story-progress__snapshot">
             <h3>{t("story_progress_from_achievements")}</h3>
             <div className="game-story-progress__mission">
-              <strong>{accountMilestone.title}</strong>
-              {accountMilestone.chapter !== undefined && (
+              <strong>{(accountMilestone ?? milestone)?.title}</strong>
+              {(accountMilestone ?? milestone)?.chapter !== undefined && (
                 <p>
                   {t("story_progress_confirmed_chapter", {
-                    chapter: accountMilestone.chapter,
-                    total: accountMilestone.totalChapters,
+                    chapter: (accountMilestone ?? milestone)?.chapter,
+                    total: (accountMilestone ?? milestone)?.totalChapters,
                   })}
                 </p>
               )}
-              {accountMilestone.finale && (
+              {(accountMilestone ?? milestone)?.finale && (
                 <p>{t("story_progress_confirmed_finale")}</p>
               )}
             </div>
