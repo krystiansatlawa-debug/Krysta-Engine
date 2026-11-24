@@ -325,6 +325,8 @@ declare global {
     krystaFpsSetPosition: (
       position: "tl" | "tr" | "bl" | "br"
     ) => Promise<"tl" | "tr" | "bl" | "br">;
+    getControllerDesktopDisplays: () => Promise<{ id: number; label: string; primary: boolean; width: number; height: number; scaleFactor: number }[]>;
+    moveControllerWindowToDisplay: (id: number) => Promise<boolean>;
     getWindowsSonyBatteryLevels: () => Promise<{ id: string; name: string; percent: number }[]>;
     getWindowsXboxBatteryLevels: () => Promise<(string | null)[]>;
     getWindowsGameBarControllerEnabled: () => Promise<boolean | null>;
