@@ -41,6 +41,25 @@ mod windows {
         }
     }
 
+    pub fn battery_level(index: u32) -> Option<String> {
+        use windows_sys::Win32::UI::Input::XboxController::{XInputGetBatteryInformation, XINPUT_BATTERY_INFORMATION};
+        if index >= 4 { return None; }
+        let mut info: XINPUT_BATTERY_INFORMATION = unsafe { std::mem::zeroed() };
+        if unsafe { XInputGetBatteryInformation(index, 0, &mut info) } != 0 { return None; }
+        match info.BatteryType {
+            0 => None,
+            1 => Some("wired".into()),
+            2 | 3 => match info.BatteryLevel {
+                0 => Some("empty".into()),
+                1 => Some("low".into()),
+                2 => Some("medium".into()),
+                3 => Some("full".into()),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     pub fn is_pressed() -> Option<bool> {
         let get_state = GET_STATE.get_or_init(load_get_state).as_ref()?;
         Some((0..4).any(|controller| {
@@ -170,7 +189,9 @@ mod windows {
 }
 
 #[cfg(windows)]
-pub use windows::is_pressed;
+pub use windows::{is_pressed, battery_level};
+#[cfg(not(windows))]
+pub fn battery_level(_index: u32) -> Option<String> { None }
 #[cfg(windows)]
 pub use windows::{game_bar_controller_enabled, set_game_bar_controller_enabled};
 
