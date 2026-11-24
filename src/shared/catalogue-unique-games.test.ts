@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { uniqueCatalogueGames } from "./catalogue-unique-games";
+import { uniqueCatalogueGames } from "./catalogue-unique-games.js";
 test("deduplicates game identities without merging shops",()=>{
  const a={shop:"steam",objectId:"42",title:"A"};
  const b={shop:"epic",objectId:"42",title:"B"};

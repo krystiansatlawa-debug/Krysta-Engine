@@ -1,5 +1,5 @@
 name: Krysta Release
-# Performance and catalogue release; idle catalogue memory cleanup.
+# Performance and catalogue release; retry after ESM test import fix.
 on:
   workflow_dispatch:
   push:

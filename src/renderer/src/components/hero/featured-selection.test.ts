@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { selectFeatured } from "./featured-selection";
+import { selectFeatured } from "./featured-selection.js";
 
 const game = (objectId: string, shop = "steam") => ({ objectId, shop, title: objectId, libraryImageUrl: "https://example.com/cover" });
 test("prioritizes unowned games and preserves editorial order", () => {
