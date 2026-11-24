@@ -1943,6 +1943,7 @@ contextBridge.exposeInMainWorld("electron", {
   notifyCloudGiftResolved: (giftId: string) =>
     ipcRenderer.invoke("notifyCloudGiftResolved", giftId),
   getCloudIframeUrl: () => ipcRenderer.invoke("getCloudIframeUrl"),
+  listGameBoostCandidates: (): Promise<string[]> => ipcRenderer.invoke("listGameBoostCandidates"),
   showOpenDialog: (options: Electron.OpenDialogOptions) =>
     ipcRenderer.invoke("showOpenDialog", options),
   ...fileExplorerApi,
