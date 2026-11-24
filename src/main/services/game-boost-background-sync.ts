@@ -13,7 +13,14 @@ const updatePause = () => {
   const nextPaused = pauseDuringGame && hasTrackedGamesRunning();
   if (paused === nextPaused) return;
   paused = nextPaused;
-  for (const listener of listeners) listener();
+  for (const listener of listeners) {
+    try {
+      listener();
+    } catch (error) {
+      // A failing consumer must not prevent other deferred tasks from resuming.
+      console.warn("[Game Boost] Background sync listener failed", error);
+    }
+  }
 };
 
 onTrackedGamesRunningChange(updatePause);
