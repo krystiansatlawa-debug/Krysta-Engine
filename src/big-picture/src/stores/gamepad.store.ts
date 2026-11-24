@@ -22,7 +22,6 @@ export interface GamepadState {
 
 export const useGamepadStore = create<GamepadState>((set, get) => {
   let cachedConnectedGamepads: GamepadInfo[] = [];
-  let lastConnectedCount = 0;
   let isInitialized = false;
 
   const ensureInitialized = () => {
@@ -52,7 +51,10 @@ export const useGamepadStore = create<GamepadState>((set, get) => {
 
       let connectedGamepads = cachedConnectedGamepads;
 
-      if (rawStates.size !== lastConnectedCount) {
+      if (rawStates.size !== cachedConnectedGamepads.length || cachedConnectedGamepads.some((pad) => {
+        const state = rawStates.get(pad.index);
+        return !state || state.name !== pad.name || state.layout !== pad.layout;
+      })) {
         connectedGamepads = Array.from(rawStates.entries()).map(
           ([idx, state]) => ({
             index: idx,
@@ -62,7 +64,6 @@ export const useGamepadStore = create<GamepadState>((set, get) => {
         );
 
         cachedConnectedGamepads = connectedGamepads;
-        lastConnectedCount = rawStates.size;
       }
 
       set({
