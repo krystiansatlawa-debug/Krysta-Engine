@@ -49,6 +49,24 @@ function Header() {
   const resetProfile = useGamepadStore((state) => state.resetProfile);
   const activePadIndex = useGamepadStore((state) => state.activeGamepadIndex);
   const activePad = connectedPads.find((pad) => pad.index === activePadIndex);
+  useEffect(() => {
+    if (!profile.enabled || activePadIndex === null) return;
+    let pending = false;
+    let armed = false;
+    const timer = window.setInterval(() => {
+      if (pending || !document.hasFocus()) { armed = false; return; }
+      const pad = navigator.getGamepads()[activePadIndex];
+      if (!pad?.connected) { armed = false; return; }
+      const x = pad.axes[0] ?? 0, y = pad.axes[1] ?? 0;
+      if (!armed) { armed = Math.abs(x) <= profile.deadZone && Math.abs(y) <= profile.deadZone; return; }
+      const axis = (v: number) => Math.abs(v) <= profile.deadZone ? 0 : Math.round(v * profile.cursorSpeed);
+      const dx = axis(x), dy = axis(y);
+      if (!dx && !dy) return;
+      pending = true;
+      void window.electron.moveControllerCursor(dx, dy).then((ok) => { if (!ok) armed = false; }).catch(() => { armed = false; }).finally(() => { pending = false; });
+    }, 32);
+    return () => window.clearInterval(timer);
+  }, [activePadIndex, profile.enabled, profile.cursorSpeed, profile.deadZone]);
   const [battery, setBattery] = useState<string[]>([]);
   const padIdentity = connectedPads.map((pad) => `${pad.index}:${pad.name}:${pad.layout}`).join("|");
   const hasXbox = connectedPads.some((pad) => /xbox|xinput/i.test(`${pad.name} ${pad.layout}`));
@@ -344,7 +362,7 @@ function Header() {
             </button>
           </FocusItem>
 
-          {connectedPads.length > 0 && <details style={{ position: "relative" }}><summary>Kontrolery</summary><div style={{ position: "absolute", zIndex: 100, background: "#20232a", padding: 12, minWidth: 220 }}><label>Aktywny pad <select value={preferredPad ?? ""} onChange={(event) => selectPad(event.target.value === "" ? null : Number(event.target.value))}><option value="">Automatycznie</option>{connectedPads.map((pad) => <option key={pad.index} value={pad.index}>{pad.name}</option>)}</select></label>{activePad && <><label style={{ display: "block" }}><input type="checkbox" checked={profile.vibration} onChange={(event) => saveProfile(activePad.name, activePad.layout, { ...profile, vibration: event.target.checked })} /> Wibracje</label><label style={{ display: "block" }}>Szybkość kursora: {profile.cursorSpeed}<input type="range" min={1} max={40} value={profile.cursorSpeed} onChange={(event) => saveProfile(activePad.name, activePad.layout, { ...profile, cursorSpeed: Number(event.target.value) })} /></label><label style={{ display: "block" }}>Martwa strefa: {Math.round(profile.deadZone * 100)}%<input type="range" min={0} max={90} value={Math.round(profile.deadZone * 100)} onChange={(event) => saveProfile(activePad.name, activePad.layout, { ...profile, deadZone: Number(event.target.value) / 100 })} /></label><button type="button" onClick={() => resetProfile(activePad.name, activePad.layout)}>Przywróć domyślne</button><button type="button" disabled={!profile.vibration} onClick={() => useGamepadStore.getState().getService().vibrate(180, 0.4, 0.4, activePad.index)}>Sprawdź wibracje</button></>}</div></details>}
+          {connectedPads.length > 0 && <details style={{ position: "relative" }}><summary>Kontrolery</summary><div style={{ position: "absolute", zIndex: 100, background: "#20232a", padding: 12, minWidth: 220 }}><label>Aktywny pad <select value={preferredPad ?? ""} onChange={(event) => selectPad(event.target.value === "" ? null : Number(event.target.value))}><option value="">Automatycznie</option>{connectedPads.map((pad) => <option key={pad.index} value={pad.index}>{pad.name}</option>)}</select></label>{activePad && <><label style={{ display: "block" }}><input type="checkbox" checked={profile.vibration} onChange={(event) => saveProfile(activePad.name, activePad.layout, { ...profile, vibration: event.target.checked })} /> Wibracje</label><label style={{ display: "block" }}><input type="checkbox" checked={profile.enabled} onChange={(event) => saveProfile(activePad.name, activePad.layout, { ...profile, enabled: event.target.checked })} /> Sterowanie kursorem</label><label style={{ display: "block" }}>Szybkość kursora: {profile.cursorSpeed}<input type="range" min={1} max={40} value={profile.cursorSpeed} onChange={(event) => saveProfile(activePad.name, activePad.layout, { ...profile, cursorSpeed: Number(event.target.value) })} /></label><label style={{ display: "block" }}>Martwa strefa: {Math.round(profile.deadZone * 100)}%<input type="range" min={0} max={90} value={Math.round(profile.deadZone * 100)} onChange={(event) => saveProfile(activePad.name, activePad.layout, { ...profile, deadZone: Number(event.target.value) / 100 })} /></label><button type="button" onClick={() => resetProfile(activePad.name, activePad.layout)}>Przywróć domyślne</button><button type="button" disabled={!profile.vibration} onClick={() => useGamepadStore.getState().getService().vibrate(180, 0.4, 0.4, activePad.index)}>Sprawdź wibracje</button></>}</div></details>}
           {connectedPads.length > 0 && <span className="header__controller-battery" title="Poziom baterii kontrolera">🔋 {batteryLabel}</span>}
           <form
             ref={searchRef}
