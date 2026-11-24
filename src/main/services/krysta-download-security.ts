@@ -76,6 +76,9 @@ async function inspectDownloadTree(base: string, target: string) {
   const executableTypes: Record<string, number> = {};
   let disguisedExecutables = 0;
   let archives = 0;
+  let misleadingExtensions = 0;
+  let bidiNames = 0;
+  let executableScripts = 0;
   const signatureCandidates: string[] = [];
   const reputationCandidates = new Set<string>();
   const fingerprints: string[] = [];
@@ -106,6 +109,10 @@ async function inspectDownloadTree(base: string, target: string) {
       const digest = hash.digest("hex");
       fingerprints.push(JSON.stringify([path.relative(target, current), digest]));
       const ext = path.extname(current).toLowerCase();
+      const name = path.basename(current);
+      if (/[\u202a-\u202e\u2066-\u2069]/u.test(name)) bidiNames++;
+      if (executableExtensions.has(ext) && /\.(pdf|jpg|jpeg|png|txt|docx|mp4)\.[^.]+$/i.test(name)) misleadingExtensions++;
+      if ([".bat", ".cmd", ".ps1", ".vbs", ".js", ".hta", ".wsf"].includes(ext)) executableScripts++;
       if (/\.(zip|rar|7z|tar|gz|bz2|xz|iso|cab|part\d+\.rar|\d{3})$/i.test(current)) archives++;
       const handle = await fs.open(current, "r");
       try {
@@ -129,7 +136,7 @@ async function inspectDownloadTree(base: string, target: string) {
     }
   }
   if (!files) throw new Error("No files to scan");
-  return { files, bytes, executableTypes, disguisedExecutables, archives, signatureCandidates, reputationCandidates: [...reputationCandidates], fingerprint: createHash("sha256").update(JSON.stringify(fingerprints.sort())).digest("hex") };
+  return { files, bytes, executableTypes, disguisedExecutables, archives, suspiciousProperties: { misleadingExtensions, bidiNames, executableScripts }, signatureCandidates, reputationCandidates: [...reputationCandidates], fingerprint: createHash("sha256").update(JSON.stringify(fingerprints.sort())).digest("hex") };
 }
 
 export async function scanCompletedDownload(download: Download, afterExtraction = false): Promise<boolean> {
@@ -152,6 +159,7 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       // Registration alone does not establish active protection or a clean scan.
       const inventory = await inspectDownloadTree(base, target);
       logger.info("[Security Shield] Download tree inventory:", inventory);
+      if (inventory.suspiciousProperties.misleadingExtensions || inventory.suspiciousProperties.bidiNames || inventory.disguisedExecutables) logger.warn("[Security Shield] Wykryto podejrzane właściwości nazw lub formatów plików; wymagana dodatkowa weryfikacja.");
       if (process.env.KRYSTA_VIRUSTOTAL_ENABLED === "1") {
         for (const digest of inventory.reputationCandidates) {
           const reputation = await lookupFileReputation(digest);
