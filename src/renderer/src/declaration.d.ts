@@ -328,6 +328,7 @@ declare global {
     getControllerDesktopDisplays: () => Promise<{ id: number; label: string; primary: boolean; width: number; height: number; scaleFactor: number }[]>;
     moveControllerWindowToDisplay: (id: number) => Promise<boolean>;
     getWindowsSonyBatteryLevels: () => Promise<{ id: string; name: string; percent: number; charging?: boolean }[]>;
+    moveControllerCursor: (dx: number, dy: number) => Promise<boolean>;
     getWindowsXboxBatteryLevels: () => Promise<(string | null)[]>;
     getWindowsGameBarControllerEnabled: () => Promise<boolean | null>;
     setWindowsGameBarControllerEnabled: (
