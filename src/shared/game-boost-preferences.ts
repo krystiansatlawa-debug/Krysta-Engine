@@ -13,5 +13,6 @@ export const getGameBoostPreferences = (
         (application) => typeof application === "string"
       )
     : [],
+  minimizeAfterGame: preferences?.gameBoostMinimizeAfterGame === true,
   restoreApplications: preferences?.gameBoostRestoreApplications !== false,
 });
