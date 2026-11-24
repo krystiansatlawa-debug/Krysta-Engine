@@ -1,5 +1,6 @@
 import { app } from "electron";
 import path from "node:path";
+import { readdir } from "node:fs/promises";
 import { db, gamesSublevel, levelKeys } from "@main/level";
 import { getGameCatalogueIdentity } from "../../shared/library-catalogue";
 import type {
@@ -47,7 +48,7 @@ const customFolders = db.sublevel<string, string>("story-save-folders", {
 const queued = new Map<string, PendingScan>();
 let activeScan: { key: string; result: Promise<CompletedScan> } | undefined;
 const canRead = () => !isGameBoostBackgroundSyncPaused();
-const storyReaderVersion = 2;
+const storyReaderVersion = 3;
 
 function storyKey(game: Game, source: StorySaveSource | undefined) {
   const { shop, objectId } = getGameCatalogueIdentity(game);
@@ -129,6 +130,51 @@ async function defaultSavePaths(
   return { profiles, directFolders };
 }
 
+// Only exact game-name directories and known save subfolders are eligible.
+async function discoverAdditionalSaveFiles(game: Game, canContinue: () => boolean) {
+  if (process.platform !== "win32") return [];
+  const home = app.getPath("home");
+  const normalize = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const title = normalize(game.title);
+  if (title.length < 3) return [];
+  const roots = [
+    app.getPath("documents"), path.join(home, "Documents"),
+    path.join(home, "Saved Games"), path.join(home, "AppData", "Local"),
+    path.join(home, "AppData", "LocalLow"), path.join(home, "AppData", "Roaming"),
+    ...(process.env.OneDrive ? [path.join(process.env.OneDrive, "Documents")] : []),
+  ];
+  const folders = new Set<string>();
+  const publishers = new Set(["rockstargames", "ubisoft", "ubisoftgamelauncher", "electronicarts", "eagames", "cdprojektred", "squareenix", "capcom", "bandainamco", "sonyinteractiveentertainment", "mygames", "gogcom", "epicgames", "bethesda", "2kgames"]);
+  for (const root of new Set(roots)) {
+    if (!canContinue()) break;
+    const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries.slice(0, 1000)) {
+      if (!canContinue()) break;
+      if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+      const candidate = path.join(root, entry.name);
+      if (normalize(entry.name) === title) folders.add(candidate);
+      else if (publishers.has(normalize(entry.name))) {
+        const children = await readdir(candidate, { withFileTypes: true }).catch(() => []);
+        for (const child of children.slice(0, 500)) {
+          if (child.isDirectory() && !child.isSymbolicLink() && normalize(child.name) === title)
+            folders.add(path.join(candidate, child.name));
+        }
+      }
+    }
+  }
+  if (game.executablePath && path.isAbsolute(game.executablePath)) {
+    const install = path.dirname(game.executablePath);
+    for (const name of ["save", "saves", "savegames", "savedata", "Saved Games", "Saved/SaveGames"])
+      folders.add(path.join(install, name));
+  }
+  const files: string[] = [];
+  for (const folder of [...folders].slice(0, 24)) {
+    if (!canContinue()) break;
+    files.push(...await discoverSelectedStorySaveFiles(folder, canContinue));
+  }
+  return [...new Set(files)];
+}
+
 async function readAutomaticSave(
   game: Game,
   source: StorySaveSource | undefined,
@@ -186,6 +232,11 @@ async function readAutomaticSave(
         (detected.status === "not-found" && epicResult.status !== "not-found")
       )
         return epicResult;
+    }
+    if (detected.status !== "ready" && detected.status !== "waiting" && canContinue()) {
+      const extra = await readDiscoveredStorySave(await discoverAdditionalSaveFiles(game, canContinue), source, canContinue);
+      if (extra.status === "ready" || extra.status === "waiting") return extra;
+      if (!source && detected.status === "not-found" && extra.status !== "not-found") return extra;
     }
     if (
       !source ||
