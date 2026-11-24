@@ -31,6 +31,9 @@ export function getSecurityScanPhase(download: Download): string {
   const target = path.resolve(download.downloadPath, download.folderName);
   return scanPhases.get(process.platform === "win32" ? target.toLowerCase() : target) ?? "unverified";
 }
+export function getSecurityCapabilities() {
+  return { enabled: true, localScannerSupported: process.platform === "win32", reputationConfigured: process.env.KRYSTA_VIRUSTOTAL_ENABLED === "1" && Boolean(process.env.KRYSTA_VIRUSTOTAL_API_KEY), fileUploadEnabled: false, verifiedVerdictSupported: false };
+}
 export function getSecurityScanQueueStatus() {
   return { running: runningScans, queued: Math.max(0, active.size - runningScans), total: active.size };
 }
