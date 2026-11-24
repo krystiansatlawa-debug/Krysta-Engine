@@ -307,6 +307,10 @@ async function flushPendingCloudSaves() {
           if (!manifestStat.isFile() || manifestStat.isSymbolicLink() || manifestStat.size > 8*1024**2) return;
           const m = JSON.parse(await fs.readFile(manifest,"utf8"));
           if (m.id!==item.version || !Array.isArray(m.files) || !m.files.length || m.files.length>5000) return;
+          if (item.automatic && remote[0] && remote[0].files.length > m.files.length) {
+            await pendingCloudSaves.put(queueKey,{...item,nextAttemptAt:Date.now()+15*60_000});
+            return;
+          }
           const names:string[] = [];
           for (const f of m.files) {
             if (typeof f.name!=="string" || !/^\\d+$/.test(f.name) || names.includes(f.name)) return;
@@ -368,6 +372,10 @@ async function backupGame(
     const comparison = beforeUpdate
       ? { state: "no-backup", version: undefined }
       : await compareSaves(base, root, files);
+    // A smaller detected save set can indicate accidental deletion or a failed scan.
+    // Never promote it automatically; keep all previous snapshots untouched.
+    if (automatic && "cloudFiles" in comparison && typeof comparison.cloudFiles === "number" && comparison.cloudFiles > files.length)
+      throw Error("SAVE_CONFLICT: Wykryto mniej plików zapisów niż w poprzedniej kopii. Sprawdź historię w menu Chmura.");
     if (automatic && comparison.state === "same" && !provider) return false;
     if (provider && automatic && net.isOnline()) {
       const remote = await listRemoteCloudSnapshots(
@@ -380,6 +388,8 @@ async function backupGame(
           throw Error("KRYSTA_RETRYABLE_READ: " + message);
         throw error;
       });
+      if (remote[0] && remote[0].files.length > files.length)
+        throw Error("SAVE_CONFLICT: Brakuje lokalnych plików zapisów. Poprzednia kopia w chmurze została zachowana.");
       if (comparison.state === "same" && remote[0]?.id === comparison.version)
         return false;
       // A remote version unknown to this PC must not become superseded
