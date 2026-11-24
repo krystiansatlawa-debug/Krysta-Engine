@@ -90,3 +90,22 @@ export function normalizeDesktopControllerSettings(value: Partial<DesktopControl
     deadZone: typeof value.deadZone === "number" && Number.isFinite(value.deadZone) ? Math.max(0, Math.min(0.9, value.deadZone)) : 0.18,
   };
 }
+
+export interface ControllerProfile extends DesktopControllerSettings {
+  vibration: boolean;
+  bindings: Record<string, number>;
+}
+export const defaultControllerProfile = (): ControllerProfile => ({
+  ...defaultDesktopControllerSettings, vibration: true, bindings: {},
+});
+export function controllerProfileKey(name: string, layout: string): string {
+  return JSON.stringify([name.trim().toLowerCase(), layout.trim().toLowerCase()]);
+}
+export function normalizeControllerProfile(value: unknown): ControllerProfile {
+  const input = value && typeof value === "object" ? value as Partial<ControllerProfile> : {};
+  const bindings: Record<string, number> = {};
+  for (const [key, index] of Object.entries(input.bindings ?? {})) {
+    if (/^(left|right|doubleClick|volumeUp|volumeDown|switchWindow|minimize|maximize)$/.test(key) && Number.isInteger(index) && index >= 0 && index < 32) bindings[key] = index;
+  }
+  return { ...normalizeDesktopControllerSettings(input), vibration: input.vibration !== false, bindings };
+}
