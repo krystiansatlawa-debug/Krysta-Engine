@@ -7,6 +7,8 @@ import {
 const rockstarPartition = "persist:krysta-rockstar-account";
 const profileUrl = "https://scapi.rockstargames.com/profile/getbasicprofile";
 let loginWindow: BrowserWindow | null = null;
+const awardCache = new Map<string, { awards: Awaited<ReturnType<typeof fetchRockstarAwardedAchievements>>; updatedAt: string }>();
+let accountGeneration = 0;
 
 function authSession() {
   return session.fromPartition(rockstarPartition);
@@ -133,15 +135,26 @@ export async function readRockstarAccountAwards(
   const token = await bearerToken();
   if (!token) throw Error("Connect your Rockstar Games account first");
   const profile = await getRockstarProfile(token);
-  const awards = await fetchRockstarAwardedAchievements(
-    title,
-    profile.rockstarId,
-    token
-  );
-  return { title, username: profile.username, awards, updatedAt: new Date().toISOString() };
+  const generation = accountGeneration;
+  const key = JSON.stringify([profile.rockstarId, title]);
+  try {
+    const awards = await fetchRockstarAwardedAchievements(title, profile.rockstarId, token);
+    if (generation !== accountGeneration) throw Error("Rockstar account changed");
+    const merged = new Map((awardCache.get(key)?.awards ?? []).map((award) => [award.id, award]));
+    for (const award of awards) merged.set(award.id, award);
+    const snapshot = { awards: [...merged.values()].sort((a,b) => (b.unlockTime ?? 0) - (a.unlockTime ?? 0)), updatedAt: new Date().toISOString() };
+    awardCache.set(key, snapshot);
+    return { title, username: profile.username, ...snapshot };
+  } catch (error) {
+    const cached = generation === accountGeneration ? awardCache.get(key) : undefined;
+    if (!cached) throw error;
+    return { title, username: profile.username, ...cached };
+  }
 }
 
 export async function disconnectRockstarAchievements() {
+  accountGeneration++;
+  awardCache.clear();
   if (loginWindow && !loginWindow.isDestroyed()) loginWindow.close();
   await authSession().clearStorageData();
 }
