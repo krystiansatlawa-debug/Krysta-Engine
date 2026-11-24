@@ -443,10 +443,16 @@ async function getUbisoftAchievementsInternal(
   }
   if (items.filter((i) => i.unlocked).length !== set.completedCount)
     throw Error("Ubisoft achievement totals do not match");
+  // Preserve verified unlocks only within the same account and game scope.
+  const previous = new Map((cached?.items ?? []).filter((item) => item.unlocked).map((item) => [item.id, item]));
+  const reconciled = items.map((item) => {
+    const known = previous.get(item.id);
+    return known ? { ...item, unlocked: true, completionDate: item.completionDate ?? known.completionDate } : item;
+  });
   const snapshot = {
-    items,
+    items: reconciled,
     total: set.totalCount,
-    completed: set.completedCount,
+    completed: reconciled.filter((item) => item.unlocked).length,
     updatedAt: new Date().toISOString(),
   };
   achievementCache.set(cacheKey, snapshot);
