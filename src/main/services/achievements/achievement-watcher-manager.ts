@@ -1,3 +1,4 @@
+import { isTrackedGameKeyRunning } from "../game-running-state";
 import { achievementSyncWorker } from "./achievement-sync-worker";
 import { parseAchievementFile } from "./parse-achievement-file";
 import { mergeAchievements } from "./merge-achievements";
@@ -46,6 +47,7 @@ const fltFiles: Map<string, Set<string>> = new Map();
 const processingGameKeys = new Set<string>();
 const lastRecoveryScan = new Map<string, number>();
 const RECOVERY_INTERVAL_MS = 5 * 60_000;
+const ACTIVE_RECOVERY_INTERVAL_MS = 30_000;
 
 const mergeDetectedAchievements = async (
   game: Game,
@@ -98,7 +100,7 @@ const watchAchievementsWindows = async () => {
   const nestedFilesByObjectId = await findNestedAchievementFiles();
   const includeSteamCache = await getEnableSteamAchievements();
 
-  for (const game of games) {
+  for (const game of [...games].sort((a, b) => Number(isTrackedGameKeyRunning(levelKeys.game(b.shop, b.objectId))) - Number(isTrackedGameKeyRunning(levelKeys.game(a.shop, a.objectId))))) {
     const gameAchievementFiles = await collectGameAchievementFiles(game, {
       includeSteamCache,
       staticFilesByObjectId,
@@ -116,7 +118,7 @@ const watchAchievementsWithWine = async () => {
 
   const includeSteamCache = await getEnableSteamAchievements();
 
-  for (const game of games) {
+  for (const game of [...games].sort((a, b) => Number(isTrackedGameKeyRunning(levelKeys.game(b.shop, b.objectId))) - Number(isTrackedGameKeyRunning(levelKeys.game(a.shop, a.objectId))))) {
     const gameAchievementFiles = await collectGameAchievementFiles(game, {
       includeSteamCache,
     });
@@ -193,7 +195,8 @@ const processChangedAchievementFiles = async (
 
   try {
     const changedFiles = achievementFiles.filter(hasAchievementFileChanged);
-    const recoveryDue = Date.now() - (lastRecoveryScan.get(gameKey) ?? 0) >= RECOVERY_INTERVAL_MS;
+    const recoveryInterval = isTrackedGameKeyRunning(gameKey) ? ACTIVE_RECOVERY_INTERVAL_MS : RECOVERY_INTERVAL_MS;
+    const recoveryDue = Date.now() - (lastRecoveryScan.get(gameKey) ?? 0) >= recoveryInterval;
     if (recoveryDue && achievementFiles.length) {
       const recovered = achievementFiles.flatMap((file) => parseAchievementFile(file.filePath, file.type));
       const count = await mergeDetectedAchievements(game, recovered);
