@@ -296,7 +296,8 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       const report = JSON.parse(stdout.trim()) as { enabled?: boolean; realtime?: boolean; signaturesOutOfDate?: boolean; recentDetections?: number };
       const reasons: string[] = [];
       const high = (typeof report.recentDetections === "number" && report.recentDetections > 0) || reputationLevels.includes("high");
-      if (high) reasons.push("Silnik antywirusowy zgłosił zagrożenie; wymagana weryfikacja.");
+      if (reputationLevels.includes("high")) reasons.push("Raport reputacji pliku zawiera wykrycia wielu silników.");
+      if (typeof report.recentDetections === "number" && report.recentDetections > 0) reasons.push("Defender zgłosił nowe wykrycia w systemie; nie potwierdzono ich związku z tą grą.");
       if (reputationLevels.includes("ambiguous")) reasons.push("Niejednoznaczny raport reputacji.");
       if (signatureSummary.HashMismatch || signatureSummary.NotTrusted) reasons.push("Nieprawidłowy lub niezaufany podpis.");
       if (inventory.disguisedExecutables || inventory.suspiciousProperties.misleadingExtensions || inventory.suspiciousProperties.bidiNames) reasons.push("Podejrzane właściwości plików.");
