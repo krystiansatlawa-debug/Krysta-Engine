@@ -1,5 +1,5 @@
 name: Krysta Release
-# Build and publish Achievements 2.0 after regression tests.
+# Rebuild 1.0.24 after nullable timestamp and database encoding fixes.
 on:
   workflow_dispatch:
   push:
