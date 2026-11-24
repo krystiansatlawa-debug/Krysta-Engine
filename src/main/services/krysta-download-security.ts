@@ -109,6 +109,8 @@ async function inspectDownloadTree(base: string, target: string) {
   let bidiNames = 0;
   let executableScripts = 0;
   const signatureCandidates: string[] = [];
+  let signatureLimitReached = false;
+  let reputationLimitReached = false;
   const reputationCandidates = new Set<string>();
   const fingerprints: string[] = [];
   while (pending.length) {
@@ -150,8 +152,12 @@ async function inspectDownloadTree(base: string, target: string) {
         const mz = bytesRead === 2 && header[0] === 0x4d && header[1] === 0x5a;
         if (mz || [".msi", ".msp", ".ps1", ".psm1", ".cat"].includes(ext)) {
           if (signatureCandidates.length < 500) signatureCandidates.push(current);
+          else signatureLimitReached = true;
         }
-        if ((mz || executableExtensions.has(ext)) && reputationCandidates.size < 500) reputationCandidates.add(digest);
+        if (mz || executableExtensions.has(ext)) {
+          if (reputationCandidates.size < 500) reputationCandidates.add(digest);
+          else if (!reputationCandidates.has(digest)) reputationLimitReached = true;
+        }
         if (executableExtensions.has(ext)) {
           executableTypes[ext] = (executableTypes[ext] ?? 0) + 1;
         } else if (mz) {
@@ -165,7 +171,7 @@ async function inspectDownloadTree(base: string, target: string) {
     }
   }
   if (!files) throw new Error("No files to scan");
-  return { files, bytes, executableTypes, disguisedExecutables, archives, suspiciousProperties: { misleadingExtensions, bidiNames, executableScripts }, signatureCandidates, reputationCandidates: [...reputationCandidates], fingerprint: createHash("sha256").update(JSON.stringify(fingerprints.sort())).digest("hex") };
+  return { files, bytes, signatureLimitReached, reputationLimitReached, executableTypes, disguisedExecutables, archives, suspiciousProperties: { misleadingExtensions, bidiNames, executableScripts }, signatureCandidates, reputationCandidates: [...reputationCandidates], fingerprint: createHash("sha256").update(JSON.stringify(fingerprints.sort())).digest("hex") };
 }
 
 export async function scanCompletedDownload(download: Download, afterExtraction = false): Promise<boolean> {
@@ -192,11 +198,13 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       logger.info("[Security Shield] Download tree inventory:", inventory);
       if (inventory.suspiciousProperties.misleadingExtensions || inventory.suspiciousProperties.bidiNames || inventory.disguisedExecutables) logger.warn("[Security Shield] Wykryto podejrzane właściwości nazw lub formatów plików; wymagana dodatkowa weryfikacja.");
       const reputationLevels: string[] = [];
+      const checkedDigests = new Set<string>();
       if (process.env.KRYSTA_VIRUSTOTAL_ENABLED === "1") {
         for (const digest of inventory.reputationCandidates) {
           const reputation = await lookupFileReputation(digest);
           const assessment = assessReputation(reputation);
           reputationLevels.push(assessment.level);
+          if (reputation.status === "reported") checkedDigests.add(digest);
           if (assessment.level === "ambiguous") {
             const recheck = await recheckAmbiguousReputation(digest, reputation);
             if (recheck.repeated) reputationLevels.push(assessReputation(recheck.repeated).level);
@@ -241,7 +249,8 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       if (signatureSummary.Unknown || signatureSummary.UnknownError) reasons.push("Nie udało się zweryfikować części podpisów cyfrowych.");
       if (signatureSummary.NotSigned) reasons.push("Część plików nie ma podpisu cyfrowego; sam brak podpisu nie oznacza wirusa.");
       if (process.env.KRYSTA_VIRUSTOTAL_ENABLED !== "1") reasons.push("Sprawdzanie reputacji online nie jest aktywne.");
-      else if (reputationLevels.length < inventory.reputationCandidates.length || reputationLevels.includes("unknown")) reasons.push("Raporty reputacji są niepełne lub niedostępne.");
+      else if (checkedDigests.size < inventory.reputationCandidates.length || reputationLevels.includes("unknown")) reasons.push("Raporty reputacji są niepełne lub niedostępne.");
+      if (inventory.signatureLimitReached || inventory.reputationLimitReached) reasons.push("Przekroczono limit analizy plików; zakres weryfikacji jest niepełny.");
       if (inventory.archives) reasons.push("Wykryto archiwa; zawartość wymaga sprawdzenia po rozpakowaniu.");
       const level = high ? "high" : reasons.length ? "review" : "unverified";
       if (!reasons.length) reasons.push("Brak potwierdzonego wyniku skanowania konkretnych plików.");
