@@ -65,7 +65,7 @@ function Header() {
         for (const device of sony) {
           if (!device.id || seen.has(device.id) || !Number.isFinite(device.percent) || device.percent < 0 || device.percent > 100) continue;
           seen.add(device.id);
-          rows.push(`${device.name || "PlayStation"}: ${device.percent}%`);
+          rows.push(`${device.name || "PlayStation"}: ${device.percent}%${device.charging ? " ⚡ Ładowanie" : device.percent <= 20 ? " · Niska bateria" : ""}`);
         }
         if (!cancelled) setBattery(rows);
       } finally { pending = false; }
