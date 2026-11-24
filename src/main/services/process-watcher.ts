@@ -423,7 +423,7 @@ export const watchProcesses = async () => {
       matchPaths = [executablePath, ...trackingPaths];
     }
 
-    let matchedPath = matchPaths.find((matchPath) => {
+    let matchedPath = [...new Set(matchPaths)].find((matchPath) => {
       const executable = matchPath
         .slice(matchPath.lastIndexOf(platform === "win32" ? "\\" : "/") + 1)
         .toLowerCase();
