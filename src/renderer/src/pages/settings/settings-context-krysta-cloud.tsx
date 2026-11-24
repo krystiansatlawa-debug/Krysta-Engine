@@ -94,6 +94,17 @@ export function SettingsContextKrystaCloud() {
   return (
     <div className="settings-context-panel">
       <div className="settings-context-panel__group">
+        <h3>{pl ? "Centrum kopii zapasowych" : "Backup center"}</h3>
+        <div style={{border:"1px solid #555",borderRadius:6,padding:12,display:"flex",flexDirection:"column",gap:8}}>
+          <strong>{pl ? "Stan konfiguracji" : "Configuration status"}</strong>
+          <p>{pl ? "Dostawca" : "Provider"}: {cfg?.provider === "google" ? "Google Drive" : cfg?.provider === "synology" ? "Synology Drive" : cfg?.provider === "local" ? (pl ? "Folder lokalny" : "Local folder") : cfg?.provider === "hydra" ? "Hydra Cloud" : "…"}</p>
+          <p>{pl ? "Konfiguracja dostępu" : "Access configuration"}: {!cfg || ((cfg.provider==="google" || cfg.provider==="synology") && !accounts) ? (pl ? "Sprawdzanie…" : "Checking…") : cfg.provider==="hydra" ? (pl ? "Zarządzana przez Hydra" : "Managed by Hydra") : (cfg.provider==="google" ? accounts?.google : cfg.provider==="synology" ? accounts?.synology : !!cfg.folder) ? (pl ? "Skonfigurowana (nie oznacza testu połączenia)" : "Configured (not a connection test)") : (pl ? "Wymaga konfiguracji" : "Setup required")}</p>
+          <p>{pl ? "Automatyczne kopie po grze" : "Automatic backups after play"}: {cfg?.provider==="hydra" || !cfg ? "—" : cfg.autoBackup ? (pl ? "Włączone" : "Enabled") : (pl ? "Wyłączone" : "Disabled")}</p>
+          <p>{pl ? "Synchronizacja przed grą" : "Sync before play"}: {cfg?.provider==="google" || cfg?.provider==="synology" ? cfg.syncBeforeLaunch ? (pl ? "Włączona" : "Enabled") : (pl ? "Wyłączona" : "Disabled") : "—"}</p>
+          <p>{pl ? "Zdjęcia / nagrania" : "Screenshots / recordings"}: {cfg?.provider==="google" ? [cfg.backupScreenshots,cfg.backupRecordings].map(v=>v?(pl?"Włączone":"Enabled"):(pl?"Wyłączone":"Disabled")).join(" / ") : "—"}</p>
+          <Button theme="outline" disabled={busy} onClick={()=>{setBusy(true);setAccountError("");setError(false);void Promise.all([window.electron.krystaCloudConfig(),window.electron.krystaCloudAccountStatus()]).then(([c,a])=>{setCfg(c);setAccounts(a);}).catch(()=>setError(true)).finally(()=>setBusy(false));}}>{pl ? "Odśwież stan konfiguracji" : "Refresh configuration status"}</Button>
+          <p>{pl ? "Historię wersji, ręczną synchronizację i przywracanie znajdziesz w menu Chmura wybranej gry. Stan konfiguracji nie potwierdza wykonania kopii." : "Version history, manual sync and restore are available in each game's Cloud menu. Configuration status does not confirm backup completion."}</p>
+        </div>
         <h3>{pl ? "Dostawca chmury" : "Cloud provider"}</h3>
         <select
           aria-label={pl ? "Dostawca chmury" : "Cloud provider"}
