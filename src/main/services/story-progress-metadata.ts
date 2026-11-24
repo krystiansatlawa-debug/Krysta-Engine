@@ -315,6 +315,12 @@ export function parseGenericStoryMetadata(
   };
 
   walk(data, [], 0);
+  // Derive completion only from explicitly identified main campaign counts.
+  if (percent === null && missionProgress?.totalMissions !== undefined &&
+      missionProgress.totalMissions > 0 &&
+      missionProgress.completedMissions <= missionProgress.totalMissions) {
+    percent = Math.round(10000 * missionProgress.completedMissions / missionProgress.totalMissions) / 100;
+  }
   if (percent === null && !saveTitle && !chapter && !missionProgress)
     return null;
   return {
