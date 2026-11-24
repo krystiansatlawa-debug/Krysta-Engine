@@ -35,9 +35,6 @@ const applications = new GameBoostApplications({
   },
   protectedPaths: async () => {
     const paths = new Set<string>([process.execPath]);
-    for (const application of await NativeAddon.listProcesses()) {
-      if (application.exe && protectedNames.has(path.win32.basename(application.exe).toLowerCase())) paths.add(application.exe);
-    }
     for await (const game of gamesSublevel.values()) {
       if (game.executablePath) paths.add(game.executablePath);
       for (const executable of game.trackingExecutablePaths ?? []) {
@@ -74,7 +71,8 @@ const getAllowedApplicationPaths = (paths: unknown) => {
     MAX_GAME_BOOST_APPLICATIONS
   ).filter(
     (executable) =>
-      !windowsExecutableKey(executable).startsWith(systemRoot + "\\")
+      !windowsExecutableKey(executable).startsWith(systemRoot + "\\") &&
+      !protectedNames.has(path.win32.basename(executable).toLowerCase())
   );
 };
 
