@@ -534,6 +534,26 @@ app.on("activate", () => {
 // Some Electron APIs can only be used after initialization finishes.
 // Top-level await blocks Electron startup when running through electron-vite.
 app.once("ready", initializeApp);
+if (process.env.KRYSTA_PERFORMANCE_DIAGNOSTICS === "1") {
+  app.once("ready", () => {
+    let samples = 0;
+    const timer = setInterval(() => {
+      try {
+        const metrics = app.getAppMetrics();
+        logger.info("[Game Boost] Resource baseline", metrics.map(metric => ({
+          type: metric.type,
+          cpuPercent: metric.cpu.percentCPUUsage,
+          workingSetKiB: metric.memory.workingSetSize,
+        })));
+      } catch (error) {
+        logger.warn("[Game Boost] Resource sample unavailable", error);
+      }
+      if (++samples >= 20) clearInterval(timer);
+    }, 15000);
+    timer.unref();
+    app.once("will-quit", () => clearInterval(timer));
+  });
+}
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
