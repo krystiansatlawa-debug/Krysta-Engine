@@ -23,6 +23,7 @@ let preferences = getGameBoostPreferences(null);
 let gameWasRunning = false;
 let minimizeTimer: ReturnType<typeof setTimeout> | undefined;
 let shuttingDown = false;
+let sessionGeneration = 0;
 
 const applications = new GameBoostApplications({
   list: async () => {
@@ -89,6 +90,8 @@ const syncApplications = () => {
   if (process.platform !== "win32" || shuttingDown) return;
   const running = hasTrackedGamesRunning();
   const ended = gameWasRunning && !running;
+  if (gameWasRunning !== running) sessionGeneration++;
+  const generation = sessionGeneration;
   gameWasRunning = running;
   applications.sync(preferences.enabled && running, preferences.closeApplications, preferences.restoreApplications);
   if (running || !preferences.enabled || !preferences.minimizeAfterGame) {
@@ -97,10 +100,10 @@ const syncApplications = () => {
   }
   if (ended && preferences.enabled && preferences.minimizeAfterGame) {
     void applications.waitForIdle().then(() => {
-      if (shuttingDown || hasTrackedGamesRunning() || !preferences.enabled || !preferences.minimizeAfterGame) return;
+      if (generation !== sessionGeneration || shuttingDown || hasTrackedGamesRunning() || !preferences.enabled || !preferences.minimizeAfterGame) return;
       minimizeTimer = setTimeout(() => {
         minimizeTimer = undefined;
-        if (shuttingDown || hasTrackedGamesRunning() || !preferences.enabled || !preferences.minimizeAfterGame) return;
+        if (generation !== sessionGeneration || shuttingDown || hasTrackedGamesRunning() || !preferences.enabled || !preferences.minimizeAfterGame) return;
         const powershell = path.win32.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
         const child = spawn(powershell, ["-NoProfile", "-NonInteractive", "-Command", "(New-Object -ComObject Shell.Application).MinimizeAll()"], { windowsHide: true, stdio: "ignore" });
         child.once("error", error => logger.warn("[Game Boost] Minimize windows", error));
