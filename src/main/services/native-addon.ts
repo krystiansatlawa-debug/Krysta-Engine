@@ -192,6 +192,7 @@ type HydraNativeModule = {
   updateRtssOsd?: (processId: number) => boolean;
   getWindowsSonyHidBatteries?: () => Promise<{ id: string; name: string; percent: number; charging: boolean }[]>;
   windowsControllerDesktopAction?: (action: string, value: number) => boolean;
+  getWindowsControllerAxes?: (index: number) => number[];
   moveWindowsControllerCursor?: (dx: number, dy: number) => boolean;
   getWindowsXboxBatteryLevel?: (index: number) => string | null;
   getWindowsXboxGuidePressed?: () => boolean | null;
@@ -641,6 +642,9 @@ export class NativeAddon {
 
   public static controllerDesktopAction(action: string, value: number): boolean {
     try { return this.load().windowsControllerDesktopAction?.(action, value) ?? false; } catch { return false; }
+  }
+  public static getControllerAxes(index: number): number[] {
+    try { return this.load().getWindowsControllerAxes?.(index) ?? []; } catch { return []; }
   }
   public static moveControllerCursor(dx: number, dy: number): boolean {
     try { return this.load().moveWindowsControllerCursor?.(dx, dy) ?? false; } catch { return false; }
