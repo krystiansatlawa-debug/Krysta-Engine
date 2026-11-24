@@ -28,7 +28,7 @@ import {
   downloadCloudSnapshot,
 } from "./krysta-cloud-accounts";
 import { AchievementMemoryStore } from "@main/services/achievements/achievement-memory-store";
-import type { GameShop } from "@types";
+import type { AutomaticGameStoryProgress, GameStoryProgress, GameShop } from "@types";
 
 type Provider = "google" | "synology" | "local" | "hydra";
 type Config = {
@@ -617,6 +617,33 @@ async function backupAchievementsToGoogle(expected: Config, signal: AbortSignal)
     await achievementBackupState.put(identity, hash);
   } finally { achievementBackupBusy = false; }
 }
+const automaticStoryBackup = db.sublevel<string, AutomaticGameStoryProgress | { automatic: AutomaticGameStoryProgress | null }>("automatic-story-progress", { valueEncoding: "json" });
+const manualStoryBackup = db.sublevel<string, GameStoryProgress>("game-story-progress", { valueEncoding: "json" });
+let storyBackupBusy = false;
+async function backupStoryToGoogle(expected: Config, signal: AbortSignal) {
+  if (storyBackupBusy || signal.aborted || expected.provider !== "google" || !expected.autoBackup) return;
+  storyBackupBusy = true;
+  try {
+    await waitForGameBoostBackgroundSync(signal);
+    const current = await config();
+    if (signal.aborted || current.provider !== "google" || !current.autoBackup || gamesPlaytime.size) return;
+    const identity = await directCloudIdentity("google");
+    const automatic = (await automaticStoryBackup.iterator().all()).flatMap(([key, value]) => {
+      const a = "automatic" in value ? value.automatic : value;
+      if (!a) return [];
+      return [{ key, percent: a.percent, saveTitle: a.saveTitle, saveTitleKind: a.saveTitleKind, missionDescription: a.missionDescription, progressKind: a.progressKind, completedMissions: a.completedMissions, totalMissions: a.totalMissions, savedAt: a.savedAt, trackedQuestId: a.trackedQuestId, summaryKey: a.summaryKey }];
+    });
+    const manual = (await manualStoryBackup.iterator().all()).map(([key, a]) => ({ key, percent: a.percent, missionName: a.missionName, missionDescription: a.missionDescription }));
+    if (!automatic.length && !manual.length) return;
+    const hash = digest(JSON.stringify({ automatic, manual }));
+    const stateKey = "story:" + identity;
+    if (await achievementBackupState.get(stateKey).catch(() => undefined) === hash) return;
+    const latest = await config();
+    if (signal.aborted || gamesPlaytime.size || latest.provider !== "google" || !latest.autoBackup) return;
+    await uploadAchievementBackup(identity, JSON.stringify({ version: 1, createdAt: new Date().toISOString(), automatic, manual }), "story");
+    await achievementBackupState.put(stateKey, hash);
+  } finally { storyBackupBusy = false; }
+}
 type AutoResult = {
   state: "saved" | "skipped" | "error";
   at: string;
@@ -693,6 +720,9 @@ onTrackedGamesRunningChange(() => {
         if (controller.signal.aborted) return;
         await backupAchievementsToGoogle(c, controller.signal).catch(() => {
           void publishKrystaNotification("KRYSTA_ERROR", game.title, "Kopia osiągnięć Google Drive nie powiodła się").catch(() => {});
+        });
+        await backupStoryToGoogle(c, controller.signal).catch(() => {
+          void publishKrystaNotification("KRYSTA_ERROR", game.title, "Kopia postępu fabularnego Google Drive nie powiodła się").catch(() => {});
         });
         autoResults.set(key, {
           state: done ? "saved" : "skipped",
