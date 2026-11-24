@@ -284,10 +284,18 @@ export const findAchievementFiles = (game: Game) => {
   return achievementFiles;
 };
 
-const steamUserIds = await getSteamUsersIds();
-const steamPath = await getSteamLocation().catch(() => null);
+let steamCacheLocations: { users: Awaited<ReturnType<typeof getSteamUsersIds>>; location: Awaited<ReturnType<typeof getSteamLocation>> | null; checkedAt: number } | undefined;
+let steamCachePending: Promise<void> | undefined;
 
-export const findAchievementFileInSteamPath = (game: Game) => {
+export const findAchievementFileInSteamPath = async (game: Game) => {
+  if (!steamCacheLocations || Date.now() - steamCacheLocations.checkedAt >= 60_000) {
+    steamCachePending ??= Promise.all([getSteamUsersIds(), getSteamLocation()]).then(([users, location]) => {
+      steamCacheLocations = { users, location, checkedAt: Date.now() };
+    }).catch(() => {}).finally(() => { steamCachePending = undefined; });
+    await steamCachePending;
+  }
+  const steamUserIds = steamCacheLocations?.users ?? [];
+  const steamPath = steamCacheLocations?.location;
   if (!steamUserIds.length) {
     return [];
   }
