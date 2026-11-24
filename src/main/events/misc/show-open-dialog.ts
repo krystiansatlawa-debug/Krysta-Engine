@@ -20,3 +20,6 @@ const showOpenDialog = async (
 };
 
 registerEvent("showOpenDialog", showOpenDialog);
+
+import { listGameBoostCandidates } from "@main/services/game-boost";
+registerEvent("listGameBoostCandidates", async () => listGameBoostCandidates());
