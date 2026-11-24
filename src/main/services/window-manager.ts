@@ -1480,8 +1480,8 @@ export class WindowManager {
 
       editorWindow.once("ready-to-show", () => {
         editorWindow.show();
-        this.mainWindow?.webContents.openDevTools();
         if (!app.isPackaged || isStaging) {
+          this.mainWindow?.webContents.openDevTools();
           editorWindow.webContents.openDevTools();
         }
       });
