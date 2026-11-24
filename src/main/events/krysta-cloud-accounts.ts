@@ -889,3 +889,19 @@ export async function downloadCloudSnapshot(
     mode: 0o600,
   });
 }
+
+// Dedicated metadata snapshot; never includes credentials or raw save paths.
+export async function uploadAchievementBackup(identity: string, payload: string) {
+  const c = await read();
+  const g = c.google;
+  if (!g || await directCloudIdentity("google") !== identity) throw Error("Cloud account changed");
+  if (Buffer.byteLength(payload) > 16 * 1024 ** 2) throw Error("Achievement backup exceeds 16 MB");
+  const token = await getGoogleAccessToken(g);
+  const boundary = "krysta_" + randomBytes(18).toString("hex");
+  const metadata = { name: "Krysta-achievements-" + new Date().toISOString().replace(/[:.]/g, "-") + ".json", mimeType: "application/json", appProperties: { krystaKind: "achievement-backup-v1" } };
+  const body = "--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json\r\n\r\n" + payload + "\r\n--" + boundary + "--\r\n";
+  const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", { method: "POST", headers: { Authorization: "Bearer " + token.access_token, "Content-Type": "multipart/related; boundary=" + boundary }, body, redirect: "error", signal: AbortSignal.timeout(120000) });
+  if (!response.ok) { await response.body?.cancel(); throw Error("Google Drive achievement backup failed (" + response.status + ")"); }
+  const result = await response.json() as { id?: string };
+  if (!result.id) throw Error("Google Drive backup ID missing");
+}
