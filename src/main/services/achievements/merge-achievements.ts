@@ -234,9 +234,14 @@ const mergeAchievementsLocally = async (
       return imageKey ? { ...achievement, imageKey } : achievement;
     });
 
+  // Historical recovery is persisted but must not trigger a fresh capture.
+  const now = Date.now();
+  const recentAchievements = newAchievements.filter((achievement) =>
+    Number.isFinite(achievement.unlockTime) && achievement.unlockTime >= now - 120_000 && achievement.unlockTime <= now + 5_000
+  );
   const pendingGroupedSouvenir = await captureAchievementSouvenirs(
     game,
-    newAchievements,
+    recentAchievements,
     achievementsData,
     userPreferences,
     publishNotification && !options.skipSouvenirCapture,
@@ -244,10 +249,10 @@ const mergeAchievementsLocally = async (
   );
 
   if (!current()) throw new Error("achievement-sync-context-changed");
-  if (publishNotification) {
+  if (publishNotification && recentAchievements.length > 0) {
     publishAchievementUnlockNotifications({
       game,
-      achievements: newAchievements
+      achievements: recentAchievements
         .toSorted((a, b) => a.unlockTime - b.unlockTime)
         .map((achievement) =>
           achievementsData.find(
