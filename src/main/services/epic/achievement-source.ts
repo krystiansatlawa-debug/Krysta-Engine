@@ -102,7 +102,11 @@ export class EpicAchievementSource {
           .slice(start, start + EPIC_SNAPSHOT_CHUNK_GAMES)
           .map(objectId);
         try {
+          const requestedIds = new Set(ids);
+          const seenTargets = new Set<string>();
           for (const target of await targets(ids, signal)) {
+            if (!requestedIds.has(target.objectId) || seenTargets.has(target.objectId)) continue;
+            seenTargets.add(target.objectId);
             if (target.status === "unsupported")
               unsupported.add(target.objectId);
             if (target.status !== "supported" || !target.achievementSandboxId) {
@@ -200,7 +204,8 @@ export class EpicAchievementSource {
                 }
               } catch (error) {
                 epicAbort(parent);
-                completed.set(sandbox, null);
+                // Do not mark failed sandboxes as completed: another resolved batch
+                // may retry the same sandbox within the existing time budget.
                 if (
                   error instanceof EpicIntegrationError &&
                   error.code === "session-expired"
