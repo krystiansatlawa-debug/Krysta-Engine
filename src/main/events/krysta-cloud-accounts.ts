@@ -533,12 +533,33 @@ export async function uploadCloudSnapshot(
     for (const name of files) {
       const bytes = await payload(name),
         boundary = "krysta_" + randomBytes(18).toString("hex");
+      // Reuse identical bytes through Drive's server-side copy. Each snapshot
+      // still owns independent files, so older versions can be restored alone.
+      const hash = createHash("sha256").update(bytes).digest("hex");
+      if (name !== "manifest.json") {
+        checkPause();
+        const query = "trashed = false and appProperties has { key='krystaSaveHash' and value='" + hash + "' }";
+        const lookup = await fetch("https://www.googleapis.com/drive/v3/files?" + new URLSearchParams({q:query,fields:"files(id,size,sha256Checksum)",pageSize:"100"}),{headers:auth,redirect:"error",signal:AbortSignal.timeout(30000)});
+        if (lookup.ok) {
+          const matches = await lookup.json() as {files?: {id:string;size?:string;sha256Checksum?:string}[]};
+          const source = matches.files?.find(f=>f.sha256Checksum===hash && Number(f.size)===bytes.length && /^[a-zA-Z0-9_-]+$/.test(f.id));
+          if (source) {
+            checkPause();
+            const copied = await fetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(source.id)+"/copy?fields=id",{
+              method:"POST",headers:{...auth,"Content-Type":"application/json"},body:JSON.stringify({name,parents:[folder],appProperties:{krystaSaveHash:hash}}),redirect:"error",signal:AbortSignal.timeout(120000)
+            });
+            if (!copied.ok) throw Error("Google Drive copy failed ("+copied.status+")");
+            await copied.body?.cancel();
+            continue;
+          }
+        } else await lookup.body?.cancel();
+      }
       const body = Buffer.concat([
         Buffer.from(
           "--" +
             boundary +
             "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" +
-            JSON.stringify({ name, parents: [folder] }) +
+            JSON.stringify({ name, parents: [folder], ...(name !== "manifest.json" ? {appProperties:{krystaSaveHash:hash}} : {}) }) +
             "\r\n--" +
             boundary +
             "\r\nContent-Type: application/octet-stream\r\n\r\n"
