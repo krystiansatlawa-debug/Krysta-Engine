@@ -670,6 +670,36 @@ async function backupLibraryToGoogle(expected: Config, signal: AbortSignal) {
     await achievementBackupState.put(stateKey, hash);
   } finally { libraryBackupBusy = false; }
 }
+let settingsBackupBusy = false;
+async function backupSettingsToGoogle(expected: Config, signal: AbortSignal) {
+  if (settingsBackupBusy || signal.aborted || expected.provider !== "google" || !expected.autoBackup) return;
+  settingsBackupBusy = true;
+  try {
+    await waitForGameBoostBackgroundSync(signal);
+    const current = await config();
+    if (signal.aborted || gamesPlaytime.size || current.provider !== "google" || !current.autoBackup) return;
+    const identity = await directCloudIdentity("google");
+    const pick = (source: Record<string, unknown>, keys: string[]) => Object.fromEntries(keys.filter(key => ["boolean", "number", "string"].includes(typeof source[key])).map(key => [key, source[key]]));
+    const preferences = await db.get<string, Record<string, unknown>>(levelKeys.userPreferences);
+    const root = app.getPath("userData");
+    const fps = await readKrystaSettings<Record<string, unknown>>(root, "fps");
+    const updates = await readKrystaSettings<Record<string, unknown>>(root, "updates");
+    const gameUpdates = await readKrystaSettings<Record<string, unknown>>(root, "game-updates");
+    const settings = {
+      preferences: pick(preferences ?? {}, ["language", "gameBoostEnabled", "enableSteamAchievements", "achievementNotificationsEnabled", "achievementSoundVolume", "screenshotsEnabled", "startMinimized", "launchToLibraryPage"]),
+      fps: pick(fps, ["enabled", "position", "output", "hotkey"]),
+      updates: pick(updates, ["automatic", "notifications"]),
+      gameUpdates: pick(gameUpdates, ["enabled", "intervalHours", "notifications", "startup", "pauseDuringPlay", "autoOpenSteamQueue", "autoDownloadEpic", "backupBeforeUpdate"])
+    };
+    const hash = digest(JSON.stringify(settings));
+    const stateKey = "settings:" + identity;
+    if (await achievementBackupState.get(stateKey).catch(() => undefined) === hash) return;
+    const latest = await config();
+    if (signal.aborted || gamesPlaytime.size || latest.provider !== "google" || !latest.autoBackup) return;
+    await uploadAchievementBackup(identity, JSON.stringify({ version: 1, createdAt: new Date().toISOString(), settings }), "settings");
+    await achievementBackupState.put(stateKey, hash);
+  } finally { settingsBackupBusy = false; }
+}
 type AutoResult = {
   state: "saved" | "skipped" | "error";
   at: string;
@@ -752,6 +782,9 @@ onTrackedGamesRunningChange(() => {
         });
         await backupLibraryToGoogle(c, controller.signal).catch(() => {
           void publishKrystaNotification("KRYSTA_ERROR", game.title, "Kopia biblioteki Google Drive nie powiodła się").catch(() => {});
+        });
+        await backupSettingsToGoogle(c, controller.signal).catch(() => {
+          void publishKrystaNotification("KRYSTA_ERROR", game.title, "Kopia ustawień Google Drive nie powiodła się").catch(() => {});
         });
         autoResults.set(key, {
           state: done ? "saved" : "skipped",
