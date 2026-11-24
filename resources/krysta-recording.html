@@ -241,7 +241,7 @@
               await output.finalize();
               if (!target.buffer || target.buffer.byteLength > config.maxBytes)
                 throw Error("Recording size limit reached");
-              s.chunks = [target.buffer];
+              if (!s.discard) s.chunks = [target.buffer];
             }
           } catch (error) {
             s.error ||= error;
@@ -462,6 +462,7 @@
           const blob = new Blob(selectedManual.chunks, {
             type: "video/" + format,
           });
+          selectedManual.chunks = [];
           const data = await new Promise((resolve, reject) => {
             const r = new FileReader();
             r.onload = () => resolve(String(r.result).split(",")[1]);
@@ -476,6 +477,7 @@
             format,
           };
         } finally {
+          selectedManual.chunks = [];
           saving = false;
           if (!ended) startRotation();
         }
@@ -512,6 +514,7 @@
           if (selected.error) throw selected.error;
           const format = selected.format;
           const blob = new Blob(selected.chunks, { type: "video/" + format });
+          selected.chunks = [];
           const data = await new Promise((resolve, reject) => {
             const r = new FileReader();
             r.onload = () => resolve(String(r.result).split(",")[1]);
@@ -522,6 +525,7 @@
         } finally {
           finish();
           stopPreview();
+          if (selected) selected.chunks = [];
           selected = null;
           saving = false;
           if (!ended) startRotation();
