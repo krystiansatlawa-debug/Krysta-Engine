@@ -20,6 +20,9 @@ import { logger } from "./logger";
 import { NativeAddon } from "./native-addon";
 
 let preferences = getGameBoostPreferences(null);
+let gameWasRunning = false;
+let minimizeTimer: ReturnType<typeof setTimeout> | undefined;
+let shuttingDown = false;
 
 const applications = new GameBoostApplications({
   list: async () => {
@@ -83,12 +86,27 @@ export const listGameBoostCandidates = async () => {
 };
 
 const syncApplications = () => {
-  if (process.platform === "win32")
-    applications.sync(
-      preferences.enabled && hasTrackedGamesRunning(),
-      preferences.closeApplications,
-      preferences.restoreApplications
-    );
+  if (process.platform !== "win32" || shuttingDown) return;
+  const running = hasTrackedGamesRunning();
+  const ended = gameWasRunning && !running;
+  gameWasRunning = running;
+  applications.sync(preferences.enabled && running, preferences.closeApplications, preferences.restoreApplications);
+  if (running || !preferences.enabled || !preferences.minimizeAfterGame) {
+    if (minimizeTimer) clearTimeout(minimizeTimer);
+    minimizeTimer = undefined;
+  }
+  if (ended && preferences.enabled && preferences.minimizeAfterGame) {
+    void applications.waitForIdle().then(() => {
+      if (shuttingDown || hasTrackedGamesRunning() || !preferences.enabled || !preferences.minimizeAfterGame) return;
+      minimizeTimer = setTimeout(() => {
+        minimizeTimer = undefined;
+        if (shuttingDown || hasTrackedGamesRunning() || !preferences.enabled || !preferences.minimizeAfterGame) return;
+        const powershell = path.win32.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+        const child = spawn(powershell, ["-NoProfile", "-NonInteractive", "-Command", "(New-Object -ComObject Shell.Application).MinimizeAll()"], { windowsHide: true, stdio: "ignore" });
+        child.once("error", error => logger.warn("[Game Boost] Minimize windows", error));
+      }, 2000);
+    }).catch(error => logger.warn("[Game Boost] Restore before minimizing", error));
+  }
 };
 
 const unsubscribe = onTrackedGamesRunningChange(syncApplications);
@@ -101,6 +119,7 @@ export const normalizeGameBoostPreferencePatch = (
     "gameBoostEnabled",
     "gameBoostPauseBackgroundSync",
     "gameBoostRestoreApplications",
+    "gameBoostMinimizeAfterGame",
   ] as const) {
     if (typeof result[key] !== "boolean") delete result[key];
   }
@@ -123,6 +142,8 @@ export const syncGameBoostPreferences = (
 };
 
 export const shutdownGameBoost = () => {
+  shuttingDown = true;
+  if (minimizeTimer) clearTimeout(minimizeTimer);
   unsubscribe();
   return applications.shutdown();
 };
