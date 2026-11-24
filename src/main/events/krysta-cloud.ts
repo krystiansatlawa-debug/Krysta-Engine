@@ -314,7 +314,7 @@ async function flushPendingCloudSaves() {
           const names:string[] = [];
           for (const f of m.files) {
             if (hasTrackedGamesRunning() || isGameBoostBackgroundSyncPaused()) return;
-            if (typeof f.name!=="string" || !/^\\d+$/.test(f.name) || names.includes(f.name)) return;
+            if (typeof f.name!=="string" || !/^\d+$/.test(f.name) || names.includes(f.name)) return;
             const file = path.join(dir,f.name), st = await fs.lstat(file);
             if (!st.isFile() || st.isSymbolicLink() || st.size!==f.size) return;
             if (f.sha256 !== undefined && (typeof f.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(f.sha256) || await fileHash(file) !== f.sha256)) throw Error("KRYSTA_INTEGRITY: Uszkodzona kopia lokalna");
@@ -536,7 +536,7 @@ ipcMain.handle("krysta:cloud-recovery-export", async (_e, shop:GameShop,id:strin
       await fs.mkdir(dest,{mode:0o700});
       try {
         for (const name of await fs.readdir(temp)) {
-          if (name !== "manifest.json" && !/^\\d+$/.test(name)) throw Error("Invalid recovery file");
+          if (name !== "manifest.json" && !/^\d+$/.test(name)) throw Error("Invalid recovery file");
           await copyVerified(path.join(temp,name),path.join(dest,name));
         }
       } catch(e) { throw Error("Niepełny eksport odzyskiwania: "+dest+" / "+String(e)); }
@@ -841,7 +841,7 @@ async function backupSettingsToGoogle(expected: Config, signal: AbortSignal) {
     if (signal.aborted || gamesPlaytime.size || current.provider !== "google" || !current.autoBackup) return;
     const identity = await directCloudIdentity("google");
     const pick = (source: Record<string, unknown>, keys: string[]) => Object.fromEntries(keys.filter(key => ["boolean", "number", "string"].includes(typeof source[key])).map(key => [key, source[key]]));
-    const preferences = await db.get<string, Record<string, unknown>>(levelKeys.userPreferences);
+    const preferences = await db.get<string, Record<string, unknown>>(levelKeys.userPreferences, {valueEncoding:"json"});
     const root = app.getPath("userData");
     const fps = await readKrystaSettings<Record<string, unknown>>(root, "fps");
     const updates = await readKrystaSettings<Record<string, unknown>>(root, "updates");
