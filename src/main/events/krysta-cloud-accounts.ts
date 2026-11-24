@@ -610,7 +610,7 @@ export async function uploadCloudSnapshot(
 type RemoteManifest = {
   id: string;
   createdAt: string;
-  files: { name: string; original: string; size: number }[];
+  files: { name: string; original: string; size: number; sha256?: string }[];
 };
 const uuidPattern = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
 async function boundedBody(response: Response, limit: number) {
@@ -660,7 +660,8 @@ function validateRemoteManifest(value: unknown, id: string): RemoteManifest {
       typeof f.original !== "string" ||
       !Number.isSafeInteger(f.size) ||
       f.size < 0 ||
-      f.size > 64 * 1024 ** 2
+      f.size > 64 * 1024 ** 2 ||
+      (f.sha256 !== undefined && (typeof f.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(f.sha256)))
     )
       throw Error("Invalid cloud save entry");
     names.add(f.name);
@@ -879,6 +880,8 @@ export async function downloadCloudSnapshot(
     const content = await remote.get(id, f.name, f.size);
     if (!content || content.length !== f.size)
       throw Error("Incomplete cloud save");
+    if (f.sha256 && createHash("sha256").update(content).digest("hex") !== f.sha256)
+      throw Error("KRYSTA_INTEGRITY: Uszkodzona kopia zapisu (SHA-256)");
     await fs.writeFile(path.join(dir, f.name), content, {
       flag: "wx",
       mode: 0o600,
