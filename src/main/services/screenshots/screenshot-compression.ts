@@ -74,12 +74,16 @@ const compress = async (
   };
 };
 
+let compressionQueue: Promise<unknown> = Promise.resolve();
+
 export const compressScreenshotForUpload = async (
   original: Buffer,
   quality: ScreenshotQuality
 ) => {
   try {
-    return await compress(original, quality);
+    const task = compressionQueue.then(() => compress(original, quality));
+    compressionQueue = task.catch(() => undefined);
+    return await task;
   } catch (error) {
     if (error instanceof Error && KEPT_COMPRESSION_ERRORS.has(error.message)) {
       throw error;
