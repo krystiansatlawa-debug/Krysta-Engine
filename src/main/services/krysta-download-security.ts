@@ -27,6 +27,41 @@ export async function detectRegisteredAntivirus(): Promise<{ name: string; produ
   }
 }
 
+// Enumerate the entire tree without following symbolic links or junctions.
+async function inspectDownloadTree(base: string, target: string) {
+  const realBase = await fs.realpath(base);
+  const realTarget = await fs.realpath(target);
+  const relative = path.relative(realBase, realTarget);
+  if (!relative || relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative)) throw new Error("Download outside scan root");
+  const pending = [target];
+  let files = 0;
+  let entries = 0;
+  let bytes = 0;
+  while (pending.length) {
+    const current = pending.pop()!;
+    if (++entries > 500000) throw new Error("Download tree exceeds inspection limit");
+    const stat = await fs.lstat(current);
+    if (stat.isSymbolicLink()) throw new Error("Download contains a symbolic link or junction");
+    const real = await fs.realpath(current);
+    const rel = path.relative(realTarget, real);
+    if (rel === ".." || rel.startsWith(".." + path.sep) || path.isAbsolute(rel)) throw new Error("Download entry outside scan root");
+    if (stat.isDirectory()) {
+      const directory = await fs.opendir(current);
+      for await (const entry of directory) {
+        if (entries + pending.length >= 500000) throw new Error("Download tree exceeds inspection limit");
+        pending.push(path.join(current, entry.name));
+      }
+    } else if (stat.isFile()) {
+      files++;
+      bytes += stat.size;
+    } else {
+      throw new Error("Unsupported download entry");
+    }
+  }
+  if (!files) throw new Error("No files to scan");
+  return { files, bytes };
+}
+
 export async function scanCompletedDownload(download: Download): Promise<boolean> {
   if (process.platform !== "win32") return false;
   if (!download.folderName || !download.downloadPath) return false;
@@ -41,8 +76,8 @@ export async function scanCompletedDownload(download: Download): Promise<boolean
       const products = await detectRegisteredAntivirus();
       logger.info("[Security Shield] Registered antivirus products:", products === null ? "unknown" : products.map((product) => product.name));
       // Registration alone does not establish active protection or a clean scan.
-      const stat = await fs.lstat(target);
-      if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile())) return false;
+      const inventory = await inspectDownloadTree(base, target);
+      logger.info("[Security Shield] Download tree inventory:", inventory);
       const systemRoot = process.env.SystemRoot;
       if (!systemRoot || !path.isAbsolute(systemRoot)) return false;
       const powershell = path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
