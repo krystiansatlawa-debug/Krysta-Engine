@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PresentMonFps } from "./presentmon-fps.js";
+import { adaptiveFpsInterval, PresentMonFps } from "./presentmon-fps.js";
 
 test("counts the active game's presents from its busiest swap chain", () => {
   const frames = new PresentMonFps(123);
@@ -18,4 +18,11 @@ test("counts the active game's presents from its busiest swap chain", () => {
   frames.addLine("Game.exe,123,0x2");
   assert.equal(frames.takeFps(), 100);
   assert.equal(frames.takeFps(), null);
+});
+
+test("adaptive FPS refresh reacts to changes and backs off when stable", () => {
+  assert.equal(adaptiveFpsInterval(null, 60, 0), 1000);
+  assert.equal(adaptiveFpsInterval(60, 90, 0), 500);
+  assert.equal(adaptiveFpsInterval(60, 61, 3), 2000);
+  assert.equal(adaptiveFpsInterval(60, null, 0), 2000);
 });
