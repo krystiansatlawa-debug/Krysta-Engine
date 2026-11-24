@@ -1,7 +1,7 @@
 import { lstat, open, readdir } from "node:fs/promises";
 import path from "node:path";
-import { findStoryMission, findPolishStoryDescription } from "../../shared/story-mission-catalogue";
-import { storyGameTitleCandidates } from "../../shared/story-game-identity";
+import { findPolishStoryDescription } from "../../shared/story-mission-catalogue.js";
+import { storyGameTitleCandidates } from "../../shared/story-game-identity.js";
 import type { AutomaticGameStoryProgress, Game, StorySaveStatus } from "@types";
 import {
   discoverSelectedStorySaveFiles,
@@ -178,7 +178,7 @@ export function parseGtaIvStoryHeader(bytes: Buffer): SaveDetails | null {
   if (terminator < 0) return null;
   const saveTitle = title.slice(0, terminator).trim();
   if (!saveTitle || /[\p{Cc}\p{Cs}\uFFFD]/u.test(saveTitle)) return null;
-  return { percent: null, saveTitle, saveTitleKind: "save-title", missionDescription: findPolishStoryDescription("gtaiv", saveTitle) };
+  return { percent: null, saveTitle, saveTitleKind: "save-title", ...(findPolishStoryDescription("gtaiv", saveTitle) ? { missionDescription: findPolishStoryDescription("gtaiv", saveTitle) } : {}) };
 }
 
 export function parseRockstarStoryHeader(
@@ -208,7 +208,7 @@ export function parseRockstarStoryHeader(
 
   const normalized = saveTitle.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "");
   const summaries = source === "rdr2" ? rdrSummaries : gtaSummaries;
-  return { percent, saveTitle: findStoryMission(source, saveTitle)?.title ?? saveTitle, summaryKey: summaries.get(normalized), missionDescription: summaries.has(normalized) ? undefined : findPolishStoryDescription(source, saveTitle) };
+  return { percent, saveTitle, summaryKey: summaries.get(normalized), ...(!summaries.has(normalized) && findPolishStoryDescription(source, saveTitle) ? { missionDescription: findPolishStoryDescription(source, saveTitle) } : {}) };
 }
 
 export function parseCyberpunkStoryMetadata(json: string): SaveDetails | null {
@@ -257,7 +257,7 @@ export function parseCyberpunkStoryMetadata(json: string): SaveDetails | null {
     return {
       percent: null,
       saveTitle: title,
-      missionDescription: findPolishStoryDescription("cyberpunk", title),
+      ...(findPolishStoryDescription("cyberpunk", title) ? { missionDescription: findPolishStoryDescription("cyberpunk", title) } : {}),
       summaryKey: cyberpunkSummaries.get(
         title
           .toLowerCase()
