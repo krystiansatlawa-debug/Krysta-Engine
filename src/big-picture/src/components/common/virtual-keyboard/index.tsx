@@ -29,6 +29,7 @@ import {
 } from "../../../hooks";
 import {
   useNavigationStore,
+  useGamepadStore,
   useInputModeStore,
   useVirtualKeyboardStore,
 } from "../../../stores";
@@ -209,7 +210,7 @@ function getKeyShortcutLabel(
 ) {
   if (key.type === "backspace") return "X";
   if (key.type === "space") return "Y";
-  if (key.type === "shift" && layer === "alphabetic") return "L3";
+  if (key.type === "shift" && layer !== "symbols") return "L3";
   if (key.type === "toggle-layer") return "R3";
   if (key.type === "enter") return "RT";
   if (key.type === "cursor-left") return "LB";
@@ -712,6 +713,10 @@ function VirtualKeyboardScreenActions({
 }
 
 export function VirtualKeyboardProvider() {
+  const sonyPad = useGamepadStore((state) => {
+    const pad = state.connectedGamepads.find((p) => p.index === state.activeGamepadIndex) ?? state.connectedGamepads[0];
+    return /dualsense|dualshock|playstation|sony/i.test(`${pad?.name ?? ""} ${pad?.layout ?? ""}`);
+  });
   const [target, setTarget] = useState<EditableTarget | null>(null);
   const [isShiftActive, setIsShiftActive] = useState(false);
   const [layer, setLayer] = useState<VirtualKeyboardLayer>("alphabetic");
@@ -1515,7 +1520,9 @@ export function VirtualKeyboardProvider() {
                       isShiftActive
                         ? key.label.toUpperCase()
                         : key.label;
-                    const shortcutLabel = getKeyShortcutLabel(key, layer);
+                    const xboxLabel = getKeyShortcutLabel(key, layer);
+                    const sonyLabels: Record<string, string> = { X: "□", Y: "△", RT: "R2", LB: "L1", RB: "R1" };
+                    const shortcutLabel = sonyPad && xboxLabel ? sonyLabels[xboxLabel] ?? xboxLabel : xboxLabel;
 
                     return (
                       <Button
