@@ -40,6 +40,7 @@ async function inspectDownloadTree(base: string, target: string) {
   const executableExtensions = new Set([".exe", ".dll", ".msi", ".msp", ".sys", ".scr", ".com", ".cpl", ".ocx", ".bat", ".cmd", ".ps1", ".psm1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".hta", ".lnk", ".reg", ".py", ".sh"]);
   const executableTypes: Record<string, number> = {};
   let disguisedExecutables = 0;
+  let archives = 0;
   while (pending.length) {
     const current = pending.pop()!;
     if (++entries > 500000) throw new Error("Download tree exceeds inspection limit");
@@ -58,6 +59,7 @@ async function inspectDownloadTree(base: string, target: string) {
       files++;
       bytes += stat.size;
       const ext = path.extname(current).toLowerCase();
+      if (/\.(zip|rar|7z|tar|gz|bz2|xz|iso|cab|part\d+\.rar|\d{3})$/i.test(current)) archives++;
       const handle = await fs.open(current, "r");
       try {
         const header = Buffer.alloc(2);
@@ -76,10 +78,10 @@ async function inspectDownloadTree(base: string, target: string) {
     }
   }
   if (!files) throw new Error("No files to scan");
-  return { files, bytes, executableTypes, disguisedExecutables };
+  return { files, bytes, executableTypes, disguisedExecutables, archives };
 }
 
-export async function scanCompletedDownload(download: Download): Promise<boolean> {
+export async function scanCompletedDownload(download: Download, afterExtraction = false): Promise<boolean> {
   if (process.platform !== "win32") return false;
   if (!download.folderName || !download.downloadPath) return false;
   const base = path.resolve(download.downloadPath);
@@ -87,7 +89,11 @@ export async function scanCompletedDownload(download: Download): Promise<boolean
   const relative = path.relative(base, target);
   if (!relative || relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative)) return false;
   const existing = active.get(target);
-  if (existing) return existing;
+  if (existing) {
+    if (!afterExtraction) return existing;
+    await existing;
+    return scanCompletedDownload(download);
+  }
   const task = (async () => {
     try {
       const products = await detectRegisteredAntivirus();
