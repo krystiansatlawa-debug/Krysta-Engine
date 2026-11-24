@@ -270,6 +270,7 @@ export interface UserPreferences {
   gameBoostPauseBackgroundSync?: boolean;
   gameBoostCloseApplications?: string[];
   gameBoostRestoreApplications?: boolean;
+  gameBoostMinimizeAfterGame?: boolean;
   screenshotsEnabled?: boolean;
   screenshotsFolderPath?: string;
   screenshotHotkey?: ScreenshotHotkeyBinding;
