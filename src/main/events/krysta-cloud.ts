@@ -51,6 +51,18 @@ async function config(): Promise<Config> {
 async function save(c: Config) {
   return writeKrystaSettings(app.getPath("userData"), "cloud", c);
 }
+let deviceIdPromise: Promise<string> | undefined;
+function cloudDeviceId(): Promise<string> {
+  deviceIdPromise ??= (async () => {
+    const file = path.join(app.getPath("userData"), "krysta-cloud-device-id");
+    const id = randomUUID();
+    await fs.writeFile(file, id, {flag:"wx", mode:0o600}).catch((e: NodeJS.ErrnoException) => { if (e.code !== "EEXIST") throw e; });
+    const value = (await fs.readFile(file, "utf8")).trim();
+    if (!/^[a-f0-9-]{36}$/.test(value)) throw Error("Invalid cloud device identity");
+    return value;
+  })().catch(e => { deviceIdPromise = undefined; throw e; });
+  return deviceIdPromise;
+}
 function digest(s: string) {
   return createHash("sha256").update(s).digest("hex");
 }
@@ -301,6 +313,11 @@ async function backupGame(
       );
       if (comparison.state === "same" && remote[0]?.id === comparison.version)
         return false;
+      // A remote version unknown to this PC must not become superseded
+      // by an automatic upload from an older local installation.
+      if (remote.length && remote[0]?.id !== comparison.version)
+        throw Error("SAVE_CONFLICT: Wykryto kopię z innego komputera. Wybierz wersję w menu Chmura.");
+
     }
     if (
       automatic &&
@@ -363,6 +380,7 @@ async function backupGame(
         JSON.stringify({
           id: uuid,
           createdAt: new Date().toISOString(),
+          deviceId: await cloudDeviceId(),
           kind: beforeUpdate
             ? "pre-update"
             : automatic
