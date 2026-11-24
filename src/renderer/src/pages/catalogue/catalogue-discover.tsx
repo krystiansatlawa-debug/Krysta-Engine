@@ -18,6 +18,7 @@ import type {
   ShopAssets,
   Steam250Game,
   TrendingGame,
+  ShopDetailsWithAssets,
 } from "@types";
 
 import { CatalogueCategories } from "./catalogue-categories";
@@ -29,6 +30,8 @@ const shelves = [
   { id: "new", label: "catalogue_new" },
   { id: CatalogueCategory.Weekly, label: "catalogue_weekly" },
   { id: CatalogueCategory.Achievements, label: "catalogue_achievements" },
+  { id: "rated", label: "rated" },
+  { id: "rising", label: "rising" },
 ] as const;
 type ShelfId = (typeof shelves)[number]["id"];
 type ShelfGames = (ShopAssets | CatalogueSearchResult)[];
@@ -70,10 +73,10 @@ export default function CatalogueDiscover() {
       };
 
       await Promise.all(
-        shelves.map(async ({ id }) => {
+        shelves.filter(({ id }) => id !== "rising").map(async ({ id }) => {
           let games: ShelfGames | null;
           try {
-            if (id === "new") {
+            if (id === "new" || id === "rated") {
               const path = "/catalogue/search";
               const response = await window.electron.hydraApi.post<{
                 edges: CatalogueSearchResult[];
@@ -81,7 +84,7 @@ export default function CatalogueDiscover() {
                 data: {
                   ...catalogueSearchSlice.getInitialState().filters,
                   ...pagination,
-                  ...newest,
+                  ...(id === "rated" ? { sortBy: "reviewScore", sortOrder: "desc" } : newest),
                 },
                 needsAuth: false,
               });
@@ -132,7 +135,16 @@ export default function CatalogueDiscover() {
     navigate("/catalogue/search");
   };
 
-  const games = results[activeShelf];
+  const rising = useMemo(() => {
+    const hot = results[CatalogueCategory.Hot];
+    const weekly = results[CatalogueCategory.Weekly];
+    if (hot === null || weekly === null) return null;
+    if (!hot || !weekly) return undefined;
+    const ranks = new Map(weekly.map((game, index) => [`${game.shop}:${game.objectId}`, index]));
+    return hot.map((game, index) => ({ game, gain: (ranks.get(`${game.shop}:${game.objectId}`) ?? weekly.length) - index }))
+      .filter(entry => entry.gain > 0).sort((a, b) => b.gain - a.gain).map(entry => entry.game);
+  }, [results]);
+  const games = activeShelf === "rising" ? rising : results[activeShelf];
   const allGames = useMemo(
     () => Object.values(results).flatMap((games) => games ?? []),
     [results]
@@ -150,9 +162,25 @@ export default function CatalogueDiscover() {
   const preview =
     games?.find((game) => gameKey(game) === hoveredGame) ?? games?.[0];
 
+  const [previewDetails, setPreviewDetails] = useState<{key: string; data: ShopDetailsWithAssets}>();
+  const previewShop = preview?.shop;
+  const previewId = preview?.objectId;
+  const previewKey = preview ? gameKey(preview) : "";
+  useEffect(() => {
+    if (!previewShop || !previewId || !hoveredGame) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      if (document.hidden) return;
+      window.electron.getGameShopDetails(previewId, previewShop, i18n.language.split("-")[0]).then(data => {
+        if (active && data) setPreviewDetails({key: previewKey, data});
+      }).catch(() => {});
+    }, 350);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [previewShop, previewId, previewKey, hoveredGame, i18n.language]);
+  const screenshots = previewDetails?.key === previewKey ? previewDetails.data.screenshots?.slice(0, 3) : undefined;
   return (
     <section className="catalogue-discover">
-      <Hero alternatives={alternatives} />
+      <Hero alternatives={alternatives} onView={remember} />
 
       <section
         className="catalogue-discover__shelf catalogue-store-width"
@@ -169,11 +197,12 @@ export default function CatalogueDiscover() {
                 setHoveredGame(undefined);
               }}
             >
-              {t(label)}
+              {id === "rated" ? (pl ? "Najwyżej oceniane" : "Top rated") : id === "rising" ? (pl ? "Zyskujące popularność" : "Rising") : t(label)}
             </button>
           ))}
         </div>
 
+        {activeShelf === "rising" && <small>{pl ? "Porównanie pozycji na aktualnej i tygodniowej liście popularności (nie pomiar wzrostu liczby graczy)." : "Current versus weekly popularity rank (not player count growth)."}</small>}
         {games === null ? (
           <div className="catalogue-discover__status" role="status">
             <p>{t("browse_load_error")}</p>
@@ -244,6 +273,7 @@ export default function CatalogueDiscover() {
                       ))}
                     </div>
                   )}
+                  {screenshots?.length ? screenshots.map(screen => <img key={screen.id} src={screen.path_thumbnail} alt="" loading="lazy" />) : null}
                   {preview.libraryImageUrl && (
                     <img src={preview.libraryImageUrl} alt="" loading="lazy" />
                   )}
@@ -253,6 +283,7 @@ export default function CatalogueDiscover() {
           </div>
         )}
 
+        {activeShelf === "rated" && <Button theme="outline" size="small" onClick={() => openResults({sortBy: "reviewScore", sortOrder: "desc"})}>{pl ? "Zobacz wszystkie" : "View all"}</Button>}
         {activeShelf === "new" && <Link to="/catalogue/releases">{pl ? "Kalendarz premier" : "Release calendar"}</Link>}
         {activeShelf === CatalogueCategory.Hot && <Link to="/catalogue/top">{pl ? "Ranking popularności" : "Popularity ranking"}</Link>}
         {activeShelf === "new" && games && (

@@ -16,7 +16,8 @@ const detailsCache = new Map<string, ShopDetailsWithAssets>();
 
 export function Hero({
   alternatives,
-}: Readonly<{ alternatives: TrendingGame[] }>) {
+  onView,
+}: Readonly<{ alternatives: TrendingGame[]; onView?: (game: TrendingGame) => void }>) {
   const { i18n, t } = useTranslation(["home", "catalogue"]);
   const language = i18n.language.split("-")[0];
   const [featured, setFeatured] = useState(
@@ -94,8 +95,9 @@ export function Hero({
           response,
           "/catalogue/featured"
         );
-        featuredCache.set(language, games);
-        if (current) setFeatured(games);
+        featuredCache.set(language, games.slice(0, 16));
+        if (featuredCache.size > 3) { const oldest = featuredCache.keys().next().value; if (oldest !== undefined) featuredCache.delete(oldest); }
+        if (current) setFeatured(games.slice(0, 16));
       })
       .catch(() => { if (current) setFeaturedError(true); });
     return () => {
@@ -119,6 +121,7 @@ export function Hero({
       .then((value: ShopDetailsWithAssets | null) => {
         if (!value) return;
         detailsCache.set(detailKey, value);
+        if (detailsCache.size > 12) { const oldest = detailsCache.keys().next().value; if (oldest !== undefined) detailsCache.delete(oldest); }
         if (current) setDetails({ key: detailKey, value });
       })
       .catch(() => {});
@@ -169,6 +172,7 @@ export function Hero({
         <Link
           className="catalogue-campaign"
           to={campaign.uri}
+          onClick={() => onView?.(campaign)}
           aria-label={campaign.title}
         >
           <img key={banner} src={banner} alt="" onError={() => setFailedCampaignImages((images) => new Set([...images, banner]))} />
@@ -208,6 +212,7 @@ export function Hero({
             {playingTrailer ? <video key={detailKey} className="store-featured__image" src={safeTrailer} controls autoPlay preload="none" onEnded={() => setTrailerKey(null)} onError={() => setTrailerKey(null)} /> : <Link
               className="store-featured__image"
               to={selected.uri}
+              onClick={() => onView?.(selected)}
               aria-label={selected.title}
             >
               {(preview ?? cover) && (
@@ -215,7 +220,7 @@ export function Hero({
               )}
             </Link>}
             <div className="store-featured__details" key={detailKey}>
-              <Link to={selected.uri} className="store-featured__title">
+              <Link to={selected.uri} onClick={() => onView?.(selected)} className="store-featured__title">
                 {selected.title}
               </Link>
               {screens.length > 0 ? (
