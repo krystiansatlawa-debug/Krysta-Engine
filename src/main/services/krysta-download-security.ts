@@ -304,7 +304,7 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       if (report.enabled !== true || report.realtime !== true) reasons.push("Ochrona Microsoft Defender jest niedostępna lub nieaktywna.");
       if (report.signaturesOutOfDate !== false) reasons.push("Nie potwierdzono aktualności sygnatur antywirusowych.");
       if (report.recentDetections !== 0 && !high) reasons.push("Nie udało się potwierdzić liczby wykryć.");
-      if (signatureSummary.Unknown || signatureSummary.UnknownError) reasons.push("Nie udało się zweryfikować części podpisów cyfrowych.");
+      if (signatureSummary.Unknown || signatureSummary.UnknownError || signatureSummary.NotSupportedFileFormat || signatureSummary.Incompatible) reasons.push("Nie udało się zweryfikować części podpisów cyfrowych.");
       if (signatureSummary.NotSigned) reasons.push("Część plików nie ma podpisu cyfrowego; sam brak podpisu nie oznacza wirusa.");
       if (process.env.KRYSTA_VIRUSTOTAL_ENABLED !== "1") reasons.push("Sprawdzanie reputacji online nie jest aktywne.");
       else if (checkedDigests.size < inventory.reputationCandidates.length || reputationLevels.includes("unknown")) reasons.push("Raporty reputacji są niepełne lub niedostępne.");
