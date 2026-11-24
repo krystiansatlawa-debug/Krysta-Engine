@@ -597,7 +597,7 @@ test("in a NVIDIA-only system F9 loads the muxer and saves an MP4", async (t) =>
   assert.equal((await f.recordingState()).clips.length, 0);
 });
 
-test("a hybrid system records WebM because the video encoder vendor is ambiguous", async (t) => {
+test("a hybrid system attempts hardware encoding and falls back to WebM", async (t) => {
   const f = await serviceFixture(
     t,
     {},
@@ -610,8 +610,8 @@ test("a hybrid system records WebM because the video encoder vendor is ambiguous
   );
   f.press();
   await waitFor(() => f.notices.includes("started"));
-  assert.ok(f.calls.some((script) => script.includes('"preferNvidia":false')));
-  assert.ok(!f.calls.some((script) => script.includes("krystaRecordingMuxer")));
+  assert.ok(f.calls.some((script) => script.includes('"preferNvidia":true')));
+  assert.ok(f.calls.some((script) => script.includes("krystaRecordingMuxer")));
   f.press();
   await waitFor(() => f.notices.includes("saved"));
   assert.equal((await f.recordingState()).clips[0].format, "webm");
