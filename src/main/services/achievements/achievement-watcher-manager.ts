@@ -44,6 +44,8 @@ const readEmulatorTrophyUnlocks = (game: Game) =>
 const fileStats: Map<string, number> = new Map();
 const fltFiles: Map<string, Set<string>> = new Map();
 const processingGameKeys = new Set<string>();
+const lastRecoveryScan = new Map<string, number>();
+const RECOVERY_INTERVAL_MS = 5 * 60_000;
 
 const mergeDetectedAchievements = async (
   game: Game,
@@ -191,6 +193,13 @@ const processChangedAchievementFiles = async (
 
   try {
     const changedFiles = achievementFiles.filter(hasAchievementFileChanged);
+    const recoveryDue = Date.now() - (lastRecoveryScan.get(gameKey) ?? 0) >= RECOVERY_INTERVAL_MS;
+    if (recoveryDue && achievementFiles.length) {
+      const recovered = achievementFiles.flatMap((file) => parseAchievementFile(file.filePath, file.type));
+      const count = await mergeDetectedAchievements(game, recovered);
+      lastRecoveryScan.set(gameKey, Date.now());
+      return count;
+    }
 
     if (!changedFiles.length) return 0;
 
@@ -199,6 +208,11 @@ const processChangedAchievementFiles = async (
     );
 
     return await mergeDetectedAchievements(game, unlockedAchievements);
+  } catch (error) {
+    lastRecoveryScan.delete(gameKey);
+    for (const file of achievementFiles) fileStats.delete(file.filePath);
+    achievementsLogger.error("Achievement scan failed; will retry", gameKey, error);
+    return 0;
   } finally {
     processingGameKeys.delete(gameKey);
   }
@@ -251,6 +265,7 @@ export class AchievementWatcherManager {
     achievementSyncWorker.stop();
     void achievementSyncWorker.trigger();
     this.alreadySyncedGames.clear();
+    lastRecoveryScan.clear();
     AchievementMemoryStore.clear();
     UnlockedAchievementsCache.clear();
     CombinedAchievementsRequests.clear();
@@ -258,6 +273,7 @@ export class AchievementWatcherManager {
 
   public static forgetAchievementFiles(gameKey: string, filePaths: string[]) {
     this.alreadySyncedGames.delete(gameKey);
+    lastRecoveryScan.delete(gameKey);
 
     for (const filePath of filePaths) {
       fileStats.delete(filePath);
