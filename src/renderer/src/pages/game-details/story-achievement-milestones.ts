@@ -1,5 +1,5 @@
 import type { Game, UserAchievement } from "@types";
-import { storyGameTitleCandidates } from "../../../../shared/story-game-identity";
+import { storyGameTitleCandidates } from "../../../../shared/story-game-identity.js";
 
 type Marker = {
   id: string;
