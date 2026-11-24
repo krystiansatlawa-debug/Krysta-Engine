@@ -34,7 +34,7 @@ const schemas: Record<
       ["google", "synology", "local", "hydra"].includes(String(o.provider)) &&
       opt(o, "folder", abs) &&
       opt(o, "autoBackup", bool) &&
-      opt(o, "syncBeforeLaunch", bool),
+      opt(o, "syncBeforeLaunch", bool) && opt(o, "backupScreenshots", bool) && opt(o, "backupRecordings", bool),
   },
   fps: {
     filename: "krysta-fps.json",
