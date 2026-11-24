@@ -20,7 +20,7 @@ export function GameLanguageSection() {
     return languageArray.map((lang) => ({
       language: lang.replace(/<[^>]*>/g, "").replaceAll("*", "").trim(),
       hasAudio: lang.includes("*"),
-    }));
+    })).filter(lang => lang.language.length > 0);
   }, [shopDetails?.supported_languages]);
 
   if (languages.length === 0) {
