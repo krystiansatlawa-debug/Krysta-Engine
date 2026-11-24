@@ -1,5 +1,6 @@
 import { lstat, open, readdir } from "node:fs/promises";
 import path from "node:path";
+import { storyGameTitleCandidates } from "../../shared/story-game-identity";
 import type { AutomaticGameStoryProgress, Game, StorySaveStatus } from "@types";
 import {
   discoverSelectedStorySaveFiles,
@@ -52,6 +53,12 @@ const executables: ReadonlyMap<string, StorySaveSource> = new Map([
 
 const gameTitles: ReadonlyMap<string, StorySaveSource> = new Map([
   ["grand theft auto iv", "gtaiv"],
+  ["gta iv", "gtaiv"],
+  ["gta 4", "gtaiv"],
+  ["grand theft auto 4", "gtaiv"],
+  ["gta 5", "gtav"],
+  ["gta 5 legacy", "gtav"],
+  ["gta 5 enhanced", "gtav-enhanced"],
   ["grand theft auto iv the complete edition", "gtaiv"],
   ["grand theft auto episodes from liberty city", "gtaiv"],
   ["grand theft auto v", "gtav"],
@@ -99,11 +106,10 @@ export function identifyStorySaveSource(
   );
   if (sources.size > 0) return sources.size === 1 ? [...sources][0] : undefined;
   if (game.shop !== "launchbox") {
-    const title = game.title
-      ?.toLowerCase()
-      .replace(/[^a-z0-9]+/g, " ")
-      .trim();
-    return gameTitles.get(title ?? "");
+    for (const title of storyGameTitleCandidates(game.title ?? "")) {
+      const source = gameTitles.get(title);
+      if (source) return source;
+    }
   }
   return undefined;
 }
