@@ -1,4 +1,4 @@
-import { hasTrackedGamesRunning } from "../services/game-running-state";
+import { hasTrackedGamesRunning, onTrackedGamesRunningChange } from "../services/game-running-state";
 import { screen, BrowserWindow } from "electron";
 import { NativeAddon } from "@main/services/native-addon";
 import { registerEvent } from "./register-event";
@@ -89,7 +89,30 @@ registerEvent("moveControllerCursor", (_event, dx: number, dy: number) => {
   return NativeAddon.moveControllerCursor(dx, dy);
 });
 
+const heldControllerButtons = new Set<string>();
+const releaseControllerButtons = () => {
+  for (const side of heldControllerButtons) NativeAddon.controllerDesktopAction(side + "Up", 0);
+  heldControllerButtons.clear();
+};
+onTrackedGamesRunningChange(() => { if (hasTrackedGamesRunning()) releaseControllerButtons(); });
 registerEvent("controllerPointerAction", (_event, action: string, value: number) => {
+  if (action === "releaseAll") { releaseControllerButtons(); return true; }
+  if (action === "leftUp" || action === "rightUp") {
+    const side = action.slice(0, -2);
+    if (!heldControllerButtons.has(side)) return true;
+    heldControllerButtons.delete(side);
+    return NativeAddon.controllerDesktopAction(action, 0);
+  }
+  if (process.platform === "win32" && !hasTrackedGamesRunning()) {
+    if (["volumeUp","volumeDown","switchWindow","minimize","maximize","showDesktop"].includes(action)) return NativeAddon.controllerDesktopAction(action, 0);
+    if (action === "leftDown" || action === "rightDown") {
+      const side = action.slice(0, -4);
+      if (heldControllerButtons.has(side)) return true;
+      const ok = NativeAddon.controllerDesktopAction(action, 0);
+      if (ok) heldControllerButtons.add(side);
+      return ok;
+    }
+  }
   if (process.platform !== "win32" || hasTrackedGamesRunning()) return false;
   if (action === "scroll" || action === "horizontalScroll") {
     if (!Number.isInteger(value) || Math.abs(value) > 3) return false;
