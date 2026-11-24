@@ -351,6 +351,7 @@
     "story_progress_from_achievements": "Campaign milestone confirmed by account achievements",
     "story_progress_confirmed_chapter": "Completed chapter {{chapter}} of {{total}}",
     "story_progress_confirmed_finale": "The account confirms the campaign finale.",
+    "story_progress_achievement_review": "The save indicates story completion, but Krysta has not confirmed a finale achievement. Check achievement synchronization; not every game has such an achievement.",
     "story_progress_diagnostic_heading": "Save diagnostics",
     "story_progress_diagnostic_not-found": "No save found. Save locally or select the save folder.",
     "story_progress_diagnostic_unreadable": "Reading failed. Check folder access and retry.",
