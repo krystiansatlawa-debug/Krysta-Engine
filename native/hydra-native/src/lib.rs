@@ -697,3 +697,19 @@ pub fn decrypt_ps4_pkg_sectors(
     ps4_xts::decrypt_sectors(&tweak_key, &data_key, &mut data, first_sector as u64)
         .map_err(Error::from_reason)
 }
+
+#[napi]
+pub fn move_windows_controller_cursor(dx: i32, dy: i32) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{SendInput, INPUT, INPUT_MOUSE, MOUSEEVENTF_MOVE};
+        let mut input: INPUT = unsafe { std::mem::zeroed() };
+        input.r#type = INPUT_MOUSE;
+        input.Anonymous.mi.dx = dx.clamp(-40, 40);
+        input.Anonymous.mi.dy = dy.clamp(-40, 40);
+        input.Anonymous.mi.dwFlags = MOUSEEVENTF_MOVE;
+        unsafe { SendInput(1, &input, std::mem::size_of::<INPUT>() as i32) == 1 }
+    }
+    #[cfg(not(target_os = "windows"))]
+    { let _ = (dx, dy); false }
+}
