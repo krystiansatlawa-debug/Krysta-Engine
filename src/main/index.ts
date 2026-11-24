@@ -537,13 +537,18 @@ app.once("ready", initializeApp);
 if (process.env.KRYSTA_PERFORMANCE_DIAGNOSTICS === "1") {
   app.once("ready", () => {
     let samples = 0;
+    const baseline = new Map<number, number>();
     const timer = setInterval(() => {
       try {
         const metrics = app.getAppMetrics();
+        const active = new Set(metrics.map(metric => metric.pid));
+        for (const pid of baseline.keys()) if (!active.has(pid)) baseline.delete(pid);
+        for (const metric of metrics) if (!baseline.has(metric.pid)) baseline.set(metric.pid, metric.memory.workingSetSize);
         logger.info("[Game Boost] Resource baseline", metrics.map(metric => ({
           type: metric.type,
           cpuPercent: metric.cpu.percentCPUUsage,
           workingSetKiB: metric.memory.workingSetSize,
+          growthKiB: metric.memory.workingSetSize - (baseline.get(metric.pid) ?? metric.memory.workingSetSize),
         })));
       } catch (error) {
         logger.warn("[Game Boost] Resource sample unavailable", error);
