@@ -329,6 +329,7 @@ declare global {
     setWindowsGameBarControllerEnabled: (
       enabled: boolean
     ) => Promise<boolean | null>;
+    krystaCloudMedia: (kind: string, enabled: boolean) => Promise<{provider: string; folder?: string; autoBackup?: boolean; syncBeforeLaunch?: boolean; backupScreenshots?: boolean; backupRecordings?: boolean}>;
     krystaCloudAuto: (enabled: boolean) => Promise<{
       provider: string;
       folder?: string;
