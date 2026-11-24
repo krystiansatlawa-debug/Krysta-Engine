@@ -41,7 +41,7 @@ export async function showRecordingNotice(
   });
   overlay = win;
   try {
-    win.setIgnoreMouseEvents(true, { forward: true });
+    win.setIgnoreMouseEvents(true);
     win.setAlwaysOnTop(true, "screen-saver");
     await win.loadFile(toastHtml, { query: { state, shortcut } });
     if (win.isDestroyed() || overlay !== win) return;
