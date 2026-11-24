@@ -14,7 +14,7 @@ import { getCloudSavePathContext } from "@main/services/cloud-save/cloud-save-ga
 import { NativeAddon } from "@main/services/native-addon";
 import { SystemPath } from "@main/services/system-path";
 import { getRecompilationSaveRules } from "@main/services/cloud-save/recompilation-cloud-save";
-import { waitForGameBoostBackgroundSync } from "@main/services/game-boost-background-sync";
+import { waitForGameBoostBackgroundSync, isGameBoostBackgroundSyncPaused } from "@main/services/game-boost-background-sync";
 import {
   gamesPlaytime,
   hasTrackedGamesRunning,
@@ -280,7 +280,7 @@ type PendingCloudSave = {shop:GameShop; id:string; provider:"google"|"synology";
 const pendingCloudSaves = db.sublevel<string, PendingCloudSave>("krysta-pending-cloud-saves",{valueEncoding:"json"});
 let pendingCloudBusy = false;
 async function flushPendingCloudSaves() {
-  if (pendingCloudBusy || !net.isOnline() || hasTrackedGamesRunning()) return;
+  if (pendingCloudBusy || !net.isOnline() || hasTrackedGamesRunning() || isGameBoostBackgroundSyncPaused()) return;
   pendingCloudBusy = true;
   try {
     for await (const [queueKey, item] of pendingCloudSaves.iterator()) {
@@ -313,6 +313,7 @@ async function flushPendingCloudSaves() {
           }
           const names:string[] = [];
           for (const f of m.files) {
+            if (hasTrackedGamesRunning() || isGameBoostBackgroundSyncPaused()) return;
             if (typeof f.name!=="string" || !/^\\d+$/.test(f.name) || names.includes(f.name)) return;
             const file = path.join(dir,f.name), st = await fs.lstat(file);
             if (!st.isFile() || st.isSymbolicLink() || st.size!==f.size) return;
@@ -321,7 +322,7 @@ async function flushPendingCloudSaves() {
           }
           const latest = await config();
           if (hasTrackedGamesRunning() || latest.provider!==item.provider || (item.automatic && !latest.autoBackup)) return;
-          await uploadCloudSnapshot(item.provider,item.identity,ctx.remoteKey,item.version,dir,names);
+          await uploadCloudSnapshot(item.provider,item.identity,ctx.remoteKey,item.version,dir,names, () => hasTrackedGamesRunning() || isGameBoostBackgroundSyncPaused());
           await pendingCloudSaves.del(queueKey);
         });
       } catch {
@@ -484,7 +485,7 @@ async function backupGame(
         await pendingCloudSaves.put(queueKey,item);
         if (net.isOnline()) {
           try {
-            await uploadCloudSnapshot(provider,identity!,remoteKey,uuid,destination,entries.map(e=>e.name));
+            await uploadCloudSnapshot(provider,identity!,remoteKey,uuid,destination,entries.map(e=>e.name), () => !!signal?.aborted || (automatic && (hasTrackedGamesRunning() || isGameBoostBackgroundSyncPaused())));
             await pendingCloudSaves.del(queueKey);
             await publishKrystaNotification("KRYSTA_CLOUD",game.title,"Kopia zapisów wykonana").catch(()=>{});
             return true;
