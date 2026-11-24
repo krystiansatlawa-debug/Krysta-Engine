@@ -7,7 +7,7 @@ import fs from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
-import { gamesSublevel, levelKeys } from "@main/level";
+import { db, gamesSublevel, levelKeys } from "@main/level";
 import { publishKrystaNotification } from "@main/services/notifications/krysta-notifications";
 import { Ludusavi } from "@main/services/ludusavi";
 import { getCloudSavePathContext } from "@main/services/cloud-save/cloud-save-game-context";
@@ -22,10 +22,12 @@ import {
 } from "@main/services/game-running-state";
 import {
   directCloudIdentity,
+  uploadAchievementBackup,
   uploadCloudSnapshot,
   listRemoteCloudSnapshots,
   downloadCloudSnapshot,
 } from "./krysta-cloud-accounts";
+import { AchievementMemoryStore } from "@main/services/achievements/achievement-memory-store";
 import type { GameShop } from "@types";
 
 type Provider = "google" | "synology" | "local" | "hydra";
@@ -594,6 +596,27 @@ ipcMain.handle(
     restoreGame(shop, id, version)
 );
 
+const achievementBackupState = db.sublevel<string, string>("krysta-google-achievement-backup", { valueEncoding: "json" });
+let achievementBackupBusy = false;
+async function backupAchievementsToGoogle(expected: Config, signal: AbortSignal) {
+  if (achievementBackupBusy || signal.aborted || expected.provider !== "google" || !expected.autoBackup) return;
+  achievementBackupBusy = true;
+  try {
+    await waitForGameBoostBackgroundSync(signal);
+    const current = await config();
+    if (signal.aborted || current.provider !== "google" || !current.autoBackup || gamesPlaytime.size) return;
+    const identity = await directCloudIdentity("google");
+    const games = Array.from(AchievementMemoryStore.all(), ([key, entry]) => ({
+      key, unlocked: entry.unlockedAchievements.filter(a => typeof a.name === "string" && Number.isFinite(a.unlockTime) && a.unlockTime > 0).map(a => ({ name: a.name, unlockTime: a.unlockTime, hardcoreUnlockTime: a.hardcoreUnlockTime }))
+    })).filter(g => g.unlocked.length);
+    if (!games.length) return;
+    const hash = digest(JSON.stringify(games));
+    if (await achievementBackupState.get(identity).catch(() => undefined) === hash) return;
+    if (signal.aborted || gamesPlaytime.size || (await config()).provider !== "google") return;
+    await uploadAchievementBackup(identity, JSON.stringify({ version: 1, createdAt: new Date().toISOString(), games }));
+    await achievementBackupState.put(identity, hash);
+  } finally { achievementBackupBusy = false; }
+}
 type AutoResult = {
   state: "saved" | "skipped" | "error";
   at: string;
@@ -668,6 +691,9 @@ onTrackedGamesRunningChange(() => {
         if (controller.signal.aborted || isTrackedGameKeyRunning(key)) return;
         const done = await backupGame(game.shop, game.objectId, true, c, false, controller.signal);
         if (controller.signal.aborted) return;
+        await backupAchievementsToGoogle(c, controller.signal).catch(() => {
+          void publishKrystaNotification("KRYSTA_ERROR", game.title, "Kopia osiągnięć Google Drive nie powiodła się").catch(() => {});
+        });
         autoResults.set(key, {
           state: done ? "saved" : "skipped",
           at: new Date().toISOString(),
