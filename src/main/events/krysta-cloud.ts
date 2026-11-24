@@ -814,7 +814,7 @@ async function backupLibraryToGoogle(expected: Config, signal: AbortSignal) {
     const current = await config();
     if (signal.aborted || current.provider !== "google" || !current.autoBackup || gamesPlaytime.size) return;
     const identity = await directCloudIdentity("google");
-    const games = [];
+    const games: { shop: string; objectId: string; title: string; favorite?: boolean; isPinned?: boolean; playTimeInMilliseconds: number; collectionIds?: string[]; collectionPositions?: Record<string, number> }[] = [];
     for await (const game of gamesSublevel.values()) {
       if (signal.aborted || gamesPlaytime.size) return;
       if (game.isDeleted) continue;
