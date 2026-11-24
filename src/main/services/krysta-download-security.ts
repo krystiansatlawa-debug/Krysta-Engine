@@ -124,6 +124,7 @@ export async function recheckAmbiguousReputation(sha256: string, initial: Awaite
 export function assessReputation(report: Awaited<ReturnType<typeof lookupFileReputation>>) {
   if (report.status !== "reported" || !report.stats) return { level: "unknown", reason: "Brak wiarygodnego raportu reputacji.", requiresReview: true };
   const { malicious, suspicious, harmless, undetected } = report.stats;
+  if (![malicious, suspicious, harmless, undetected].every(value => Number.isSafeInteger(value) && value >= 0)) return { level: "unknown", reason: "Nieprawidłowe liczniki raportu reputacji.", requiresReview: true };
   if (malicious >= 2) return { level: "high", reason: "Co najmniej dwa silniki zgłaszają zagrożenie; wymagana weryfikacja.", requiresReview: true };
   if (malicious > 0 || suspicious > 0) return { level: "ambiguous", reason: "Niejednoznaczne wykrycie. Możliwy fałszywy alarm, ale nie potwierdzono bezpieczeństwa.", requiresReview: true };
   const date = report.analysisDate;
