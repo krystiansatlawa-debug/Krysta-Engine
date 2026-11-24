@@ -99,8 +99,37 @@ async function selectDesktopClient(): Promise<DesktopClient | null> {
     );
   return desktopClient(data.installed.client_id, data.installed.client_secret);
 }
+async function googleRetryFetch(url: string, init: RequestInit, timeout = 30000, refresh?: () => Promise<string>): Promise<Response> {
+  let refreshed = false;
+  for (let attempt = 0; ; attempt++) {
+    let response: Response;
+    try {
+      response = await fetch(url, { ...init, signal: AbortSignal.timeout(timeout) });
+    } catch (error) {
+      if (attempt >= 2) throw error;
+      await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** attempt));
+      continue;
+    }
+    if (response.status === 401 && refresh && !refreshed) {
+      refreshed = true;
+      await response.body?.cancel();
+      const headers = new Headers(init.headers);
+      headers.set("Authorization", "Bearer " + await refresh());
+      init = { ...init, headers };
+      continue;
+    }
+    if (attempt >= 2 || ![408, 429, 500, 502, 503, 504].includes(response.status)) return response;
+    const retryAfter = response.headers.get("Retry-After");
+    const seconds = retryAfter === null ? 0 : Number(retryAfter);
+    const delay = Number.isFinite(seconds) ? Math.max(1000 * 2 ** attempt, seconds * 1000) : 1000 * 2 ** attempt;
+    if (delay > 30000) return response;
+    await response.body?.cancel();
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+}
 async function tokenRequest(params: Record<string, string>) {
-  const r = await fetch("https://oauth2.googleapis.com/token", {
+  const request = params.grant_type === "refresh_token" ? googleRetryFetch : fetch;
+  const r = await request("https://oauth2.googleapis.com/token", {
     method: "POST",
     body: new URLSearchParams(params),
     signal: AbortSignal.timeout(30000),
@@ -645,13 +674,13 @@ async function remoteCloud(
           pageSize: "100",
         });
         if (page) params.set("pageToken", page);
-        const res = await fetch(
+        const res = await googleRetryFetch(
           "https://www.googleapis.com/drive/v3/files?" + params,
           {
             headers: auth,
             redirect: "error",
             signal: AbortSignal.timeout(30000),
-          }
+          }, 30000, async () => (await getGoogleAccessToken(g, true)).access_token
         );
         const data = JSON.parse(
           (await boundedBody(res, 2 * 1024 ** 2)).toString("utf8")
@@ -702,7 +731,7 @@ async function remoteCloud(
         if (!children.length) return null;
         if (children.length !== 1) throw Error("Duplicate cloud file");
         return boundedBody(
-          await fetch(
+          await googleRetryFetch(
             "https://www.googleapis.com/drive/v3/files/" +
               children[0].id +
               "?alt=media",
@@ -710,7 +739,7 @@ async function remoteCloud(
               headers: auth,
               redirect: "error",
               signal: AbortSignal.timeout(120000),
-            }
+            }, 120000, async () => (await getGoogleAccessToken(g, true)).access_token
           ),
           limit
         );
