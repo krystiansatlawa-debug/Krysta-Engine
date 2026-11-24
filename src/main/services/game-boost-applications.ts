@@ -51,7 +51,7 @@ export class GameBoostApplications {
     );
 
     if (!active) {
-      if (!this.session) return;
+      if (!this.session && !this.closed.size) return;
       this.session = undefined;
       this.enqueue(() => this.reopenApplications());
       return;
@@ -120,14 +120,18 @@ export class GameBoostApplications {
     );
     for (const [key, executable] of this.closed) {
       if (this.session) return;
-      this.closed.delete(key);
       if (
         !this.restore ||
         runningKeys.has(key) ||
         unidentifiedNames.has(path.win32.basename(key, ".exe"))
-      )
+      ) {
+        this.closed.delete(key);
         continue;
-      await this.actions.reopen(executable).catch(this.actions.reportError);
+      }
+      try {
+        await this.actions.reopen(executable);
+        this.closed.delete(key);
+      } catch (error) { this.actions.reportError(error); }
     }
   }
 }
