@@ -16,6 +16,8 @@ export const levelKeys = {
   downloads: "downloads",
   downloadLayoutState: "downloadLayoutState",
   userPreferences: "userPreferences",
+  desktopControllerSettings: "desktopControllerSettings",
+  controllerDisplaySettings: "controller-display-settings",
   language: "language",
   screenState: "screenState",
   rpcPassword: "rpcPassword",

@@ -1,0 +1,86 @@
+.controller-settings {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+
+  &__group {
+    display: grid;
+    justify-items: start;
+    gap: 12px;
+    min-width: 0;
+
+    > p {
+      opacity: 0.78;
+    }
+  }
+
+  &__actions,
+  &__number,
+  &__stepper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__actions,
+  &__number {
+    flex-wrap: wrap;
+  }
+
+  &__stepper {
+    output {
+      min-width: 4ch;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    button {
+      min-width: 36px;
+    }
+  }
+
+  &__button-map {
+    display: grid;
+    gap: 12px;
+    width: min(100%, 560px);
+    min-width: 0;
+  }
+
+  &__board {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: clamp(2px, 1vw, 8px);
+    padding: clamp(4px, 1vw, 12px);
+    border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+    border-radius: 16px;
+    background: color-mix(in srgb, currentColor 4%, transparent);
+  }
+
+  &__key {
+    min-width: 0;
+
+    button {
+      justify-content: center;
+      width: 100%;
+      min-width: 0;
+      padding-inline: 2px;
+      overflow-wrap: anywhere;
+      text-align: center;
+      font-size: clamp(10px, 1.45vw, 14px);
+
+      &[aria-pressed="true"] {
+        outline: 1px solid currentColor;
+        outline-offset: 1px;
+      }
+    }
+  }
+}
+
+.controller-settings__accessible-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}

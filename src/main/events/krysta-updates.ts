@@ -123,7 +123,7 @@ async function latestKrysta(): Promise<Release | null> {
       (!beta && (d.prerelease || /-beta\./.test(d.tag_name)))
     )
       continue;
-    if (!/^Krysta Launcher\b/i.test(String(d.name))) continue;
+    if (!/^Krysta (?:Launcher|Engine)\b/i.test(String(d.name))) continue;
     const name =
       "krysta-launcher-" + d.tag_name.replace(/^v/, "") + "-setup.exe";
     if (!Array.isArray(d.assets) || !d.assets.some((a: any) => a.name === name))
