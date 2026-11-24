@@ -309,6 +309,7 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       if (process.env.KRYSTA_VIRUSTOTAL_ENABLED !== "1") reasons.push("Sprawdzanie reputacji online nie jest aktywne.");
       else if (checkedDigests.size < inventory.reputationCandidates.length || reputationLevels.includes("unknown")) reasons.push("Raporty reputacji są niepełne lub niedostępne.");
       if (inventory.signatureLimitReached || inventory.reputationLimitReached) reasons.push("Przekroczono limit analizy plików; zakres weryfikacji jest niepełny.");
+      if (inventory.suspiciousProperties.executableScripts) reasons.push("Wykryto skrypty wykonywalne; ich obecność nie przesądza o zagrożeniu.");
       if (inventory.archives) reasons.push("Wykryto archiwa; zawartość wymaga sprawdzenia po rozpakowaniu.");
       const level = high ? "high" : reasons.length ? "review" : "unverified";
       if (!reasons.length) reasons.push("Brak potwierdzonego wyniku skanowania konkretnych plików.");
