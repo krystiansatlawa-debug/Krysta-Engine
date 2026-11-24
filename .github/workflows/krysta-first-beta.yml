@@ -1,5 +1,5 @@
 name: Krysta Release
-# Rebuild 1.0.24 after achievement diagnostics signature fix.
+# Superseded by combined 1.0.24 release from main.
 on:
   workflow_dispatch:
   push:
@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   windows:
-    if: github.ref == 'refs/heads/release/1.0.24'
+    if: ${{ false }}
     runs-on: windows-2022
     timeout-minutes: 90
     steps:
