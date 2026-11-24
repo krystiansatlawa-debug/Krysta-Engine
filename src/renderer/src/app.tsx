@@ -386,7 +386,17 @@ export function App() {
   }, [fetchUserDetails, updateUserDetails, dispatch, setupWorkWonders]);
 
   useEffect(() => {
-    setupExternalResources();
+    // Keep sign-in and initial profile data available, but do not start
+    // optional external widgets until the renderer is visible.
+    let started = false;
+    const start = () => {
+      if (started || document.hidden) return;
+      started = true;
+      void setupExternalResources();
+    };
+    document.addEventListener("visibilitychange", start);
+    start();
+    return () => document.removeEventListener("visibilitychange", start);
   }, [setupExternalResources]);
 
   const onSignIn = useCallback(() => {

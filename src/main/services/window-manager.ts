@@ -394,6 +394,9 @@ export class WindowManager {
       mainWindow.minimize();
     };
     // Limit visual work only in the launcher renderer, not capture windows.
+    let idleMotion = false;
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
+    const clearIdle = () => { clearTimeout(idleTimer); idleMotion = false; };
     let reducedMotionCss: string | undefined;
     let motionUpdate = Promise.resolve();
     let motionPending = false;
@@ -405,7 +408,7 @@ export class WindowManager {
         if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
         const contents = mainWindow.webContents;
         contents.setBackgroundThrottling(true);
-        const reduce = mainWindow.isMinimized() || !mainWindow.isVisible() || (isGameBoostBackgroundSyncPaused() && !mainWindow.isFocused());
+        const reduce = idleMotion || mainWindow.isMinimized() || !mainWindow.isVisible() || (isGameBoostBackgroundSyncPaused() && !mainWindow.isFocused());
         if (reduce && !reducedMotionCss) {
           reducedMotionCss = await contents.insertCSS(
             "*, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }"
@@ -426,12 +429,24 @@ export class WindowManager {
       reducedMotionCss = undefined;
       updateLauncherMotion();
     });
-    mainWindow.on("blur", () => { sleepLauncher(); updateLauncherMotion(); });
-    mainWindow.on("focus", updateLauncherMotion);
+    const wake = () => { clearIdle(); updateLauncherMotion(); };
+    mainWindow.on("blur", () => {
+      sleepLauncher();
+      clearIdle();
+      idleTimer = setTimeout(() => {
+        if (mainWindow.isDestroyed() || mainWindow.isFocused()) return;
+        idleMotion = true;
+        updateLauncherMotion();
+      }, 120_000);
+      idleTimer.unref();
+      updateLauncherMotion();
+    });
+    mainWindow.on("focus", wake);
     mainWindow.on("minimize", updateLauncherMotion);
-    mainWindow.on("restore", updateLauncherMotion);
+    mainWindow.on("restore", wake);
     mainWindow.on("hide", updateLauncherMotion);
-    mainWindow.on("show", updateLauncherMotion);
+    mainWindow.on("show", wake);
+    mainWindow.once("closed", clearIdle);
     mainWindow.once("closed", unsubscribeSleep);
     sleepLauncher();
 
@@ -1687,11 +1702,7 @@ export class WindowManager {
           }),
           type: "normal",
           click: () => {
-            if (this.mainWindow) {
-              this.mainWindow.show();
-            } else {
-              this.createMainWindow();
-            }
+            this.openMainWindow();
           },
         },
         {
@@ -1728,11 +1739,7 @@ export class WindowManager {
     if (process.platform === "win32") {
 
       tray.addListener("double-click", () => {
-        if (this.mainWindow) {
-          this.mainWindow.show();
-        } else {
-          this.createMainWindow();
-        }
+        this.openMainWindow();
       });
 
       tray.addListener("right-click", showContextMenu);
@@ -1740,11 +1747,7 @@ export class WindowManager {
       await updateSystemTray();
 
       tray.addListener("click", () => {
-        if (this.mainWindow) {
-          this.mainWindow.show();
-        } else {
-          this.createMainWindow();
-        }
+        this.openMainWindow();
       });
 
       tray.addListener("right-click", showContextMenu);
