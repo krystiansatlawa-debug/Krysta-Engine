@@ -138,8 +138,8 @@ function fixture(preference: {
     exports: {},
     process: { platform: "win32", resourcesPath: "mock-resources" },
     require: (name: string) => dependencies[name],
-    setTimeout: (callback: () => void) => {
-      const timer = { callback, unref: () => {} };
+    setTimeout: (callback: () => void, delay: number) => {
+      const timer = { callback, delay, unref: () => {} };
       timers.add(timer);
       return timer;
     },
@@ -162,8 +162,10 @@ function fixture(preference: {
     },
     async focus(window: typeof game) {
       foreground = window;
-      assert.equal(timers.size, 1);
-      for (const timer of timers) timer.callback();
+      const timer = [...timers].find(timer => timer.delay === 750) ?? [...timers].at(-1);
+      assert.ok(timer);
+      timers.delete(timer);
+      timer.callback();
       await setImmediate();
     },
     invoke: (channel: string, value?: unknown) =>
@@ -177,8 +179,8 @@ test("FPS only polls during tracked games and stops PresentMon when focus leaves
   assert.equal(fps.timers.size, 0);
   await fps.setRunning(true);
   assert.deepEqual(fps.processes, [42]);
-  assert.equal(fps.timers.size, 1);
-  assert.equal(fps.intervals.size, 1);
+  assert.equal(fps.timers.size, 2);
+  assert.equal(fps.intervals.size, 0);
 
   await fps.focus(otherWindow);
   assert.deepEqual(fps.stopped, [42]);
