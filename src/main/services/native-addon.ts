@@ -190,6 +190,7 @@ type HydraNativeModule = {
   ) => boolean;
   isRtssOsdAvailable?: () => boolean;
   updateRtssOsd?: (processId: number) => boolean;
+  getWindowsXboxBatteryLevel?: (index: number) => string | null;
   getWindowsXboxGuidePressed?: () => boolean | null;
   getWindowsGameBarControllerEnabled?: () => boolean;
   setWindowsGameBarControllerEnabled?: (enabled: boolean) => boolean;
@@ -626,6 +627,15 @@ export class NativeAddon {
     if (process.platform !== "win32") return null;
     try {
       return this.load().getWindowsGamepadComboPressed?.(buttons) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  public static getWindowsXboxBatteryLevel(index: number) {
+    if (process.platform !== "win32" || !Number.isInteger(index) || index < 0 || index > 3) return null;
+    try {
+      return this.load().getWindowsXboxBatteryLevel?.(index) ?? null;
     } catch {
       return null;
     }
