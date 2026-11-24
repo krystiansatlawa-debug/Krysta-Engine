@@ -891,7 +891,7 @@ export async function downloadCloudSnapshot(
 }
 
 // Dedicated metadata snapshot; never includes credentials or raw save paths.
-export async function uploadAchievementBackup(identity: string, payload: string, kind: "achievement" | "story" | "library" = "achievement") {
+export async function uploadAchievementBackup(identity: string, payload: string, kind: "achievement" | "story" | "library" | "settings" = "achievement") {
   const c = await read();
   const g = c.google;
   if (!g || await directCloudIdentity("google") !== identity) throw Error("Cloud account changed");
