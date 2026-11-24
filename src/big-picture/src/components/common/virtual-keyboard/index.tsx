@@ -713,6 +713,15 @@ function VirtualKeyboardScreenActions({
 }
 
 export function VirtualKeyboardProvider() {
+  const [appearance, setAppearance] = useState(() => {
+    try {
+      const p = JSON.parse(localStorage.getItem("krysta-keyboard-appearance") ?? "{}");
+      return { size: Math.max(0.7, Math.min(1, Number(p.size) || 1)), opacity: Math.max(0.5, Math.min(1, Number(p.opacity) || 1)), top: p.top === true, feedback: p.feedback === true };
+    } catch { return { size: 1, opacity: 1, top: false, feedback: false }; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("krysta-keyboard-appearance", JSON.stringify(appearance)); } catch { /* session only */ }
+  }, [appearance]);
   const sonyPad = useGamepadStore((state) => {
     const pad = state.connectedGamepads.find((p) => p.index === state.activeGamepadIndex) ?? state.connectedGamepads[0];
     return /dualsense|dualshock|playstation|sony/i.test(`${pad?.name ?? ""} ${pad?.layout ?? ""}`);
@@ -1494,6 +1503,7 @@ export function VirtualKeyboardProvider() {
               <motion.aside
                 ref={keyboardRef}
                 className="virtual-keyboard"
+                style={{ width: `${appearance.size * 100}%`, opacity: appearance.opacity, ...(appearance.top ? { position: "fixed", top: 16, left: "50%", translate: "-50% 0" } : {}) }}
                 role="dialog"
                 aria-label="Virtual keyboard"
                 initial={{ y: 32, scale: 0.98 }}
@@ -1501,6 +1511,7 @@ export function VirtualKeyboardProvider() {
                 exit={{ y: 24, scale: 0.98 }}
                 transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
               >
+                <details><summary>Ustawienia klawiatury</summary><label>Rozmiar <input type="range" min={70} max={100} value={Math.round(appearance.size * 100)} onChange={e => setAppearance(p => ({...p, size: Number(e.target.value) / 100}))} /></label><label>Przezroczystość <input type="range" min={50} max={100} value={Math.round(appearance.opacity * 100)} onChange={e => setAppearance(p => ({...p, opacity: Number(e.target.value) / 100}))} /></label><label><input type="checkbox" checked={appearance.top} onChange={e => setAppearance(p => ({...p, top: e.target.checked}))} /> U góry</label><label><input type="checkbox" checked={appearance.feedback} onChange={e => setAppearance(p => ({...p, feedback: e.target.checked}))} /> Wibracje przy pisaniu</label></details>
                 <GridFocusGroup
                   regionId={VIRTUAL_KEYBOARD_REGION_ID}
                   className="virtual-keyboard__keys"
@@ -1543,7 +1554,7 @@ export function VirtualKeyboardProvider() {
                         }
                         data-pulsing={pulsingKeyId === keyId || undefined}
                         onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => handleKey(key)}
+                        onClick={() => { handleKey(key); if (appearance.feedback) useGamepadStore.getState().playFeedback("navigation"); }}
                       >
                         <span className="virtual-keyboard__key-label">
                           {label}
