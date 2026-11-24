@@ -1,4 +1,5 @@
 import { isTrackedGameKeyRunning } from "../game-running-state";
+import { isGameBoostBackgroundSyncPaused } from "../game-boost-background-sync";
 import { achievementSyncWorker } from "./achievement-sync-worker";
 import { parseAchievementFile } from "./parse-achievement-file";
 import { mergeAchievements } from "./merge-achievements";
@@ -98,11 +99,13 @@ const watchAchievementsWindows = async () => {
 
   if (games.length === 0) return;
 
-  const staticFilesByObjectId = findAllAchievementFiles();
-  const nestedFilesByObjectId = await findNestedAchievementFiles();
+  const boosted = isGameBoostBackgroundSyncPaused();
+  const staticFilesByObjectId = boosted ? undefined : findAllAchievementFiles();
+  const nestedFilesByObjectId = boosted ? undefined : await findNestedAchievementFiles();
   const includeSteamCache = await getEnableSteamAchievements();
 
   for (const game of [...games].sort((a, b) => Number(isTrackedGameKeyRunning(levelKeys.game(b.shop, b.objectId))) - Number(isTrackedGameKeyRunning(levelKeys.game(a.shop, a.objectId))))) {
+    if (isGameBoostBackgroundSyncPaused() && !isTrackedGameKeyRunning(levelKeys.game(game.shop, game.objectId))) continue;
     const gameAchievementFiles = await collectGameAchievementFiles(game, {
       includeSteamCache,
       staticFilesByObjectId,
@@ -121,6 +124,7 @@ const watchAchievementsWithWine = async () => {
   const includeSteamCache = await getEnableSteamAchievements();
 
   for (const game of [...games].sort((a, b) => Number(isTrackedGameKeyRunning(levelKeys.game(b.shop, b.objectId))) - Number(isTrackedGameKeyRunning(levelKeys.game(a.shop, a.objectId))))) {
+    if (isGameBoostBackgroundSyncPaused() && !isTrackedGameKeyRunning(levelKeys.game(game.shop, game.objectId))) continue;
     const gameAchievementFiles = await collectGameAchievementFiles(game, {
       includeSteamCache,
     });
@@ -320,6 +324,7 @@ export class AchievementWatcherManager {
     const game = await gamesSublevel.get(gameKey).catch(() => null);
     if (!game || game.isDeleted) return;
 
+    if (isGameBoostBackgroundSyncPaused() && !isTrackedGameKeyRunning(levelKeys.game(game.shop, game.objectId))) continue;
     const gameAchievementFiles = await collectGameAchievementFiles(game, {
       includeSteamCache: await getEnableSteamAchievements(),
       awaitGameDirectoryLocations: true,
