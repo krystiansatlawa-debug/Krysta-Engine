@@ -1,7 +1,7 @@
 use std::ffi::c_void;
 
 use napi_derive::napi;
-use windows::core::{IUnknown_Vtbl, Interface, GUID, HRESULT, PCWSTR};
+use windows::core::{IUnknown, IUnknown_Vtbl, Interface, GUID, HRESULT, PCWSTR};
 use windows::Win32::Foundation::{PROPERTYKEY, RPC_E_CHANGED_MODE};
 use windows::Win32::Media::Audio::{
     eCommunications, eConsole, eMultimedia, eRender, DigitalAudioDisplayDevice, ERole, IMMDevice,
@@ -24,13 +24,18 @@ const POLICY_CONFIG_CLIENT: GUID = GUID::from_u128(0x870af99c_171d_4f9e_af0d_e63
 
 // Core Audio enumerates and reads default devices. PolicyConfig is the Windows
 // implementation used to change the default endpoint for a render role.
-windows::core::imp::define_interface!(
-    PolicyConfig,
-    PolicyConfigVtable,
-    0xf8679f50_850a_41cf_9c72_430f290290c8
-);
+#[repr(transparent)]
+#[derive(Clone)]
+struct PolicyConfig(IUnknown);
+
+// The COM pointer has IUnknown's layout, and CoCreateInstance obtains it
+// specifically for this IID before the matching vtable is used.
+unsafe impl Interface for PolicyConfig {
+    type Vtable = PolicyConfigVtable;
+    const IID: GUID = GUID::from_u128(0xf8679f50_850a_41cf_9c72_430f290290c8);
+}
 #[repr(C)]
-pub struct PolicyConfigVtable {
+struct PolicyConfigVtable {
     base: IUnknown_Vtbl,
     preceding_methods: [usize; 10],
     set_default_endpoint: unsafe extern "system" fn(*mut c_void, PCWSTR, ERole) -> HRESULT,
