@@ -190,6 +190,7 @@ type HydraNativeModule = {
   ) => boolean;
   isRtssOsdAvailable?: () => boolean;
   updateRtssOsd?: (processId: number) => boolean;
+  getWindowsSonyHidBatteries?: () => Promise<{ id: string; name: string; percent: number; charging: boolean }[]>;
   getWindowsXboxBatteryLevel?: (index: number) => string | null;
   getWindowsXboxGuidePressed?: () => boolean | null;
   getWindowsGameBarControllerEnabled?: () => boolean;
@@ -630,6 +631,10 @@ export class NativeAddon {
     } catch {
       return null;
     }
+  }
+
+  public static async getWindowsSonyHidBatteries() {
+    try { return await this.load().getWindowsSonyHidBatteries?.() ?? []; } catch { return []; }
   }
 
   public static getWindowsXboxBatteryLevel(index: number) {
