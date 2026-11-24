@@ -21,3 +21,33 @@ export function findStoryMission(source: string, title: string): StoryMission | 
   const list = missions[source === "gtav-enhanced" ? "gtav" : source] ?? [];
   return list.find(mission => [mission.title, ...(mission.aliases ?? [])].some(alias => key(alias) === key(title)));
 }
+
+// Curated descriptions refer only to the named mission, not later outcomes.
+const polishDescriptions: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  gtav: {
+    "Blitz Play": "Bohaterowie przygotowują zasadzkę na transport opancerzony.",
+    "The Paleto Score": "Ekipa podejmuje się napadu na bank w Paleto Bay.",
+    "The Bureau Raid": "Michael i Franklin przygotowują operację w siedzibie FIB.",
+    "The Big Score": "Bohaterowie przystępują do wielkiego skoku na Union Depository.",
+  },
+  rdr2: {
+    "A Quiet Time": "Arthur i Lenny spędzają wieczór w saloonie w Valentine.",
+    "A Fisher of Men": "Arthur zabiera Jacka na ryby.",
+    "A Strange Kindness": "Gang szuka nowego miejsca na obóz.",
+    "The Sheep and the Goats": "Arthur pomaga Johnowi przy przedsięwzięciu związanym z handlem owcami.",
+  },
+  cyberpunk: {
+    "The Pickup": "V próbuje zdobyć robota Flathead od gangu Maelstrom.",
+    "Nocturne OP55N1": "V udaje się na spotkanie z Hanako w Embers.",
+  },
+  gtaiv: {
+    "The Cousins Bellic": "Niko przybywa do Liberty City i spotyka kuzyna Romana.",
+    "It's Your Call": "Niko pomaga Romanowi podczas jego spraw w mieście.",
+    "Three Leaf Clover": "Niko bierze udział w przygotowanym napadzie na bank.",
+    "Easy Fare": "Niko wykonuje kurs dla firmy taksówkarskiej Romana.",
+  },
+};
+export function findPolishStoryDescription(source: string, title: string): string | undefined {
+  const mission = findStoryMission(source, title);
+  return mission ? polishDescriptions[source === "gtav-enhanced" ? "gtav" : source]?.[mission.title] : undefined;
+}
