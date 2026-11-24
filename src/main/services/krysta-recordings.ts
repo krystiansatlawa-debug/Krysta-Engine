@@ -119,7 +119,10 @@ async function prepareHardwareEncoder(win: BrowserWindow): Promise<boolean> {
   try {
     // Let Chromium probe actual hardware H.264 support, including hybrid GPUs.
     // The worker requires hardware acceleration and falls back if unavailable.
-    muxerScript ??= fs.readFile(captureMuxer, "utf8");
+    muxerScript ??= fs.readFile(captureMuxer, "utf8").catch((error) => {
+      muxerScript = undefined;
+      throw error;
+    });
     await win.webContents.executeJavaScript(
       `${await muxerScript}\n;void (globalThis.krystaRecordingMuxer = Mediabunny);`
     );
