@@ -70,8 +70,8 @@ export function KrystaGameCloud({
         setComparison(null);
         setNotice(
           pl
-            ? "Kopia zapisana w wybranym miejscu."
-            : "Backup saved to selected destination."
+            ? "Kopia utworzona. Sprawdź historię, aby potwierdzić dostępność w chmurze."
+            : "Backup created. Check history to confirm cloud availability."
         );
       }
     } catch (e) {
@@ -79,6 +79,32 @@ export function KrystaGameCloud({
     } finally {
       setBusy(false);
     }
+  };
+  const synchronize = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    setComparison(null);
+    try {
+      const result = await window.electron.krystaCloudCompare(shop,objectId);
+      setComparison(result);
+      if (result.state === "same") {
+        setNotice(pl ? "Zapisy są już zsynchronizowane." : "Saves are already synchronized.");
+        return;
+      }
+      if (result.state === "different") return;
+      if (result.state === "unavailable") {
+        setNotice(pl ? "Nie można sprawdzić chmury. Użyj przycisku tworzenia kopii, aby zachować zapisy lokalnie." : "Cloud unavailable. Use Create backup to preserve local saves.");
+        return;
+      }
+      if (await window.electron.krystaCloudBackup(shop,objectId)) {
+        await reload();
+        setComparison(null);
+        setNotice(pl ? "Kopia utworzona. Sprawdź historię, aby potwierdzić dostępność w chmurze." : "Backup created. Check history to confirm cloud availability.");
+      }
+    } catch(e) { setError(String(e)); }
+    finally { setBusy(false); }
   };
   const restore = async (version: string) => {
     setBusy(true);
@@ -127,6 +153,9 @@ export function KrystaGameCloud({
                   ? "Folder lokalny"
                   : "Local folder"}
           </p>
+          <Button theme="outline" disabled={busy} onClick={() => void synchronize()}>
+            {pl ? "Synchronizuj teraz" : "Sync now"}
+          </Button>
           <Button theme="outline" disabled={busy} onClick={() => void backup()}>
             {pl ? "Utwórz kopię zapisów" : "Create save backup"}
           </Button>
