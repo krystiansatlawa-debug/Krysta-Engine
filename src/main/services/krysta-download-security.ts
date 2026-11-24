@@ -23,11 +23,16 @@ export async function scanCompletedDownload(download: Download): Promise<boolean
       const systemRoot = process.env.SystemRoot;
       if (!systemRoot || !path.isAbsolute(systemRoot)) return false;
       const powershell = path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-      await run(powershell, ["-NoProfile", "-NonInteractive", "-Command",
-        "$ErrorActionPreference='Stop'; $s=Get-MpComputerStatus; if (-not $s.AntivirusEnabled) { throw 'Defender unavailable' }; Start-MpScan -ScanType CustomScan -ScanPath $env:KRYSTA_SCAN_PATH -ErrorAction Stop; Write-Output 'KRYSTA_SCAN_REQUEST_COMPLETED'"],
+      const { stdout } = await run(powershell, ["-NoProfile", "-NonInteractive", "-Command",
+        "$ErrorActionPreference='Stop'; $s=Get-MpComputerStatus; if (-not $s.AntivirusEnabled -or -not $s.AMServiceEnabled) { throw 'Defender unavailable' }; $before=Get-Date; Start-MpScan -ScanType CustomScan -ScanPath $env:KRYSTA_SCAN_PATH -ErrorAction Stop; $after=Get-MpComputerStatus; $detections=@(Get-MpThreatDetection -ErrorAction Stop | Where-Object { $_.InitialDetectionTime -ge $before }); [pscustomobject]@{ enabled=[bool]$after.AntivirusEnabled; realtime=[bool]$after.RealTimeProtectionEnabled; signaturesOutOfDate=[bool]$after.DefenderSignaturesOutOfDate; recentDetections=$detections.Count } | ConvertTo-Json -Compress"],
         { windowsHide: true, timeout: 2 * 60 * 60 * 1000, maxBuffer: 1024 * 1024, env: {...process.env, KRYSTA_SCAN_PATH: target} });
-      logger.info("[Security Shield] Defender scan request completed; verdict not yet verified");
-      // A completed scan command is not proof of a clean result.
+      const report = JSON.parse(stdout.trim()) as { enabled?: boolean; realtime?: boolean; signaturesOutOfDate?: boolean; recentDetections?: number };
+      if (report.enabled !== true || report.realtime !== true || report.signaturesOutOfDate !== false || report.recentDetections !== 0) {
+        logger.warn("[Security Shield] Defender reported detections or protection is not fully available");
+        return false;
+      }
+      logger.info("[Security Shield] Defender reported no new detections; scan-specific verdict remains unverified");
+      // Global detection history cannot establish a scan-specific clean verdict.
       return false;
     } catch (error) {
       logger.warn("[Security Shield] Download scan unavailable or failed", error);
