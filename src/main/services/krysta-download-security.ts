@@ -10,7 +10,7 @@ import { logger } from "./logger";
 const run = promisify(execFile);
 const active = new Map<string, Promise<boolean>>();
 let historyQueue: Promise<void> = Promise.resolve();
-function recordSecurityDecision(fingerprint: string, level: string, reasons: string[]) {
+function recordSecurityDecision(fingerprint: string | null, level: string, reasons: string[]) {
   const entry = JSON.stringify({ schema: 1, timestamp: new Date().toISOString(), fingerprint, level, reasons, verified: false }) + "\n";
   const task = historyQueue.then(async () => {
     const directory = path.join(app.getPath("userData"), "security-shield");
@@ -182,11 +182,13 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
     return scanCompletedDownload(download);
   }
   const task = (async () => {
+    let inspectedFingerprint: string | null = null;
     try {
       const products = await detectRegisteredAntivirus();
       logger.info("[Security Shield] Registered antivirus products:", products === null ? "unknown" : products.map((product) => product.name));
       // Registration alone does not establish active protection or a clean scan.
       const inventory = await inspectDownloadTree(base, target);
+      inspectedFingerprint = inventory.fingerprint;
       logger.info("[Security Shield] Download tree inventory:", inventory);
       if (inventory.suspiciousProperties.misleadingExtensions || inventory.suspiciousProperties.bidiNames || inventory.disguisedExecutables) logger.warn("[Security Shield] Wykryto podejrzane właściwości nazw lub formatów plików; wymagana dodatkowa weryfikacja.");
       const reputationLevels: string[] = [];
@@ -205,7 +207,10 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
         }
       }
       const systemRoot = process.env.SystemRoot;
-      if (!systemRoot || !path.isAbsolute(systemRoot)) return false;
+      if (!systemRoot || !path.isAbsolute(systemRoot)) {
+        await recordSecurityDecision(inspectedFingerprint, "unverified", ["Nie znaleziono środowiska systemowego Windows."]);
+        return false;
+      }
       const powershell = path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
       const signatureSummary: Record<string, number> = {};
       const publishers = new Set<string>();
@@ -248,6 +253,7 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       }
       const finalInventory = await inspectDownloadTree(base, target);
       if (finalInventory.fingerprint !== inventory.fingerprint) {
+        await recordSecurityDecision(inspectedFingerprint, "unverified", ["Zawartość zmieniła się podczas skanowania; wynik unieważniony."]);
         logger.warn("[Security Shield] Download contents changed during antivirus scan; verdict invalidated");
         return false;
       }
@@ -255,6 +261,7 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       // Global detection history cannot establish a scan-specific clean verdict.
       return false;
     } catch (error) {
+      await recordSecurityDecision(inspectedFingerprint, "unverified", ["Skanowanie nie zostało zakończone; bezpieczeństwo niepotwierdzone."]);
       logger.warn("[Security Shield] Nie udało się zakończyć skanowania. Pliki pozostają niezweryfikowane.", error);
       return false;
     }
