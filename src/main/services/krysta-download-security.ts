@@ -160,10 +160,13 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       const inventory = await inspectDownloadTree(base, target);
       logger.info("[Security Shield] Download tree inventory:", inventory);
       if (inventory.suspiciousProperties.misleadingExtensions || inventory.suspiciousProperties.bidiNames || inventory.disguisedExecutables) logger.warn("[Security Shield] Wykryto podejrzane właściwości nazw lub formatów plików; wymagana dodatkowa weryfikacja.");
+      const reputationLevels: string[] = [];
       if (process.env.KRYSTA_VIRUSTOTAL_ENABLED === "1") {
         for (const digest of inventory.reputationCandidates) {
           const reputation = await lookupFileReputation(digest);
-          logger.info("[Security Shield] Hash reputation observation:", digest, reputation, assessReputation(reputation));
+          const assessment = assessReputation(reputation);
+          reputationLevels.push(assessment.level);
+          logger.info("[Security Shield] Hash reputation observation:", digest, reputation, assessment);
           if (reputation.status === "deferred" || reputation.status === "unavailable") break;
         }
       }
@@ -187,6 +190,15 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
         "$ErrorActionPreference='Stop'; $s=Get-MpComputerStatus; if (-not $s.AntivirusEnabled -or -not $s.AMServiceEnabled) { throw 'Defender unavailable' }; $before=Get-Date; Start-MpScan -ScanType CustomScan -ScanPath $env:KRYSTA_SCAN_PATH -ErrorAction Stop; $after=Get-MpComputerStatus; $detections=@(Get-MpThreatDetection -ErrorAction Stop | Where-Object { $_.InitialDetectionTime -ge $before }); [pscustomobject]@{ enabled=[bool]$after.AntivirusEnabled; realtime=[bool]$after.RealTimeProtectionEnabled; signaturesOutOfDate=[bool]$after.DefenderSignaturesOutOfDate; recentDetections=$detections.Count } | ConvertTo-Json -Compress"],
         { windowsHide: true, timeout: 2 * 60 * 60 * 1000, maxBuffer: 1024 * 1024, env: {...process.env, KRYSTA_SCAN_PATH: target} });
       const report = JSON.parse(stdout.trim()) as { enabled?: boolean; realtime?: boolean; signaturesOutOfDate?: boolean; recentDetections?: number };
+      const reasons: string[] = [];
+      const high = (typeof report.recentDetections === "number" && report.recentDetections > 0) || reputationLevels.includes("high");
+      if (high) reasons.push("Silnik antywirusowy zgłosił zagrożenie; wymagana weryfikacja.");
+      if (reputationLevels.includes("ambiguous")) reasons.push("Niejednoznaczny raport reputacji.");
+      if (signatureSummary.HashMismatch || signatureSummary.NotTrusted) reasons.push("Nieprawidłowy lub niezaufany podpis.");
+      if (inventory.disguisedExecutables || inventory.suspiciousProperties.misleadingExtensions || inventory.suspiciousProperties.bidiNames) reasons.push("Podejrzane właściwości plików.");
+      const level = high ? "high" : reasons.length ? "review" : "unverified";
+      if (!reasons.length) reasons.push("Brak potwierdzonego wyniku skanowania konkretnych plików.");
+      logger.info("[Security Shield] Ocena zagrożenia:", { level, reasons, verified: false });
       if (report.enabled !== true || report.realtime !== true || report.signaturesOutOfDate !== false || report.recentDetections !== 0) {
         logger.warn("[Security Shield] Defender reported detections or protection is not fully available");
         return false;
