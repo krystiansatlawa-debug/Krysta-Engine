@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "games": [
+    {
+      "source": "gtav",
+      "missions": [
+        {
+          "title": "Blitz Play",
+          "description": "Bohaterowie przygotowują zasadzkę na transport opancerzony."
+        }
+      ]
+    },
+    {
+      "source": "rdr2",
+      "missions": [
+        {
+          "title": "A Fisher of Men",
+          "description": "Arthur zabiera Jacka na ryby."
+        }
+      ]
+    }
+  ]
+}
