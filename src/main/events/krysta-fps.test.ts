@@ -21,7 +21,7 @@ const { outputText } = ts.transpileModule(source, {
 
 const game = { windowHandle: "game", processId: 42 };
 const otherWindow = { windowHandle: "other", processId: 25 };
-type PollTimer = { callback: () => void; unref: () => void };
+type PollTimer = { callback: () => void; delay: number; unref: () => void };
 type Handler = (event: unknown, value?: unknown) => Promise<unknown>;
 
 function fixture(preference: {
