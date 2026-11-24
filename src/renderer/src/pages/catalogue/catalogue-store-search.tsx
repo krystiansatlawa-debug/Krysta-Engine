@@ -14,7 +14,10 @@ import {
 export function CatalogueStoreSearch({
   inline = false,
 }: Readonly<{ inline?: boolean }>) {
-  const { t } = useTranslation("catalogue");
+  const { t, i18n } = useTranslation("catalogue");
+  const pl = i18n.language.startsWith("pl");
+  const [history, setHistory] = useState<string[]>(() => { try { const data = JSON.parse(localStorage.getItem("krysta-search-history") ?? "[]"); return Array.isArray(data) ? data.filter(v=>typeof v==="string").slice(0,10) : []; } catch { return []; } });
+  const remember = (value:string) => { const term=value.trim(); if(!term)return; const next=[term,...history.filter(v=>v.toLowerCase()!==term.toLowerCase())].slice(0,10); setHistory(next); try { localStorage.setItem("krysta-search-history",JSON.stringify(next)); } catch {} };
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const isResults = Boolean(useMatch("/catalogue/search"));
@@ -57,6 +60,7 @@ export function CatalogueStoreSearch({
           dispatch(setMode("modern"));
           dispatch(clearFilters());
         }
+        remember(query);
         dispatch(setFilters({ title: query.trim() }));
         navigate("/catalogue/search");
       }}
@@ -89,6 +93,7 @@ export function CatalogueStoreSearch({
       >
         {inline ? t("store_submit_search") : <SearchIcon />}
       </button>
+      {open && !query.trim() && history.length > 0 && <ul className="catalogue-store-search__suggestions"><li>{pl ? "Historia wyszukiwania" : "Search history"}</li>{history.map(term=><li key={term}><button style={{width:"100%"}} type="button" onClick={()=>{ setQuery(term); setOpen(false); if(!isResults){dispatch(setMode("modern"));dispatch(clearFilters());} dispatch(setFilters({title:term})); navigate("/catalogue/search"); }}>{term}</button></li>)}<li><button style={{width:"100%"}} type="button" onClick={()=>{setHistory([]);try{localStorage.removeItem("krysta-search-history");}catch{}}}>{pl ? "Wyczyść historię" : "Clear history"}</button></li></ul>}
       {open && suggestions.length > 0 && (
         <ul
           className="catalogue-store-search__suggestions"

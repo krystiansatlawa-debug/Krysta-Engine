@@ -59,7 +59,9 @@ export interface GalleryMediaItem {
 
 export function GallerySlider() {
   const { shopDetails } = useContext(gameDetailsContext);
-  const { t } = useTranslation("game_details");
+  const { t, i18n } = useTranslation("game_details");
+  const pl = i18n.language.startsWith("pl");
+  const [mediaFilter, setMediaFilter] = useState<"all"|"image"|"video">("all");
   const userPreferences = useAppSelector(
     (state) => state.userPreferences.value
   );
@@ -160,7 +162,7 @@ export function GallerySlider() {
         if (!movieSource) return;
 
         items.push({
-          id: String(video.id),
+          id: "video-" + video.id,
           type: "video",
           poster: video.thumbnail,
           thumbnail: video.thumbnail,
@@ -173,7 +175,7 @@ export function GallerySlider() {
     if (shopDetails?.screenshots) {
       shopDetails.screenshots.forEach((image, index) => {
         items.push({
-          id: String(image.id),
+          id: "image-" + image.id,
           type: "image",
           src: image.path_full,
           thumbnail: image.path_thumbnail,
@@ -182,10 +184,12 @@ export function GallerySlider() {
       });
     }
 
-    return items;
-  }, [shopDetails, t]);
+    return mediaFilter === "all" ? items : items.filter(item => item.type === mediaFilter);
+  }, [shopDetails, t, mediaFilter]);
 
   const hasMedia = mediaItems.length > 0;
+  useEffect(() => { setSelectedIndex(0); setLightbox(null); setPresentation(null); emblaApi?.scrollTo(0,true); }, [mediaFilter, emblaApi]);
+  useEffect(() => { const onVisibility = () => { if (document.hidden) playerHandlesRef.current.forEach(handle => handle.pause()); }; document.addEventListener("visibilitychange",onVisibility); return () => document.removeEventListener("visibilitychange",onVisibility); }, []);
 
   const previews = useMemo(
     () =>
@@ -202,6 +206,7 @@ export function GallerySlider() {
 
   const videoHosts = useMemo(() => {
     const hosts = videoHostsRef.current;
+    for (const id of hosts.keys()) if (!mediaItems.some(item => item.id === id)) hosts.delete(id);
     mediaItems.forEach((item) => {
       if (item.type === "video" && !hosts.has(item.id)) {
         hosts.set(item.id, new GalleryVideoHost());
@@ -345,7 +350,7 @@ export function GallerySlider() {
     };
   }, [lightbox, mediaItems, selectedIndex, openLightbox]);
 
-  if (!hasMedia) {
+  if (!hasMedia && !shopDetails?.screenshots?.length && !shopDetails?.movies?.length) {
     return null;
   }
 
@@ -369,7 +374,7 @@ export function GallerySlider() {
         className={borrowed ? "gallery-lightbox__frame" : undefined}
         item={item}
         autoPlay={autoplayEnabled && index === firstVideoIndex}
-        loadOnDemand={!autoplayEnabled}
+        loadOnDemand={!autoplayEnabled || index !== firstVideoIndex}
         isFullscreen={borrowed && !!presentation?.isFullscreen}
         controlsHidden={borrowed && !!presentation?.chromeHidden}
         onHoldChromeChange={active ? setVideoHoldsChrome : undefined}
@@ -386,6 +391,7 @@ export function GallerySlider() {
 
   return (
     <div className="gallery-slider__container" ref={containerRef}>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{(["all","image","video"] as const).map(type=><button key={type} type="button" aria-pressed={mediaFilter===type} onClick={()=>setMediaFilter(type)}>{type==="all"?(pl?"Wszystkie":"All"):type==="image"?(pl?"Zdjęcia":"Screenshots"):(pl?"Zwiastuny":"Trailers")}</button>)}</div>
       <div className="gallery-slider__viewport" ref={emblaRef}>
         <div className="gallery-slider__container-inner">
           {mediaItems.map((item, index) => (
@@ -476,6 +482,7 @@ export function GallerySlider() {
               src={media.thumbnail}
               className="gallery-slider__preview-image"
               draggable={false}
+              loading="lazy"
               alt={t("screenshot", { number: String(i + 1) })}
             />
             {media.type === "video" && (
