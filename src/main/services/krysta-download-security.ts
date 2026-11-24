@@ -51,6 +51,17 @@ export async function detectRegisteredAntivirus(): Promise<{ name: string; produ
   }
 }
 
+// Retry an ambiguous report once, respecting the shared API cooldown.
+export async function recheckAmbiguousReputation(sha256: string, initial: Awaited<ReturnType<typeof lookupFileReputation>>) {
+  if (assessReputation(initial).level !== "ambiguous") return { initial, repeated: null };
+  const delay = Math.max(0, nextReputationRequest - Date.now());
+  if (delay > 20000) return { initial, repeated: null };
+  await new Promise<void>(resolve => setTimeout(resolve, delay + 100));
+  const repeated = await lookupFileReputation(sha256);
+  // A later report cannot erase an earlier detection automatically.
+  return { initial, repeated };
+}
+
 // A disagreement is not proof of a false positive.
 export function assessReputation(report: Awaited<ReturnType<typeof lookupFileReputation>>) {
   if (report.status !== "reported" || !report.stats) return { level: "unknown", reason: "Brak wiarygodnego raportu reputacji.", requiresReview: true };
@@ -166,6 +177,11 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
           const reputation = await lookupFileReputation(digest);
           const assessment = assessReputation(reputation);
           reputationLevels.push(assessment.level);
+          if (assessment.level === "ambiguous") {
+            const recheck = await recheckAmbiguousReputation(digest, reputation);
+            if (recheck.repeated) reputationLevels.push(assessReputation(recheck.repeated).level);
+            logger.info("[Security Shield] Ponowna weryfikacja; pierwotne wykrycie pozostaje w ocenie:", digest, recheck);
+          }
           logger.info("[Security Shield] Hash reputation observation:", digest, reputation, assessment);
           if (reputation.status === "deferred" || reputation.status === "unavailable") break;
         }
