@@ -50,3 +50,11 @@ export class PresentMonFps {
     return best ? Math.round((1000 * best.frames) / best.totalMs) : null;
   }
 }
+
+// Adapt display updates, not the game's frame rate or capture accuracy.
+export function adaptiveFpsInterval(previous: number | null, current: number | null, stableSamples: number) {
+  if (current === null) return 2000;
+  if (previous === null) return 1000;
+  if (Math.abs(current - previous) >= Math.max(5, previous * 0.1)) return 500;
+  return stableSamples >= 3 ? 2000 : 1000;
+}
