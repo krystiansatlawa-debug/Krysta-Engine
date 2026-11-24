@@ -1467,6 +1467,7 @@ export class WindowManager {
         webPreferences: {
           preload: path.join(__dirname, "../preload/index.mjs"),
           sandbox: false,
+          backgroundThrottling: true,
         },
         show: false,
       });
