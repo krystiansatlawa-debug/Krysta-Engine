@@ -360,7 +360,12 @@ async function backupGame(
         provider,
         identity!,
         remoteKey
-      );
+      ).catch(error => {
+        const message = String(error);
+        if (/fetch failed|network|timeout|timed out|\b(?:408|429|500|502|503|504)\b/i.test(message))
+          throw Error("KRYSTA_RETRYABLE_READ: " + message);
+        throw error;
+      });
       if (comparison.state === "same" && remote[0]?.id === comparison.version)
         return false;
       // A remote version unknown to this PC must not become superseded
@@ -916,7 +921,29 @@ onTrackedGamesRunningChange(() => {
         if (!game || game.isDeleted || controller.signal.aborted) return;
         await waitForGameBoostBackgroundSync(controller.signal);
         if (controller.signal.aborted || isTrackedGameKeyRunning(key)) return;
-        const done = await backupGame(game.shop, game.objectId, true, c, false, controller.signal);
+        // Retry only read-side transient failures; an ambiguous upload must
+        // never be repeated with a new snapshot ID.
+        let done: boolean;
+        const delays = [5000, 15000, 60000];
+        for (let attempt = 0; ; attempt++) {
+          try {
+            done = await backupGame(game.shop, game.objectId, true, c, false, controller.signal);
+            break;
+          } catch (error) {
+            if (!(error instanceof Error) || !error.message.startsWith("KRYSTA_RETRYABLE_READ:") || attempt >= delays.length || controller.signal.aborted) throw error;
+            await new Promise<void>(resolve => {
+              const finish = () => { clearTimeout(timer); controller.signal.removeEventListener("abort",finish); resolve(); };
+              const timer = setTimeout(finish,delays[attempt]);
+              controller.signal.addEventListener("abort",finish,{once:true});
+              if (controller.signal.aborted) finish();
+            });
+            if (controller.signal.aborted || isTrackedGameKeyRunning(key)) return;
+            const latest = await config();
+            if (!latest.autoBackup || latest.provider !== c.provider || latest.folder !== c.folder) return;
+            await waitForGameBoostBackgroundSync(controller.signal);
+            if (controller.signal.aborted) return;
+          }
+        }
         if (controller.signal.aborted) return;
         await backupAchievementsToGoogle(c, controller.signal).catch(() => {
           void publishKrystaNotification("KRYSTA_ERROR", game.title, "Kopia osiągnięć Google Drive nie powiodła się").catch(() => {});
