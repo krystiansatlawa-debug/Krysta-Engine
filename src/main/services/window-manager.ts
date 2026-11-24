@@ -1716,7 +1716,6 @@ export class WindowManager {
     tray.setToolTip("Krysta Launcher");
 
     if (process.platform === "win32") {
-      await updateSystemTray();
 
       tray.addListener("double-click", () => {
         if (this.mainWindow) {
