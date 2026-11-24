@@ -93,6 +93,7 @@ export class GamepadService {
   private isPolling = false;
   private animationFrameId: number | null = null;
   private activeGamepadIndex: number | null = null;
+  private preferredGamepadIndex: number | null = null;
   private lastActiveGamepadSwitchTime = 0;
   private lastGamepadActivityTime = 0;
   private hasPendingActiveGamepadChange = false;
@@ -223,6 +224,7 @@ export class GamepadService {
   private readonly handleGamepadDisconnection = (event: GamepadEvent) => {
     const gamepad = event.gamepad;
 
+    if (this.preferredGamepadIndex === gamepad.index) this.preferredGamepadIndex = null;
     this.gamepads.delete(gamepad.index);
     this.gamepadStates.delete(gamepad.index);
 
@@ -1276,7 +1278,22 @@ export class GamepadService {
     return false;
   }
 
+  public setPreferredGamepadIndex(index: number | null): void {
+    if (index !== null && !this.gamepads.has(index)) return;
+    this.preferredGamepadIndex = index;
+    this.clearAllTimers();
+    this.recentAcceptedInputs = [];
+    if (index !== null) this.setActiveGamepadIndex(index);
+    this.notifyStateChange();
+  }
+
+  public getPreferredGamepadIndex(): number | null {
+    return this.preferredGamepadIndex;
+  }
+
   public setActiveGamepadIndex(index: number | null): void {
+    if (index !== null && !this.gamepads.has(index)) return;
+    if (this.preferredGamepadIndex !== null && index !== this.preferredGamepadIndex) return;
     if (this.activeGamepadIndex === index) return;
 
     this.activeGamepadIndex = index;
@@ -1481,6 +1498,9 @@ export class GamepadService {
     }
   ): GamepadInputEventMeta {
     const previousActiveGamepadIndex = this.activeGamepadIndex;
+    if (this.preferredGamepadIndex !== null && gamepadIndex !== this.preferredGamepadIndex) {
+      return { status: "ignored-inactive", accepted: false, activeGamepadIndex: this.activeGamepadIndex, previousActiveGamepadIndex };
+    }
 
     if (previousActiveGamepadIndex === gamepadIndex) {
       this.recordAcceptedInput(gamepadIndex, options.input, options.now);
