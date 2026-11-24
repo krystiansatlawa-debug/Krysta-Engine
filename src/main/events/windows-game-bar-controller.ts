@@ -1,4 +1,4 @@
-import { screen } from "electron";
+import { screen, BrowserWindow } from "electron";
 import { NativeAddon } from "@main/services/native-addon";
 import { registerEvent } from "./register-event";
 
@@ -50,4 +50,33 @@ registerEvent("getControllerDesktopDisplays", () => {
     height: display.size.height,
     scaleFactor: display.scaleFactor,
   }));
+});
+
+registerEvent("moveControllerWindowToDisplay", (event, displayId: unknown) => {
+  if (typeof displayId !== "number" || !Number.isSafeInteger(displayId)) return false;
+  const display = screen.getAllDisplays().find((item) => item.id === displayId);
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!display || !window || window.isDestroyed()) return false;
+  const fullscreen = window.isFullScreen();
+  const maximized = window.isMaximized();
+  const move = () => {
+    if (window.isDestroyed()) return;
+    const target = screen.getAllDisplays().find((item) => item.id === displayId);
+    if (!target) return;
+    const area = target.workArea;
+    const bounds = window.getBounds();
+    const width = Math.min(bounds.width, area.width);
+    const height = Math.min(bounds.height, area.height);
+    window.setBounds({ x: area.x + Math.floor((area.width - width) / 2), y: area.y + Math.floor((area.height - height) / 2), width, height });
+    if (fullscreen) window.setFullScreen(true);
+    else if (maximized) window.maximize();
+  };
+  if (fullscreen) {
+    window.once("leave-full-screen", move);
+    window.setFullScreen(false);
+  } else {
+    if (maximized) window.unmaximize();
+    move();
+  }
+  return true;
 });
