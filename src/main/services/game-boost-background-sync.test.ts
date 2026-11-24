@@ -52,15 +52,15 @@ test("background work resumes only after all tracked session types exit", async 
   assert.equal(isGameBoostBackgroundSyncPaused(), false);
 });
 
-test("changing the pause preference releases waiting tasks during gameplay", async () => {
+test("only disabling maximum Game Boost releases waiting tasks during gameplay", async () => {
   setEmulatorGameRunning(emulator);
   const pending = waitForGameBoostBackgroundSync();
   syncGameBoostBackgroundSyncPreferences({
     gameBoostPauseBackgroundSync: false,
   });
-  await pending;
-  assert.equal(isGameBoostBackgroundSyncPaused(), false);
+  assert.equal(isGameBoostBackgroundSyncPaused(), true);
   syncGameBoostBackgroundSyncPreferences({ gameBoostEnabled: false });
+  await pending;
   assert.equal(isGameBoostBackgroundSyncPaused(), false);
 });
 
