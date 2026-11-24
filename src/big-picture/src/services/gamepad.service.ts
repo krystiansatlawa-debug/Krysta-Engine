@@ -1356,14 +1356,15 @@ export class GamepadService {
     const activeGamepad = this.gamepads.get(gamepadIndex);
 
     if (!activeGamepad?.vibrationActuator) return;
+    if (![duration, weakMagnitude, strongMagnitude].every(Number.isFinite)) return;
 
     try {
-      activeGamepad.vibrationActuator.playEffect("dual-rumble", {
+      void activeGamepad.vibrationActuator.playEffect("dual-rumble", {
         startDelay: 0,
-        duration: duration,
+        duration: Math.max(0, Math.min(1000, duration)),
         weakMagnitude: Math.max(0, Math.min(1, weakMagnitude)),
         strongMagnitude: Math.max(0, Math.min(1, strongMagnitude)),
-      });
+      }).catch(() => undefined);
     } catch (error) {
       console.error("Error ao tentar vibrar o controle:", error);
     }
