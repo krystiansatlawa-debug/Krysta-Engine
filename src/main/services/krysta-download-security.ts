@@ -42,6 +42,7 @@ async function inspectDownloadTree(base: string, target: string) {
   const executableTypes: Record<string, number> = {};
   let disguisedExecutables = 0;
   let archives = 0;
+  const signatureCandidates: string[] = [];
   const fingerprints: string[] = [];
   while (pending.length) {
     const current = pending.pop()!;
@@ -75,6 +76,9 @@ async function inspectDownloadTree(base: string, target: string) {
         const header = Buffer.alloc(2);
         const { bytesRead } = await handle.read(header, 0, header.length, 0);
         const mz = bytesRead === 2 && header[0] === 0x4d && header[1] === 0x5a;
+        if (mz || [".msi", ".msp", ".ps1", ".psm1", ".cat"].includes(ext)) {
+          if (signatureCandidates.length < 500) signatureCandidates.push(current);
+        }
         if (executableExtensions.has(ext)) {
           executableTypes[ext] = (executableTypes[ext] ?? 0) + 1;
         } else if (mz) {
@@ -88,7 +92,7 @@ async function inspectDownloadTree(base: string, target: string) {
     }
   }
   if (!files) throw new Error("No files to scan");
-  return { files, bytes, executableTypes, disguisedExecutables, archives, fingerprint: createHash("sha256").update(JSON.stringify(fingerprints.sort())).digest("hex") };
+  return { files, bytes, executableTypes, disguisedExecutables, archives, signatureCandidates, fingerprint: createHash("sha256").update(JSON.stringify(fingerprints.sort())).digest("hex") };
 }
 
 export async function scanCompletedDownload(download: Download, afterExtraction = false): Promise<boolean> {
@@ -114,6 +118,16 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       const systemRoot = process.env.SystemRoot;
       if (!systemRoot || !path.isAbsolute(systemRoot)) return false;
       const powershell = path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+      const signatureSummary: Record<string, number> = {};
+      for (const candidate of inventory.signatureCandidates) {
+        try {
+          const result = await run(powershell, ["-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference=\'Stop\'; (Get-AuthenticodeSignature -LiteralPath $env:KRYSTA_SIGNATURE_PATH).Status.ToString()"], { windowsHide: true, timeout: 15000, maxBuffer: 16384, env: {...process.env, KRYSTA_SIGNATURE_PATH: candidate} });
+          const status = result.stdout.trim();
+          const key = ["Valid", "NotSigned", "HashMismatch", "NotTrusted", "UnknownError", "NotSupportedFileFormat", "Incompatible"].includes(status) ? status : "Unknown";
+          signatureSummary[key] = (signatureSummary[key] ?? 0) + 1;
+        } catch { signatureSummary.Unknown = (signatureSummary.Unknown ?? 0) + 1; }
+      }
+      logger.info("[Security Shield] Authenticode observations (not a malware verdict):", signatureSummary);
       const { stdout } = await run(powershell, ["-NoProfile", "-NonInteractive", "-Command",
         "$ErrorActionPreference='Stop'; $s=Get-MpComputerStatus; if (-not $s.AntivirusEnabled -or -not $s.AMServiceEnabled) { throw 'Defender unavailable' }; $before=Get-Date; Start-MpScan -ScanType CustomScan -ScanPath $env:KRYSTA_SCAN_PATH -ErrorAction Stop; $after=Get-MpComputerStatus; $detections=@(Get-MpThreatDetection -ErrorAction Stop | Where-Object { $_.InitialDetectionTime -ge $before }); [pscustomobject]@{ enabled=[bool]$after.AntivirusEnabled; realtime=[bool]$after.RealTimeProtectionEnabled; signaturesOutOfDate=[bool]$after.DefenderSignaturesOutOfDate; recentDetections=$detections.Count } | ConvertTo-Json -Compress"],
         { windowsHide: true, timeout: 2 * 60 * 60 * 1000, maxBuffer: 1024 * 1024, env: {...process.env, KRYSTA_SCAN_PATH: target} });
