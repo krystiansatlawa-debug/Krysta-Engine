@@ -107,6 +107,11 @@ pub fn request_windows_background_application_close(process_id: u32, expected_pa
 }
 
 #[napi]
+pub fn get_windows_xbox_battery_level(index: u32) -> Option<String> {
+    xbox_guide::battery_level(index)
+}
+
+#[napi]
 pub fn get_windows_xbox_guide_pressed() -> Option<bool> {
     xbox_guide::is_pressed()
 }
