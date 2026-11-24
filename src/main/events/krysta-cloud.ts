@@ -276,7 +276,7 @@ ipcMain.handle("krysta:cloud-open-pre-update-folder", async () => {
   const error = await shell.openPath(folder);
   if (error) throw Error("Cannot open backup folder");
 });
-type PendingCloudSave = {shop:GameShop; id:string; provider:"google"|"synology"; identity:string; version:string; expectedRemote:string|null};
+type PendingCloudSave = {shop:GameShop; id:string; provider:"google"|"synology"; identity:string; version:string; expectedRemote:string|null; automatic?:boolean; attempts?:number; nextAttemptAt?:number};
 const pendingCloudSaves = db.sublevel<string, PendingCloudSave>("krysta-pending-cloud-saves",{valueEncoding:"json"});
 let pendingCloudBusy = false;
 async function flushPendingCloudSaves() {
@@ -285,18 +285,27 @@ async function flushPendingCloudSaves() {
   try {
     for await (const [queueKey, item] of pendingCloudSaves.iterator()) {
       if (!net.isOnline() || hasTrackedGamesRunning()) break;
+      if ((item.nextAttemptAt ?? 0) > Date.now()) continue;
       try {
+        const current = await config();
+        if (item.automatic && !current.autoBackup) continue;
         const ctx = await gameContext(item.shop,item.id);
         if (ctx.provider !== item.provider || ctx.identity !== item.identity) continue;
         await locked(ctx.key,async () => {
           if (hasTrackedGamesRunning()) return;
           const remote = await listRemoteCloudSnapshots(item.provider,item.identity,ctx.remoteKey);
           if (remote.some(m=>m.id===item.version)) { await pendingCloudSaves.del(queueKey); return; }
-          if ((remote[0]?.id ?? null) !== item.expectedRemote) return;
+          if ((remote[0]?.id ?? null) !== item.expectedRemote) {
+            await pendingCloudSaves.put(queueKey,{...item,nextAttemptAt:Date.now()+15*60_000});
+            return;
+          }
           if (!/^[a-f0-9-]{36}$/.test(item.version)) return;
           const dir = path.join(ctx.base,item.version);
           await safeDirectory(ctx.root,dir);
-          const m = JSON.parse(await fs.readFile(path.join(dir,"manifest.json"),"utf8"));
+          const manifest = path.join(dir,"manifest.json");
+          const manifestStat = await fs.lstat(manifest);
+          if (!manifestStat.isFile() || manifestStat.isSymbolicLink() || manifestStat.size > 8*1024**2) return;
+          const m = JSON.parse(await fs.readFile(manifest,"utf8"));
           if (m.id!==item.version || !Array.isArray(m.files) || !m.files.length || m.files.length>5000) return;
           const names:string[] = [];
           for (const f of m.files) {
@@ -305,11 +314,15 @@ async function flushPendingCloudSaves() {
             if (!st.isFile() || st.isSymbolicLink() || st.size!==f.size) return;
             names.push(f.name);
           }
-          if (hasTrackedGamesRunning() || (await config()).provider!==item.provider) return;
+          const latest = await config();
+          if (hasTrackedGamesRunning() || latest.provider!==item.provider || (item.automatic && !latest.autoBackup)) return;
           await uploadCloudSnapshot(item.provider,item.identity,ctx.remoteKey,item.version,dir,names);
           await pendingCloudSaves.del(queueKey);
         });
-      } catch { /* retain local copy and retry later */ }
+      } catch {
+        const attempts = (item.attempts ?? 0)+1;
+        await pendingCloudSaves.put(queueKey,{...item,attempts,nextAttemptAt:Date.now()+Math.min(3600_000,60_000*2**Math.min(attempts,6))}).catch(()=>{});
+      }
     }
   } finally { pendingCloudBusy = false; }
 }
@@ -451,20 +464,21 @@ async function backupGame(
           (await directCloudIdentity(provider)) !== identity
         )
           throw Error("Cloud provider changed");
-        if (!net.isOnline()) {
-          await fs.rename(temp,path.join(base,uuid));
-          await pendingCloudSaves.put(identity+":"+uuid,{shop,id,provider,identity:identity!,version:uuid,expectedRemote:comparison.version ?? null});
-          await publishKrystaNotification("KRYSTA_CLOUD",game.title,"Kopia lokalna zapisana. Oczekuje na internet.").catch(()=>{});
-          return true;
+        const queueKey = identity+":"+uuid;
+        const item: PendingCloudSave = {shop,id,provider,identity:identity!,version:uuid,expectedRemote:comparison.version ?? null,automatic};
+        const destination = path.join(base,uuid);
+        await fs.rename(temp,destination);
+        await pendingCloudSaves.put(queueKey,item);
+        if (net.isOnline()) {
+          try {
+            await uploadCloudSnapshot(provider,identity!,remoteKey,uuid,destination,entries.map(e=>e.name));
+            await pendingCloudSaves.del(queueKey);
+            await publishKrystaNotification("KRYSTA_CLOUD",game.title,"Kopia zapisów wykonana").catch(()=>{});
+            return true;
+          } catch { /* keep the same snapshot ID for retry */ }
         }
-        await uploadCloudSnapshot(
-          provider,
-          identity!,
-          remoteKey,
-          uuid,
-          temp,
-          entries.map((e) => e.name)
-        );
+        await publishKrystaNotification("KRYSTA_CLOUD",game.title,"Kopia lokalna zapisana. Oczekuje na synchronizację.").catch(()=>{});
+        return true;
       }
       await fs.rename(temp, path.join(base, uuid));
       await publishKrystaNotification(
