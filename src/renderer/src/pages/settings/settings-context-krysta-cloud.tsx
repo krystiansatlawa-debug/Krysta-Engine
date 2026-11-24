@@ -9,6 +9,8 @@ export function SettingsContextKrystaCloud() {
     folder?: string;
     autoBackup?: boolean;
     syncBeforeLaunch?: boolean;
+    backupScreenshots?: boolean;
+    backupRecordings?: boolean;
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -75,6 +77,8 @@ export function SettingsContextKrystaCloud() {
       folder?: string;
       autoBackup?: boolean;
       syncBeforeLaunch?: boolean;
+    backupScreenshots?: boolean;
+    backupRecordings?: boolean;
     }>
   ) => {
     setBusy(true);
@@ -220,6 +224,9 @@ export function SettingsContextKrystaCloud() {
             {cfg.provider === "google" && (
               <>
                 <h4>Google Drive</h4>
+                <CheckboxField checked={cfg.backupScreenshots === true} disabled={busy || !accounts?.google} label={pl ? "Synchronizuj zrzuty ekranu" : "Back up screenshots"} onChange={() => void run(() => window.electron.krystaCloudMedia("backupScreenshots", !cfg.backupScreenshots))} />
+                <CheckboxField checked={cfg.backupRecordings === true} disabled={busy || !accounts?.google} label={pl ? "Synchronizuj nagrania" : "Back up recordings"} onChange={() => void run(() => window.electron.krystaCloudMedia("backupRecordings", !cfg.backupRecordings))} />
+                <p>{pl ? "Wymaga automatycznej kopii po grze. Limity pliku: zdjęcia 16 MB, nagrania 96 MB." : "Requires automatic backup after playing. File limits: screenshots 16 MB, recordings 96 MB."}</p>
                 {accounts && !accounts.google && !accounts.googleConfigured && (
                   <p role="status">
                     {pl
