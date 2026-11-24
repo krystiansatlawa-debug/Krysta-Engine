@@ -170,11 +170,15 @@ async function connectGoogle(installed: DesktopClient) {
     rejectCallback = reject;
   });
   void codePromise.catch(() => {});
+  let callbackAccepted = false;
   const server = createServer((req, res) => {
-    const u = new URL(req.url ?? "/", "http://127.0.0.1");
+    let u: URL;
+    try { u = new URL(req.url ?? "/", "http://127.0.0.1"); }
+    catch { res.writeHead(400); res.end("Invalid request"); return; }
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
     if (
+      callbackAccepted ||
       req.method !== "GET" ||
       u.pathname !== "/callback" ||
       u.searchParams.get("state") !== state
@@ -183,6 +187,7 @@ async function connectGoogle(installed: DesktopClient) {
       res.end("Invalid request");
       return;
     }
+    callbackAccepted = true;
     const error = u.searchParams.get("error");
     if (error) {
       res.end("Google sign-in was not completed. Return to Krysta Launcher.");
@@ -200,12 +205,12 @@ async function connectGoogle(installed: DesktopClient) {
     callback(code);
   });
   const timer = setTimeout(
-    () => rejectCallback(Error("Google login timed out")),
+    () => rejectCallback(Error("Logowanie Google: upłynął czas oczekiwania. Zamknij kartę logowania i spróbuj ponownie.")),
     180000
   );
   try {
     await new Promise<void>((resolve, reject) => {
-      server.once("error", reject);
+      server.once("error", () => reject(Error("Nie można uruchomić lokalnego połączenia OAuth. Sprawdź zaporę systemową.")));
       server.listen(0, "127.0.0.1", resolve);
     });
     const addr = server.address();
@@ -223,7 +228,9 @@ async function connectGoogle(installed: DesktopClient) {
       access_type: "offline",
       prompt: "consent",
     }).toString();
-    await shell.openExternal(u.toString());
+    await shell.openExternal(u.toString()).catch(() => {
+      throw Error("Nie można otworzyć przeglądarki. Sprawdź domyślną przeglądarkę systemową.");
+    });
     const code = await codePromise;
     const t = await tokenRequest({
       client_id: installed.client_id,
@@ -234,7 +241,7 @@ async function connectGoogle(installed: DesktopClient) {
       redirect_uri: redirect,
     });
     if (!t.refresh_token || !t.access_token)
-      throw Error("Google did not provide offline authorization");
+      throw Error("Google nie udzielił dostępu offline. Ponownie połącz konto i zaakceptuj wymagane uprawnienia.");
     await probeGoogleDrive(t.access_token);
     await write({
       ...(await read()),
