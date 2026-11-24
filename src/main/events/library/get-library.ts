@@ -92,13 +92,12 @@ const getLibrary = async (
   collection: "visible" | "hidden" | "all" = "visible"
 ): Promise<LibraryGame[]> => {
   const authContext = HydraApi.getAuthContext();
-  const entries = (await gamesSublevel.iterator().all())
-    .filter(([_key, game]) => belongsToLibraryCollection(game, collection))
-    .map(
-      ([key, storedGame]) =>
-        [key, getContextualEpicGame(storedGame, authContext)] as const
-    )
-    .filter(([_key, game]) => !game.isDeleted);
+  const entries: Array<readonly [string, Game]> = [];
+  for await (const [key, storedGame] of gamesSublevel.iterator()) {
+    if (!belongsToLibraryCollection(storedGame, collection)) continue;
+    const game = getContextualEpicGame(storedGame, authContext);
+    if (!game.isDeleted) entries.push([key, game]);
+  }
   const keys = entries.map(([key]) => key);
   const catalogueKeys = entries.map(([key, game]) =>
     game.catalogueGame
