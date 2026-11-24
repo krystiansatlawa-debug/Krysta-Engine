@@ -1,5 +1,5 @@
 name: Krysta Release
-# Game Boost 3.0 validation and prerelease.
+# Combined Security Shield and Game Boost 3.0 prerelease.
 on:
   workflow_dispatch:
   push:
@@ -138,5 +138,5 @@ jobs:
           $hashes = $files | ForEach-Object { $h = Get-FileHash -LiteralPath $_ -Algorithm SHA256; "$($h.Hash.ToLowerInvariant())  $(Split-Path $_ -Leaf)" }
           $hashes | Set-Content -LiteralPath 'dist/krysta-launcher-1.0.26-sha256.txt' -Encoding ascii
           $files += 'dist/krysta-launcher-1.0.26-sha256.txt'
-          gh release create $tag @files --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Krysta Launcher 1.0.26' --prerelease --notes 'Game Boost 3.0 test release. Runtime performance and Security Shield verdicts are not yet validated.'
+          gh release create $tag @files --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Krysta Engine 1.0.26 - Security Shield + Game Boost 3.0' --prerelease --notes 'Combined 1.0.25 Security Shield + 1.0.26 Game Boost 3.0. Runtime performance and scan-specific clean verdicts are not yet validated.'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
