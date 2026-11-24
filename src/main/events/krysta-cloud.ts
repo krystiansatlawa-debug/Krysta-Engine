@@ -10,6 +10,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { gamesSublevel, levelKeys } from "@main/level";
 import { publishKrystaNotification } from "@main/services/notifications/krysta-notifications";
 import { Ludusavi } from "@main/services/ludusavi";
+import { getCloudSavePathContext } from "@main/services/cloud-save/cloud-save-game-context";
+import { NativeAddon } from "@main/services/native-addon";
+import { SystemPath } from "@main/services/system-path";
+import { getRecompilationSaveRules } from "@main/services/cloud-save/recompilation-cloud-save";
 import { waitForGameBoostBackgroundSync } from "@main/services/game-boost-background-sync";
 import {
   gamesPlaytime,
@@ -113,10 +117,25 @@ async function safeDirectory(root: string, dir: string) {
   return actual;
 }
 async function discover(shop: GameShop, id: string) {
-  const data = await Ludusavi.getBackupPreview(shop, id);
-  const paths = Object.values(data?.games ?? {}).flatMap((g) =>
-    Object.keys(g.files ?? {})
-  );
+  const context = await getCloudSavePathContext(id, shop).catch(() => undefined);
+  const game = context?.game;
+  const data = await Ludusavi.getBackupPreview(shop, id, context?.pathContext.winePrefixPath).catch(() => null);
+  const matches = data?.games ?? {};
+  const values = Object.values(matches);
+  const match = matches[id] ?? (values.length === 1 ? values[0] : undefined);
+  const paths = Object.keys(match?.files ?? {});
+  if (context && game && !context.emulatorProvider) {
+    const native = await (async () => {
+      const { rules } = await NativeAddon.getSaveRulesForGame({
+        shop, objectId: id, title: game.title, remoteId: game.remoteId ?? undefined,
+        userDataPath: SystemPath.getPath("userData"),
+        recompilationRules: getRecompilationSaveRules(context.pathContext, game.executablePath)
+      });
+      return NativeAddon.scanLocalSaveRuleFiles(context.pathContext, rules.filter(({ tags }) => tags.includes("save")));
+    })().catch(() => []);
+    paths.push(...native);
+  }
+  if (paths.length > 5000) throw Error("Too many detected save files");
   const files: string[] = [];
   for (const p of [...new Set(paths)]) {
     if (!path.isAbsolute(p)) continue;
