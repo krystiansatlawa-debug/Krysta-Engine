@@ -451,8 +451,11 @@ export async function uploadCloudSnapshot(
   gameKey: string,
   snapshotId: string,
   dir: string,
-  names: string[]
+  names: string[],
+  shouldPause: () => boolean = () => false
 ) {
+  const checkPause = () => { if (shouldPause()) throw Error("KRYSTA_CLOUD_PAUSED: Synchronizacja wstrzymana podczas gry"); };
+  checkPause();
   const c = await read(),
     account = c[provider];
   if (
@@ -470,6 +473,7 @@ export async function uploadCloudSnapshot(
   const files = [...names, "manifest.json"];
   // Bound memory per upload; the manifest is committed last, never overwriting an older snapshot.
   async function payload(name: string) {
+    checkPause();
     const p = path.join(dir, name),
       st = await fs.lstat(p);
     if (!st.isFile() || st.isSymbolicLink() || st.size > 64 * 1024 ** 2)
@@ -524,6 +528,7 @@ export async function uploadCloudSnapshot(
     if (data.nextPageToken || (data.files?.length ?? 0) > 1)
       throw Error("Multiple Krysta Cloud folders; resolve ambiguity in Drive");
     const root = data.files?.[0]?.id ?? (await createFolder("Krysta Cloud"));
+    checkPause();
     const folder = await createFolder(gameKey + "-" + snapshotId, root);
     for (const name of files) {
       const bytes = await payload(name),
@@ -541,6 +546,7 @@ export async function uploadCloudSnapshot(
         bytes,
         Buffer.from("\r\n--" + boundary + "--\r\n"),
       ]);
+      checkPause();
       const response = await fetch(
         "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",
         {
@@ -578,6 +584,7 @@ export async function uploadCloudSnapshot(
     const cloud = new URL("Krysta%20Cloud/", root),
       snapshot = new URL(gameKey + "-" + snapshotId + "/", cloud);
     for (const u of [cloud, snapshot]) {
+      checkPause();
       const response = await fetch(u, {
         method: "MKCOL",
         headers: auth,
@@ -589,6 +596,8 @@ export async function uploadCloudSnapshot(
         throw Error("WebDAV folder creation failed (" + response.status + ")");
     }
     for (const name of files) {
+      const bytes = await payload(name);
+      checkPause();
       const response = await fetch(new URL(name, snapshot), {
         method: "PUT",
         headers: {
@@ -596,7 +605,7 @@ export async function uploadCloudSnapshot(
           "Content-Type": "application/octet-stream",
           "If-None-Match": "*",
         },
-        body: new Uint8Array(await payload(name)),
+        body: new Uint8Array(bytes),
         redirect: "error",
         signal: AbortSignal.timeout(120000),
       });
