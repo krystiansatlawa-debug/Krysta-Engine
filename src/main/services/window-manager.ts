@@ -396,12 +396,16 @@ export class WindowManager {
     // Limit visual work only in the launcher renderer, not capture windows.
     let reducedMotionCss: string | undefined;
     let motionUpdate = Promise.resolve();
+    let motionPending = false;
     const updateLauncherMotion = () => {
+      if (motionPending) return;
+      motionPending = true;
       motionUpdate = motionUpdate.then(async () => {
+        motionPending = false;
         if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
         const contents = mainWindow.webContents;
         contents.setBackgroundThrottling(true);
-        const reduce = isGameBoostBackgroundSyncPaused();
+        const reduce = isGameBoostBackgroundSyncPaused() && !mainWindow.isFocused();
         if (reduce && !reducedMotionCss) {
           reducedMotionCss = await contents.insertCSS(
             "*, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }"
@@ -422,7 +426,8 @@ export class WindowManager {
       reducedMotionCss = undefined;
       updateLauncherMotion();
     });
-    mainWindow.on("blur", sleepLauncher);
+    mainWindow.on("blur", () => { sleepLauncher(); updateLauncherMotion(); });
+    mainWindow.on("focus", updateLauncherMotion);
     mainWindow.once("closed", unsubscribeSleep);
     sleepLauncher();
 
