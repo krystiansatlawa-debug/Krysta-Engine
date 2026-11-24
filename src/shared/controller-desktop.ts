@@ -34,7 +34,9 @@ export function desktopActions(
   const down = (i: number) => Boolean(active?.buttons[i]);
   const was = (i: number) => Boolean(previous?.buttons[i]);
   const pressed = (i: number) => down(i) && !was(i);
-  for (const [index, button] of [[0, "left"], [1, "right"]] as const) {
+  const bindings = normalizeControllerProfile(settings).bindings;
+  const bind = (action: string, fallback: number) => bindings[action] ?? fallback;
+  for (const [index, button] of [[bind("left", 0), "left"], [bind("right", 1), "right"]] as const) {
     if (down(index) !== was(index)) actions.push({ type: "mouse", button, down: down(index) });
   }
   if (!active) return actions;
@@ -45,12 +47,12 @@ export function desktopActions(
   if (x || y) actions.push({ type: "move", x, y });
   const sx = axis(2), sy = axis(3);
   if (sx || sy) actions.push({ type: "scroll", x: sx, y: sy });
-  if (pressed(2) && !down(0) && !down(1)) actions.push({ type: "doubleClick" });
-  if (pressed(4)) actions.push({ type: "volume", direction: -1 });
-  if (pressed(5)) actions.push({ type: "volume", direction: 1 });
-  if (pressed(3)) actions.push({ type: "switchWindow" });
-  if (pressed(13)) actions.push({ type: "minimize" });
-  if (pressed(12)) actions.push({ type: "maximize" });
+  if (pressed(bind("doubleClick", 2)) && !down(bind("left", 0)) && !down(bind("right", 1))) actions.push({ type: "doubleClick" });
+  if (pressed(bind("volumeDown", 4))) actions.push({ type: "volume", direction: -1 });
+  if (pressed(bind("volumeUp", 5))) actions.push({ type: "volume", direction: 1 });
+  if (pressed(bind("switchWindow", 3))) actions.push({ type: "switchWindow" });
+  if (pressed(bind("minimize", 13))) actions.push({ type: "minimize" });
+  if (pressed(bind("maximize", 12))) actions.push({ type: "maximize" });
   return actions;
 }
 
