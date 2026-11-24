@@ -1,5 +1,5 @@
 name: Krysta Release
-# Combined Achievements 2.0 and Cloud Sync 2.0 release 1.0.24.
+# Retry combined 1.0.24 after cloud library type fix.
 on:
   workflow_dispatch:
   push:
