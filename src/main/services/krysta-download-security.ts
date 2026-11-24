@@ -1,3 +1,4 @@
+import { app } from "electron";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -8,6 +9,23 @@ import { logger } from "./logger";
 
 const run = promisify(execFile);
 const active = new Map<string, Promise<boolean>>();
+let historyQueue: Promise<void> = Promise.resolve();
+function recordSecurityDecision(fingerprint: string, level: string, reasons: string[]) {
+  const entry = JSON.stringify({ schema: 1, timestamp: new Date().toISOString(), fingerprint, level, reasons, verified: false }) + "\n";
+  const task = historyQueue.then(async () => {
+    const directory = path.join(app.getPath("userData"), "security-shield");
+    await fs.mkdir(directory, { recursive: true });
+    const history = path.join(directory, "decisions.jsonl");
+    const stat = await fs.stat(history).catch(() => null);
+    if (stat && stat.size >= 5 * 1024 * 1024) {
+      await fs.rm(history + ".previous", { force: true });
+      await fs.rename(history, history + ".previous");
+    }
+    await fs.appendFile(history, entry, { encoding: "utf8", mode: 0o600 });
+  });
+  historyQueue = task.catch(() => { logger.warn("[Security Shield] Nie udało się zapisać historii decyzji."); });
+  return historyQueue;
+}
 let nextReputationRequest = 0;
 
 // Hash-only, opt-in reputation lookup. Never upload downloaded files.
@@ -222,6 +240,7 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       if (inventory.archives) reasons.push("Wykryto archiwa; zawartość wymaga sprawdzenia po rozpakowaniu.");
       const level = high ? "high" : reasons.length ? "review" : "unverified";
       if (!reasons.length) reasons.push("Brak potwierdzonego wyniku skanowania konkretnych plików.");
+      await recordSecurityDecision(inventory.fingerprint, level, reasons);
       logger.info("[Security Shield] Ocena zagrożenia:", { level, reasons, verified: false, disclaimer: "Nawet pomyślne skanowanie nie gwarantuje bezpieczeństwa plików." });
       if (report.enabled !== true || report.realtime !== true || report.signaturesOutOfDate !== false || report.recentDetections !== 0) {
         logger.warn("[Security Shield] Defender reported detections or protection is not fully available");
