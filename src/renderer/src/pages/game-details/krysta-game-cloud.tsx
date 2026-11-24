@@ -17,6 +17,12 @@ export function KrystaGameCloud({
   );
   const [entries, setEntries] = useState<Entry[]>([]);
   const [busy, setBusy] = useState(false);
+  const [operations,setOperations] = useState<{at:string;kind:string;result:string}[]>([]);
+  const recordOperation = (kind:string,result:string) => {
+    setOperations(previous=>[{at:new Date().toISOString(),kind,result},...previous].slice(0,30));
+  };
+  useEffect(()=>{setOperations([]);},[shop,objectId]);
+
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [comparison, setComparison] = useState<Awaited<
@@ -26,8 +32,11 @@ export function KrystaGameCloud({
     setBusy(true);
     setError("");
     try {
-      setComparison(await window.electron.krystaCloudCompare(shop, objectId));
+      const result = await window.electron.krystaCloudCompare(shop, objectId);
+      setComparison(result);
+      recordOperation("compare",result.state);
     } catch (e) {
+      recordOperation("error","error");
       setError(String(e));
     } finally {
       setBusy(false);
@@ -66,6 +75,7 @@ export function KrystaGameCloud({
     setNotice("");
     try {
       if (await window.electron.krystaCloudBackup(shop, objectId)) {
+        recordOperation("backup","created");
         await reload();
         setComparison(null);
         setNotice(
@@ -75,6 +85,7 @@ export function KrystaGameCloud({
         );
       }
     } catch (e) {
+      recordOperation("error","error");
       setError(String(e));
     } finally {
       setBusy(false);
@@ -89,6 +100,7 @@ export function KrystaGameCloud({
     try {
       const result = await window.electron.krystaCloudCompare(shop,objectId);
       setComparison(result);
+      recordOperation("sync",result.state);
       if (result.state === "same") {
         setNotice(pl ? "Zapisy są już zsynchronizowane." : "Saves are already synchronized.");
         return;
@@ -99,11 +111,12 @@ export function KrystaGameCloud({
         return;
       }
       if (await window.electron.krystaCloudBackup(shop,objectId)) {
+        recordOperation("backup","created");
         await reload();
         setComparison(null);
         setNotice(pl ? "Kopia utworzona. Sprawdź historię, aby potwierdzić dostępność w chmurze." : "Backup created. Check history to confirm cloud availability.");
       }
-    } catch(e) { setError(String(e)); }
+    } catch(e) { recordOperation("sync","error"); setError(String(e)); }
     finally { setBusy(false); }
   };
   const restore = async (version: string) => {
@@ -112,6 +125,7 @@ export function KrystaGameCloud({
     setNotice("");
     try {
       if (await window.electron.krystaCloudRestore(shop, objectId, version)) {
+        recordOperation("restore","restored");
         await reload();
         setNotice(
           pl
@@ -120,6 +134,7 @@ export function KrystaGameCloud({
         );
       }
     } catch (e) {
+      recordOperation("error","error");
       setError(String(e));
     } finally {
       setBusy(false);
@@ -238,6 +253,10 @@ export function KrystaGameCloud({
               )}
             </div>
           )}
+          <h3>{pl ? "Ostatnie operacje w tej sesji" : "Recent operations this session"}</h3>
+          {operations.length === 0 ? <p>{pl ? "Brak operacji." : "No operations."}</p> : operations.map((op,index)=>(
+            <p key={op.at+index}>{new Date(op.at).toLocaleString(i18n.language)} · {pl ? ({compare:"Porównanie",sync:"Synchronizacja",backup:"Kopia",restore:"Przywracanie",error:"Operacja"} as Record<string,string>)[op.kind] : op.kind} · {pl ? ({same:"Zgodne",different:"Konflikt",unavailable:"Niedostępne","no-backup":"Brak kopii",created:"Utworzona (sprawdź lokalizację w historii)",restored:"Przywrócono",error:"Błąd"} as Record<string,string>)[op.result] : op.result}</p>
+          ))}
           <h3>
             {pl
               ? "Historia wersji zapisów"
