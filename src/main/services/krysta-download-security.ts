@@ -127,7 +127,7 @@ export function assessReputation(report: Awaited<ReturnType<typeof lookupFileRep
   if (malicious >= 2) return { level: "high", reason: "Co najmniej dwa silniki zgłaszają zagrożenie; wymagana weryfikacja.", requiresReview: true };
   if (malicious > 0 || suspicious > 0) return { level: "ambiguous", reason: "Niejednoznaczne wykrycie. Możliwy fałszywy alarm, ale nie potwierdzono bezpieczeństwa.", requiresReview: true };
   const date = report.analysisDate;
-  if (typeof date !== "number" || !Number.isFinite(date) || date * 1000 > Date.now() || Date.now() - date * 1000 > 7 * 86400000 || harmless + undetected < 10) return { level: "unknown", reason: "Raport nieaktualny lub niewystarczający.", requiresReview: true };
+  if (typeof date !== "number" || !Number.isSafeInteger(date) || date <= 0 || date * 1000 > Date.now() || Date.now() - date * 1000 > 7 * 86400000 || harmless + undetected < 10) return { level: "unknown", reason: "Raport nieaktualny lub niewystarczający.", requiresReview: true };
   return { level: "no-detections", reason: "Brak wykryć w dostępnym raporcie; nie stanowi gwarancji bezpieczeństwa.", requiresReview: false };
 }
 
