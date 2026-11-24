@@ -251,11 +251,13 @@ async function backupGame(
   id: string,
   automatic = false,
   expected?: Config,
-  beforeUpdate = false
+  beforeUpdate = false,
+  signal?: AbortSignal
 ) {
   const { key, game, base, root, provider, identity, remoteKey } =
     await gameContext(shop, id, beforeUpdate);
   return locked(key, async () => {
+    if (signal?.aborted) return false;
     if (isTrackedGameKeyRunning(key))
       throw Error("Close the game before backing up");
     if (automatic) {
@@ -268,6 +270,7 @@ async function backupGame(
         return false;
     }
     const files = await discover(shop, id);
+    if (signal?.aborted) return false;
     if (!files.length) {
       if (automatic) return false;
       throw Error(
@@ -322,6 +325,9 @@ async function backupGame(
       const entries: { name: string; original: string; size: number }[] = [];
       let total = 0;
       for (const [i, p] of files.entries()) {
+        if (signal?.aborted || isTrackedGameKeyRunning(key)) throw Error("Backup cancelled: game restarted");
+        if (automatic) await waitForGameBoostBackgroundSync(signal);
+        if (signal?.aborted || isTrackedGameKeyRunning(key)) throw Error("Backup cancelled: game restarted");
         const st = await fs.stat(p);
         total += st.size;
         if (total > 5 * 1024 ** 3) throw Error("Backup exceeds 5 GB");
@@ -341,7 +347,7 @@ async function backupGame(
         }
         entries.push({ name, original: p, size: st.size });
       }
-      if (isTrackedGameKeyRunning(key))
+      if (signal?.aborted || isTrackedGameKeyRunning(key))
         throw Error("Game started during backup");
       await fs.writeFile(
         path.join(temp, "manifest.json"),
@@ -657,9 +663,11 @@ onTrackedGamesRunningChange(() => {
         )
           return;
         const game = await gamesSublevel.get(key);
-        if (!game || controller.signal.aborted) return;
+        if (!game || game.isDeleted || controller.signal.aborted) return;
         await waitForGameBoostBackgroundSync(controller.signal);
-        const done = await backupGame(game.shop, game.objectId, true, c);
+        if (controller.signal.aborted || isTrackedGameKeyRunning(key)) return;
+        const done = await backupGame(game.shop, game.objectId, true, c, false, controller.signal);
+        if (controller.signal.aborted) return;
         autoResults.set(key, {
           state: done ? "saved" : "skipped",
           at: new Date().toISOString(),
