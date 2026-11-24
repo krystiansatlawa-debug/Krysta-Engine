@@ -65,7 +65,7 @@ export const collectGameAchievementFiles = async (
   achievementFiles.push(...gameDirectoryFiles);
 
   if (includeSteamCache) {
-    achievementFiles.push(...findAchievementFileInSteamPath(game));
+    achievementFiles.push(...await findAchievementFileInSteamPath(game));
   }
 
   return dedupeAchievementFiles(achievementFiles);
