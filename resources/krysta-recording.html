@@ -25,6 +25,43 @@
         finishTimer = null;
       let chosenMime = "";
       let nvidiaEncoder = null;
+      let captureFps = 60;
+      let adaptationTimer = null;
+      let adaptationBusy = false;
+      let pressureSamples = 0;
+      let healthySamples = 0;
+      let lastAdaptationTick = 0;
+
+      // Timer delay is a conservative worker-pressure signal, not a GPU meter.
+      // Change capture cadence without restarting the encoder or changing resolution.
+      function startAdaptation() {
+        captureFps = config.fps;
+        if (captureFps <= 30) return;
+        lastAdaptationTick = performance.now();
+        adaptationTimer = setInterval(async () => {
+          const now = performance.now();
+          const delayed = now - lastAdaptationTick > 1250;
+          lastAdaptationTick = now;
+          if (ended || adaptationBusy) return;
+          pressureSamples = delayed ? pressureSamples + 1 : 0;
+          healthySamples = delayed ? 0 : healthySamples + 1;
+          const next = pressureSamples >= 3 ? 30 : healthySamples >= 15 ? config.fps : captureFps;
+          if (next === captureFps) return;
+          const track = stream?.getVideoTracks()[0];
+          if (!track || track.readyState !== "live") return;
+          adaptationBusy = true;
+          try {
+            await track.applyConstraints({ ...track.getConstraints(), frameRate: { ideal: next, max: next } });
+            captureFps = next;
+          } catch {
+            // Unsupported capture constraints must never interrupt recording.
+          } finally {
+            pressureSamples = 0;
+            healthySamples = 0;
+            adaptationBusy = false;
+          }
+        }, 1000);
+      }
 
       function videoBitrate() {
         return Math.round(
@@ -332,6 +369,8 @@
       }
       globalThis.krystaStop = () => {
         ended = true;
+        if (adaptationTimer !== null) clearInterval(adaptationTimer);
+        adaptationTimer = null;
         stopRotation();
         if (starting) void discard(starting);
         if (buffered) {
@@ -381,6 +420,7 @@
           throw Error("Video encoder unavailable");
         }
         started = true;
+        startAdaptation();
         await startRotation();
         return true;
       };
