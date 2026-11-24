@@ -35,7 +35,7 @@ export function getSecurityScanQueueStatus() {
   return { running: runningScans, queued: Math.max(0, active.size - runningScans), total: active.size };
 }
 function recordSecurityDecision(fingerprint: string | null, level: string, reasons: string[]) {
-  const entry = JSON.stringify({ schema: 1, timestamp: new Date().toISOString(), fingerprint, level, reasons, verified: false }) + "\n";
+  const entry = JSON.stringify({ schema: 1, timestamp: new Date().toISOString(), fingerprint, level, reasons: reasons.slice(0, 100).map(reason => reason.slice(0, 1000)), verified: false }) + "\n";
   const task = historyQueue.then(async () => {
     const directory = path.join(app.getPath("userData"), "security-shield");
     await fs.mkdir(directory, { recursive: true });
