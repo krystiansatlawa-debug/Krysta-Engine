@@ -8,6 +8,29 @@ import { logger } from "./logger";
 
 const run = promisify(execFile);
 const active = new Map<string, Promise<boolean>>();
+let nextReputationRequest = 0;
+
+// Hash-only, opt-in reputation lookup. Never upload downloaded files.
+export async function lookupFileReputation(sha256: string) {
+  const key = process.env.KRYSTA_VIRUSTOTAL_API_KEY;
+  if (process.env.KRYSTA_VIRUSTOTAL_ENABLED !== "1" || !key || !/^[a-f0-9]{64}$/.test(sha256)) return { status: "unavailable" as const };
+  if (Date.now() < nextReputationRequest) return { status: "deferred" as const };
+  nextReputationRequest = Date.now() + 16000;
+  try {
+    const response = await fetch("https://www.virustotal.com/api/v3/files/" + sha256, {
+      headers: { "x-apikey": key }, redirect: "error", signal: AbortSignal.timeout(15000)
+    });
+    if (response.status === 404) return { status: "unknown" as const };
+    if (response.status === 429) nextReputationRequest = Date.now() + 60000;
+    if (!response.ok) return { status: "unavailable" as const };
+    const body = await response.json() as { data?: { id?: string; attributes?: { last_analysis_stats?: Record<string, number>; last_analysis_date?: number; reputation?: number } } };
+    const attrs = body.data?.attributes;
+    const stats = attrs?.last_analysis_stats;
+    if (body.data?.id !== sha256 || !stats || !attrs || !["malicious", "suspicious", "undetected", "harmless"].every(k => Number.isSafeInteger(stats[k]) && stats[k] >= 0)) return { status: "unknown" as const };
+    return { status: "reported" as const, stats, analysisDate: attrs.last_analysis_date, reputation: attrs.reputation };
+  } catch { return { status: "unavailable" as const }; }
+}
+
 export async function detectRegisteredAntivirus(): Promise<{ name: string; productState: number | null }[] | null> {
   if (process.platform !== "win32") return null;
   const root = process.env.SystemRoot;
@@ -43,6 +66,7 @@ async function inspectDownloadTree(base: string, target: string) {
   let disguisedExecutables = 0;
   let archives = 0;
   const signatureCandidates: string[] = [];
+  const reputationCandidates = new Set<string>();
   const fingerprints: string[] = [];
   while (pending.length) {
     const current = pending.pop()!;
@@ -68,7 +92,8 @@ async function inspectDownloadTree(base: string, target: string) {
         const after = await file.stat();
         if (after.size !== stat.size || after.mtimeMs !== stat.mtimeMs) throw new Error("File changed during inspection");
       } finally { await file.close(); }
-      fingerprints.push(JSON.stringify([path.relative(target, current), hash.digest("hex")]));
+      const digest = hash.digest("hex");
+      fingerprints.push(JSON.stringify([path.relative(target, current), digest]));
       const ext = path.extname(current).toLowerCase();
       if (/\.(zip|rar|7z|tar|gz|bz2|xz|iso|cab|part\d+\.rar|\d{3})$/i.test(current)) archives++;
       const handle = await fs.open(current, "r");
@@ -79,6 +104,7 @@ async function inspectDownloadTree(base: string, target: string) {
         if (mz || [".msi", ".msp", ".ps1", ".psm1", ".cat"].includes(ext)) {
           if (signatureCandidates.length < 500) signatureCandidates.push(current);
         }
+        if ((mz || executableExtensions.has(ext)) && reputationCandidates.size < 500) reputationCandidates.add(digest);
         if (executableExtensions.has(ext)) {
           executableTypes[ext] = (executableTypes[ext] ?? 0) + 1;
         } else if (mz) {
@@ -92,7 +118,7 @@ async function inspectDownloadTree(base: string, target: string) {
     }
   }
   if (!files) throw new Error("No files to scan");
-  return { files, bytes, executableTypes, disguisedExecutables, archives, signatureCandidates, fingerprint: createHash("sha256").update(JSON.stringify(fingerprints.sort())).digest("hex") };
+  return { files, bytes, executableTypes, disguisedExecutables, archives, signatureCandidates, reputationCandidates: [...reputationCandidates], fingerprint: createHash("sha256").update(JSON.stringify(fingerprints.sort())).digest("hex") };
 }
 
 export async function scanCompletedDownload(download: Download, afterExtraction = false): Promise<boolean> {
@@ -115,6 +141,13 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       // Registration alone does not establish active protection or a clean scan.
       const inventory = await inspectDownloadTree(base, target);
       logger.info("[Security Shield] Download tree inventory:", inventory);
+      if (process.env.KRYSTA_VIRUSTOTAL_ENABLED === "1") {
+        for (const digest of inventory.reputationCandidates) {
+          const reputation = await lookupFileReputation(digest);
+          logger.info("[Security Shield] Hash reputation observation:", digest, reputation);
+          if (reputation.status === "deferred" || reputation.status === "unavailable") break;
+        }
+      }
       const systemRoot = process.env.SystemRoot;
       if (!systemRoot || !path.isAbsolute(systemRoot)) return false;
       const powershell = path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
