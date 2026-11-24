@@ -16,6 +16,8 @@ export interface GamepadState {
   hasGamepadConnected: boolean;
   activeGamepadIndex: number | null;
 
+  preferredGamepadIndex: number | null;
+  selectGamepad: (index: number | null) => void;
   profiles: Record<string, ControllerProfile>;
   activeProfile: ControllerProfile;
   saveProfile: (name: string, layout: string, profile: ControllerProfile) => void;
@@ -54,6 +56,12 @@ export const useGamepadStore = create<GamepadState>((set, get) => {
   };
 
   return {
+    preferredGamepadIndex: null,
+    selectGamepad: (index) => {
+      if (index !== null && !get().connectedGamepads.some((pad) => pad.index === index)) return;
+      GamepadService.getInstance().setPreferredGamepadIndex(index);
+      get().sync();
+    },
     profiles,
     activeProfile: defaultControllerProfile(),
     saveProfile: (name, layout, profile) => {
@@ -100,7 +108,8 @@ export const useGamepadStore = create<GamepadState>((set, get) => {
         hasGamepadConnected,
         connectedGamepads,
         activeGamepadIndex,
-        activeProfile: activeGamepadIndex === get().activeGamepadIndex ? get().activeProfile : resolveProfile(connectedGamepads.find((pad) => pad.index === activeGamepadIndex) ?? null),
+        preferredGamepadIndex: service.getPreferredGamepadIndex(),
+        activeProfile: activeGamepadIndex === get().activeGamepadIndex && connectedGamepads === get().connectedGamepads ? get().activeProfile : resolveProfile(connectedGamepads.find((pad) => pad.index === activeGamepadIndex) ?? null),
       });
     },
 
