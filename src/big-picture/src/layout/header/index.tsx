@@ -56,17 +56,22 @@ function Header() {
     let previous: boolean[] = [];
     let lastScroll = 0;
     const timer = window.setInterval(() => {
-      if (pending || !document.hasFocus()) { armed = false; return; }
+      if (pending) return;
+      if (!document.hasFocus()) { if (armed) void window.electron.controllerPointerAction("releaseAll", 0).catch(() => undefined); armed = false; return; }
       const pad = navigator.getGamepads()[activePadIndex];
-      if (!pad?.connected) { armed = false; return; }
+      if (!pad?.connected) { if (armed) void window.electron.controllerPointerAction("releaseAll", 0).catch(() => undefined); armed = false; return; }
       const x = pad.axes[0] ?? 0, y = pad.axes[1] ?? 0;
       const buttons = Array.from(pad.buttons, (button) => button.pressed);
       const rx = pad.axes[2] ?? 0, ry = pad.axes[3] ?? 0;
       if (!armed) { armed = [x,y,rx,ry].every(v => Math.abs(v) <= profile.deadZone) && !buttons.some(Boolean); previous = buttons; return; }
       const pressed = (index: number) => buttons[index] && !previous[index];
       const actions: [string, number][] = [];
-      if (pressed(profile.bindings.left ?? 0)) actions.push(["leftClick", 0]);
-      if (pressed(profile.bindings.right ?? 1)) actions.push(["rightClick", 0]);
+      for (const [side, index] of [["left", profile.bindings.left ?? 0], ["right", profile.bindings.right ?? 1]] as const) {
+        if (Boolean(buttons[index]) !== Boolean(previous[index])) actions.push([side + (buttons[index] ? "Down" : "Up"), 0]);
+      }
+      for (const [action, index] of [["volumeDown",4],["volumeUp",5],["switchWindow",3],["minimize",13],["maximize",12]] as const) {
+        if (pressed(profile.bindings[action] ?? index)) actions.push([action, 0]);
+      }
       if (pressed(profile.bindings.doubleClick ?? 2)) actions.push(["doubleClick", 0]);
       previous = buttons;
       if (Date.now() - lastScroll >= 100) {
@@ -80,7 +85,7 @@ function Header() {
       pending = true;
       void Promise.all([...(dx || dy ? [window.electron.moveControllerCursor(dx, dy)] : []), ...actions.map(([action, value]) => window.electron.controllerPointerAction(action, value))]).then((results) => { if (results.some(ok => !ok)) armed = false; }).catch(() => { armed = false; }).finally(() => { pending = false; });
     }, 32);
-    return () => window.clearInterval(timer);
+    return () => { window.clearInterval(timer); void window.electron.controllerPointerAction("releaseAll", 0).catch(() => undefined); };
   }, [activePadIndex, profile.enabled, profile.cursorSpeed, profile.deadZone, profile.bindings]);
   const [battery, setBattery] = useState<string[]>([]);
   const padIdentity = connectedPads.map((pad) => `${pad.index}:${pad.name}:${pad.layout}`).join("|");
