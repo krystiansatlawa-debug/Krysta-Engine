@@ -10,7 +10,11 @@ import { logger } from "./logger";
 import { DownloadOrchestrator } from "./download-orchestrator";
 import { refreshQueuedStoryProgress } from "./automatic-story-progress";
 
-const wrapInLoop = (fn: () => unknown, interval: number, deferDuringGame = false) => {
+const wrapInLoop = (
+  fn: () => unknown,
+  interval: number,
+  deferDuringGame = false
+) => {
   const loop = async () => {
     // eslint-disable-next-line no-constant-condition
     while (true) {
@@ -31,12 +35,13 @@ const wrapInLoop = (fn: () => unknown, interval: number, deferDuringGame = false
 export const startMainLoop = async () => {
   wrapInLoop(async () => {
     await watchProcesses();
-    refreshQueuedStoryProgress();
+    if (!hasTrackedGamesRunning()) refreshQueuedStoryProgress();
   }, INTERVALS.processWatcher);
   wrapInLoop(() => DownloadManager.watchDownloads(), INTERVALS.downloadWatcher);
   wrapInLoop(
     () => DownloadOrchestrator.pollAwaitingDebridDownloads(),
-    INTERVALS.debridReadinessWatcher
+    INTERVALS.debridReadinessWatcher,
+    true
   );
   wrapInLoop(
     () => AchievementWatcherManager.watchAchievements(),
@@ -47,7 +52,11 @@ export const startMainLoop = async () => {
     INTERVALS.seedStatusWatcher,
     true
   );
-  wrapInLoop(() => UpdateManager.checkForUpdates(), INTERVALS.updateChecker, true);
+  wrapInLoop(
+    () => UpdateManager.checkForUpdates(),
+    INTERVALS.updateChecker,
+    true
+  );
 
   wrapInLoop(() => {
     PowerSaveBlockerManager.syncState({
