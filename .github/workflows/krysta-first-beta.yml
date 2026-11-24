@@ -31,6 +31,7 @@ jobs:
       - name: Run Windows release regressions
         run: >
           node --import ./scripts/register-ts-node.mjs --test
+          src/shared/catalogue-unique-games.test.ts
           src/renderer/src/helpers/response-cache.test.ts
           src/renderer/src/components/hero/featured-selection.test.ts
           src/main/services/krysta-settings-recovery.test.ts
@@ -140,5 +141,5 @@ jobs:
           $hashes = $files | ForEach-Object { $h = Get-FileHash -LiteralPath $_ -Algorithm SHA256; "$($h.Hash.ToLowerInvariant())  $(Split-Path $_ -Leaf)" }
           $hashes | Set-Content -LiteralPath 'dist/krysta-launcher-1.0.29-sha256.txt' -Encoding ascii
           $files += 'dist/krysta-launcher-1.0.29-sha256.txt'
-          gh release create $tag @files --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Krysta Engine 1.0.29 - Optymalizacja i katalog' --latest --notes 'Optymalizacja pamieci, ladowania modulow, cache, Big Picture i procesow tla. Rzeczywiste pomiary RAM, CPU i VRAM na komputerze uzytkownika nie zostaly jeszcze wykonane.'
+          gh release create $tag @files --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Krysta Engine 1.0.29 - Optymalizacja i katalog' --latest --notes 'Optymalizacja pamieci, ladowania modulow, cache, Big Picture i procesow tla. Katalog: rekomendacje, filtry, galerie, lista zyczen i Free to Play. Bez cen i zakupow. Czesc funkcji wymaga dalszego dopracowania. Rzeczywiste pomiary RAM, CPU i VRAM na komputerze uzytkownika nie zostaly jeszcze wykonane.'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

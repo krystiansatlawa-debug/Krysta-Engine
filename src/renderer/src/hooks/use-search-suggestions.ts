@@ -34,7 +34,7 @@ export function useSearchSuggestions(
   const [isLoading, setIsLoading] = useState(false);
   const library = useAppSelector((state) => state.library.value);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const cacheRef = useRef<Map<string, SearchSuggestion[]>>(new Map());
+  const cacheRef = useRef<Map<string, {at:number; games:SearchSuggestion[]}>>(new Map());
   const librarySearchIndex = useMemo(
     () =>
       library
@@ -110,8 +110,8 @@ export function useSearchSuggestions(
       const cacheKey = `${searchQuery.toLowerCase()}_${limit}_${shopParam}`;
       const cachedResults = cacheRef.current.get(cacheKey);
 
-      if (cachedResults) {
-        setSuggestions(cachedResults);
+      if (cachedResults && Date.now()-cachedResults.at < 120000) {
+        setSuggestions(cachedResults.games);
         setIsLoading(false);
         return;
       }
@@ -148,7 +148,8 @@ export function useSearchSuggestions(
           })
         );
 
-        cacheRef.current.set(cacheKey, catalogueSuggestions);
+        cacheRef.current.delete(cacheKey);
+        cacheRef.current.set(cacheKey, {at:Date.now(),games:catalogueSuggestions.slice(0,limit)});
         if (cacheRef.current.size > 40) { const oldest = cacheRef.current.keys().next().value; if (oldest !== undefined) cacheRef.current.delete(oldest); }
         setSuggestions(catalogueSuggestions);
       } catch (error) {
@@ -170,6 +171,7 @@ export function useSearchSuggestions(
   ).current;
 
   useEffect(() => {
+    setSuggestions([]);
     if (!enabled || !query || query.length < 2) {
       setSuggestions([]);
       setIsLoading(false);

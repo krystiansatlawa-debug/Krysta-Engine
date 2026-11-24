@@ -21,6 +21,7 @@ import type {
   ShopDetailsWithAssets,
 } from "@types";
 
+import { uniqueCatalogueGames } from "@shared/catalogue-unique-games";
 import { CataloguePersonalization } from "./catalogue-personalization";
 import { CatalogueCategories } from "./catalogue-categories";
 import { CatalogueWishlistButton } from "./catalogue-wishlist";
@@ -54,6 +55,10 @@ export default function CatalogueDiscover() {
   const mode = useAppSelector((state) => state.catalogueSearch.mode);
   const [results, setResults] = useState<ShelfResults>({});
   const [attempt, setAttempt] = useState(0);
+  const [visible, setVisible] = useState(() => !document.hidden);
+  const [recentLimit, setRecentLimit] = useState(6);
+  useEffect(() => { const change = () => setVisible(!document.hidden); document.addEventListener("visibilitychange",change); return () => document.removeEventListener("visibilitychange",change); }, []);
+  useEffect(() => { if (!visible) return; const timer = window.setInterval(() => setAttempt(value=>value+1), 5*60*1000); return () => window.clearInterval(timer); }, [visible]);
   const [activeShelf, setActiveShelf] = useState<ShelfId>(
     CatalogueCategory.Hot
   );
@@ -61,6 +66,7 @@ export default function CatalogueDiscover() {
   const [randomGame, setRandomGame] = useState<Steam250Game | null>(null);
 
   useEffect(() => {
+    if (!visible) return;
     let active = true;
 
     const loadShelves = async () => {
@@ -107,7 +113,7 @@ export default function CatalogueDiscover() {
             games = null;
           }
 
-          if (active) setResults((current) => ({ ...current, [id]: games }));
+          if (active) setResults((current) => ({ ...current, [id]: games === null ? current[id] ?? null : uniqueCatalogueGames(games, shelfSize) }));
         })
       );
     };
@@ -116,7 +122,7 @@ export default function CatalogueDiscover() {
     return () => {
       active = false;
     };
-  }, [attempt]);
+  }, [attempt, visible]);
 
   useEffect(() => {
     let active = true;
@@ -170,7 +176,7 @@ export default function CatalogueDiscover() {
   const previewId = preview?.objectId;
   const previewKey = preview ? gameKey(preview) : "";
   useEffect(() => {
-    if (!previewShop || !previewId || !hoveredGame) return;
+    if (!visible || !previewShop || !previewId || !hoveredGame) return;
     let active = true;
     const timer = window.setTimeout(() => {
       if (document.hidden) return;
@@ -179,7 +185,7 @@ export default function CatalogueDiscover() {
       }).catch(() => {});
     }, 350);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [previewShop, previewId, previewKey, hoveredGame, i18n.language]);
+  }, [previewShop, previewId, previewKey, hoveredGame, i18n.language, visible]);
   const screenshots = previewDetails?.key === previewKey ? previewDetails.data.screenshots?.slice(0, 3) : undefined;
   return (
     <section className="catalogue-discover">
@@ -245,7 +251,7 @@ export default function CatalogueDiscover() {
                           <img
                             src={game.libraryImageUrl}
                             alt=""
-                            loading="lazy"
+                            loading="lazy" decoding="async"
                           />
                         )}
                         <span>
@@ -305,7 +311,8 @@ export default function CatalogueDiscover() {
       <CataloguePersonalization />
       {recent.length > 0 && <section className="catalogue-discover__shelf catalogue-store-width">
         <header className="catalogue-discover__heading"><h2>{pl ? "Ostatnio przeglądane" : "Recently viewed"}</h2><Button theme="outline" size="small" onClick={() => { setRecent([]); try { localStorage.removeItem("krysta-catalogue-recent"); } catch {} }}>{pl ? "Wyczyść" : "Clear"}</Button></header>
-        <div className="catalogue-discover__games">{recent.map(game => <article className="catalogue-discover__game" key={gameKey(game)}><Link to={buildGameDetailsPath(game)} onClick={() => remember(game)}>{game.libraryImageUrl && <img src={game.libraryImageUrl} alt="" loading="lazy" />}<span><strong>{game.title}</strong></span></Link></article>)}</div>
+        <div className="catalogue-discover__games">{recent.slice(0,recentLimit).map(game => <article className="catalogue-discover__game" key={gameKey(game)}><Link to={buildGameDetailsPath(game)} onClick={() => remember(game)}>{game.libraryImageUrl && <img src={game.libraryImageUrl} alt="" loading="lazy" />}<span><strong>{game.title}</strong></span></Link></article>)}</div>
+        {recent.length > recentLimit && <Button theme="outline" size="small" onClick={()=>setRecentLimit(v=>v+6)}>{pl?"Pokaż więcej":"Show more"}</Button>}
       </section>}
       <section className="catalogue-discover__browse catalogue-store-width">
         <header className="catalogue-discover__heading">

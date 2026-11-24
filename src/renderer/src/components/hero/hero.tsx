@@ -109,6 +109,7 @@ export function Hero({
   const selectedId = selected?.objectId;
   useEffect(() => {
     if (
+      !visible ||
       !detailKey ||
       !selectedShop ||
       !selectedId ||
@@ -128,7 +129,7 @@ export function Hero({
     return () => {
       current = false;
     };
-  }, [detailKey, language, selectedId, selectedShop]);
+  }, [detailKey, language, selectedId, selectedShop, visible]);
 
   useEffect(() => {
     if (games.length < 2 || !play || interacting || !visible) return;
@@ -175,7 +176,7 @@ export function Hero({
           onClick={() => onView?.(campaign)}
           aria-label={campaign.title}
         >
-          <img key={banner} src={banner} alt="" onError={() => setFailedCampaignImages((images) => new Set([...images, banner]))} />
+          <img key={banner} src={banner} alt="" decoding="async" onError={() => setFailedCampaignImages((images) => new Set([...images, banner]))} />
           <span className="catalogue-campaign__name">
             {campaign.logoImageUrl ? (
               <img src={campaign.logoImageUrl} alt={campaign.title} />
@@ -216,7 +217,7 @@ export function Hero({
               aria-label={selected.title}
             >
               {(preview ?? cover) && (
-                <img src={preview ?? cover ?? undefined} alt="" />
+                <img src={preview ?? cover ?? undefined} alt="" decoding="async" />
               )}
             </Link>}
             <div className="store-featured__details" key={detailKey}>
@@ -238,7 +239,7 @@ export function Hero({
                       onBlur={() => setPreview(undefined)}
                       onClick={() => setPreview(screen.path_full)}
                     >
-                      <img src={screen.path_thumbnail} alt="" />
+                      <img src={screen.path_thumbnail} alt="" loading="lazy" decoding="async" />
                     </button>
                   ))}
                 </div>
