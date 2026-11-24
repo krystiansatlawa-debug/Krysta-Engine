@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { controllerProfileKey, normalizeControllerProfile, defaultControllerProfile, type ControllerProfile } from "../../../shared/controller-desktop";
 import { GamepadRawState, GamepadService } from "../services";
 
 type GamepadStateMap = Map<number, GamepadRawState>;
@@ -15,12 +16,29 @@ export interface GamepadState {
   hasGamepadConnected: boolean;
   activeGamepadIndex: number | null;
 
+  profiles: Record<string, ControllerProfile>;
+  activeProfile: ControllerProfile;
+  saveProfile: (name: string, layout: string, profile: ControllerProfile) => void;
+  resetProfile: (name: string, layout: string) => void;
   sync: () => void;
   getActiveGamepad: () => GamepadInfo | null;
   getService: () => GamepadService;
 }
 
 export const useGamepadStore = create<GamepadState>((set, get) => {
+  const storageKey = "krysta-controller-profiles-v1";
+  let profiles: Record<string, ControllerProfile> = {};
+  try {
+    const saved = JSON.parse(localStorage.getItem(storageKey) ?? "{}");
+    if (saved && typeof saved === "object") for (const [key, value] of Object.entries(saved).slice(0, 100)) {
+      if (key.startsWith("[")) profiles[key] = normalizeControllerProfile(value);
+    }
+  } catch { /* unavailable storage */ }
+  const resolveProfile = (pad: GamepadInfo | null) => pad ? profiles[controllerProfileKey(pad.name, pad.layout)] ?? defaultControllerProfile() : defaultControllerProfile();
+  const persist = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(profiles)); } catch { /* session-only settings */ }
+    set({ profiles, activeProfile: resolveProfile(get().getActiveGamepad()) });
+  };
   let cachedConnectedGamepads: GamepadInfo[] = [];
   let isInitialized = false;
 
@@ -36,6 +54,17 @@ export const useGamepadStore = create<GamepadState>((set, get) => {
   };
 
   return {
+    profiles,
+    activeProfile: defaultControllerProfile(),
+    saveProfile: (name, layout, profile) => {
+      profiles = { ...profiles, [controllerProfileKey(name, layout)]: normalizeControllerProfile(profile) };
+      persist();
+    },
+    resetProfile: (name, layout) => {
+      profiles = { ...profiles };
+      delete profiles[controllerProfileKey(name, layout)];
+      persist();
+    },
     states: new Map(),
     connectedGamepads: [],
     hasGamepadConnected: false,
@@ -71,6 +100,7 @@ export const useGamepadStore = create<GamepadState>((set, get) => {
         hasGamepadConnected,
         connectedGamepads,
         activeGamepadIndex,
+        activeProfile: activeGamepadIndex === get().activeGamepadIndex ? get().activeProfile : resolveProfile(connectedGamepads.find((pad) => pad.index === activeGamepadIndex) ?? null),
       });
     },
 
