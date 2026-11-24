@@ -1,4 +1,5 @@
 import { app } from "electron";
+import { remoteStoryDescription } from "./story-catalogue-update";
 import path from "node:path";
 import { readdir } from "node:fs/promises";
 import { db, gamesSublevel, levelKeys } from "@main/level";
@@ -286,6 +287,11 @@ function refresh(key: string, scan: PendingScan) {
     });
     if (!canContinue() || current.status === "waiting") return retry(previous);
 
+    if (source && current.automatic?.saveTitle && canContinue()) {
+      const description = await remoteStoryDescription(source, current.automatic.saveTitle).catch(() => undefined);
+      if (!canContinue()) return retry(previous);
+      if (description) current.automatic = { ...current.automatic, missionDescription: description };
+    }
     const catalogue = getGameCatalogueIdentity(game);
     const next: CompletedScan = {
       // A failed scan is not evidence that the player's campaign was reset.
