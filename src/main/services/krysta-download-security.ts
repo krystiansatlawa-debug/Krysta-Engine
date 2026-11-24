@@ -51,6 +51,17 @@ export async function detectRegisteredAntivirus(): Promise<{ name: string; produ
   }
 }
 
+// A disagreement is not proof of a false positive.
+export function assessReputation(report: Awaited<ReturnType<typeof lookupFileReputation>>) {
+  if (report.status !== "reported" || !report.stats) return { level: "unknown", reason: "Brak wiarygodnego raportu reputacji.", requiresReview: true };
+  const { malicious, suspicious, harmless, undetected } = report.stats;
+  if (malicious >= 2) return { level: "high", reason: "Co najmniej dwa silniki zgłaszają zagrożenie; wymagana weryfikacja.", requiresReview: true };
+  if (malicious > 0 || suspicious > 0) return { level: "ambiguous", reason: "Niejednoznaczne wykrycie. Możliwy fałszywy alarm, ale nie potwierdzono bezpieczeństwa.", requiresReview: true };
+  const date = report.analysisDate;
+  if (typeof date !== "number" || !Number.isFinite(date) || date * 1000 > Date.now() || Date.now() - date * 1000 > 7 * 86400000 || harmless + undetected < 10) return { level: "unknown", reason: "Raport nieaktualny lub niewystarczający.", requiresReview: true };
+  return { level: "no-detections", reason: "Brak wykryć w dostępnym raporcie; nie stanowi gwarancji bezpieczeństwa.", requiresReview: false };
+}
+
 // Enumerate the entire tree without following symbolic links or junctions.
 async function inspectDownloadTree(base: string, target: string) {
   const realBase = await fs.realpath(base);
@@ -144,7 +155,7 @@ export async function scanCompletedDownload(download: Download, afterExtraction 
       if (process.env.KRYSTA_VIRUSTOTAL_ENABLED === "1") {
         for (const digest of inventory.reputationCandidates) {
           const reputation = await lookupFileReputation(digest);
-          logger.info("[Security Shield] Hash reputation observation:", digest, reputation);
+          logger.info("[Security Shield] Hash reputation observation:", digest, reputation, assessReputation(reputation));
           if (reputation.status === "deferred" || reputation.status === "unavailable") break;
         }
       }
