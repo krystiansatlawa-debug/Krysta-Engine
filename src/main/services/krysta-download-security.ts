@@ -175,12 +175,21 @@ async function inspectDownloadTree(base: string, target: string) {
 }
 
 export async function scanCompletedDownload(download: Download, afterExtraction = false): Promise<boolean> {
-  if (process.platform !== "win32") return false;
-  if (!download.folderName || !download.downloadPath) return false;
+  if (process.platform !== "win32") {
+    await recordSecurityDecision(null, "unverified", ["Automatyczne skanowanie antywirusowe nie jest obsługiwane na tym systemie."]);
+    return false;
+  }
+  if (!download.folderName || !download.downloadPath) {
+    await recordSecurityDecision(null, "unverified", ["Brak ścieżki pobranych plików."]);
+    return false;
+  }
   const base = path.resolve(download.downloadPath);
   const target = path.resolve(base, download.folderName);
   const relative = path.relative(base, target);
-  if (!relative || relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative)) return false;
+  if (!relative || relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative)) {
+    await recordSecurityDecision(null, "unverified", ["Ścieżka pobrania znajduje się poza dozwolonym katalogiem."]);
+    return false;
+  }
   const existing = active.get(target);
   if (existing) {
     if (!afterExtraction) return existing;
