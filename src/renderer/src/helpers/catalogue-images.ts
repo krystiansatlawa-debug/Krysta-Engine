@@ -1,7 +1,7 @@
 import { thumbHashToDataURL } from "thumbhash";
 import type { CatalogueImages, CatalogueImageVariants } from "@types";
 
-const MAX_CACHED_PLACEHOLDERS = 1000;
+const MAX_CACHED_PLACEHOLDERS = 192;
 const placeholderCache = new Map<string, string | null>();
 
 export const findCatalogueImageVariants = (
@@ -52,7 +52,11 @@ export const decodeCatalogueThumbHash = (
   if (!thumbHash) return null;
 
   const cached = placeholderCache.get(thumbHash);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    placeholderCache.delete(thumbHash);
+    placeholderCache.set(thumbHash, cached);
+    return cached;
+  }
 
   let placeholder: string | null = null;
   try {

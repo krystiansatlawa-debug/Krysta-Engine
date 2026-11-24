@@ -208,14 +208,22 @@ export function useGameArtworkGrid({
   }, [shop, objectId, lookupShop, lookupObjectId, assetType, reset]);
 
   useEffect(() => {
-    if (!enabled) return;
-
+    if (!enabled) {
+      requestIdRef.current += 1;
+      loadingRef.current = false;
+      pageRef.current = 0;
+      setItems([]);
+      setIsLoading(false);
+      setHasMore(true);
+      return;
+    }
     loadPage(0).catch(() => {});
+    return () => { requestIdRef.current += 1; loadingRef.current = false; };
   }, [enabled, loadPage]);
 
   const loadNextPage = useCallback(() => {
-    loadPage(pageRef.current).catch(() => {});
-  }, [loadPage]);
+    if (enabled) loadPage(pageRef.current).catch(() => {});
+  }, [enabled, loadPage]);
 
   const reload = useCallback(() => {
     reset();

@@ -72,9 +72,8 @@ Sentry.init({
   dsn: import.meta.env.RENDERER_VITE_SENTRY_DSN,
   integrations: [
     Sentry.browserTracingIntegration(),
-    Sentry.replayIntegration(),
   ],
-  tracesSampleRate: 0.5,
+  tracesSampleRate: 0.05,
   replaysSessionSampleRate: 0,
   replaysOnErrorSampleRate: 0,
   release: "hydra-launcher@" + (await globalThis.electron.getVersion()),

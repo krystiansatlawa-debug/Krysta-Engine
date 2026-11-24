@@ -1,7 +1,6 @@
 import { useCallback } from "react";
-import type { LibraryGame } from "@types";
 import { useAppDispatch, useAppSelector } from "./redux";
-import type { AppDispatch } from "@renderer/store";
+import { store, type AppDispatch } from "@renderer/store";
 import { setLibrary } from "@renderer/features";
 
 type SetLibraryAction = ReturnType<typeof setLibrary>;
@@ -9,14 +8,20 @@ type SetLibraryAction = ReturnType<typeof setLibrary>;
 let inFlight: Promise<SetLibraryAction> | null = null;
 let trailing: Promise<SetLibraryAction> | null = null;
 
-// Frozen rows let Immer skip deep-freezing every game on each library update.
-const freezeGames = (games: LibraryGame[]): LibraryGame[] =>
-  games.map((game) => Object.freeze(game));
-
 const startLibraryUpdate = (dispatch: AppDispatch) => {
   const update = window.electron
     .getLibrary(true)
-    .then((library) => dispatch(setLibrary(freezeGames(library))))
+    .then((library) => {
+      const previous = store.getState().library.downloadLibrary;
+      const byId = new Map(previous.map(game => [game.id, game]));
+      // Reuse unchanged rows rather than replacing every card's props.
+      const next = library.map(game => {
+        const old = byId.get(game.id);
+        if (old && JSON.stringify(old) === JSON.stringify(game)) return old;
+        return Object.freeze(game);
+      });
+      return dispatch(setLibrary(next));
+    })
     .finally(() => {
       if (inFlight === update) inFlight = null;
     });
