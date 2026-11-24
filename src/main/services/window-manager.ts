@@ -44,6 +44,10 @@ import UserAgent from "user-agents";
 import { HydraApi } from "./hydra-api";
 import { logger } from "./logger";
 import {
+  isGameBoostBackgroundSyncPaused,
+  onGameBoostBackgroundSyncChange,
+} from "./game-boost-background-sync";
+import {
   addSteamGridDbCacheControl,
   isSteamGridDbArtworkRequest,
 } from "./steam-grid-db-cache";
@@ -371,6 +375,29 @@ export class WindowManager {
       webPreferences: this.getDecoratedWindowWebPreferences(),
     });
     this.mainWindowInstance = mainWindow;
+
+    // Sleep only the main launcher window, never capture or FPS windows.
+    // Do not steal focus from the game or minimize a window the user is using.
+    let sleptDuringGame = false;
+    const sleepLauncher = () => {
+      if (!isGameBoostBackgroundSyncPaused()) {
+        sleptDuringGame = false;
+        return;
+      }
+      if (
+        sleptDuringGame ||
+        mainWindow.isDestroyed() ||
+        !mainWindow.isVisible() ||
+        mainWindow.isMinimized() ||
+        mainWindow.isFocused()
+      ) return;
+      sleptDuringGame = true;
+      mainWindow.minimize();
+    };
+    const unsubscribeSleep = onGameBoostBackgroundSyncChange(sleepLauncher);
+    mainWindow.on("blur", sleepLauncher);
+    mainWindow.once("closed", unsubscribeSleep);
+    sleepLauncher();
 
     this.deferredMainMaximize = false;
 
