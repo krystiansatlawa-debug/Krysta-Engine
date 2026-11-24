@@ -161,7 +161,7 @@ export function AchievementsContent({
     if (!shop || !objectId || checking) return;
     setChecking(true);
     try {
-      const rows = await window.electron.getUnlockedAchievements(objectId, shop, true);
+      const rows = await window.electron.getUnlockedAchievements(objectId, shop);
       const count = rows.filter((row) => row.unlocked).length;
       setDiagnostic({ key: diagnosticKey, message: rows.length ? (pl ? `Potwierdzone osiągnięcia: ${count}/${rows.length}. Brakujące trofea mogą wymagać synchronizacji konta lub zapisu gry.` : `Confirmed achievements: ${count}/${rows.length}. Missing trophies may require account or save synchronization.`) : (pl ? "Nie zwrócono katalogu osiągnięć. Gra może nie być obsługiwana lub dane są niedostępne." : "No achievement catalogue returned. The game may be unsupported or data unavailable.") });
     } catch {
