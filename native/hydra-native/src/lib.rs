@@ -798,3 +798,33 @@ pub async fn get_windows_sony_hid_batteries() -> Vec<SonyControllerBattery> {
     #[cfg(not(windows))]
     { Vec::new() }
 }
+
+/** USB DualSense adaptive trigger feedback. Does not claim audio-based haptics.
+ * Only a single unambiguous controller is targeted. */
+#[napi]
+pub async fn set_dualsense_usb_trigger_feedback(strength: u32) -> bool {
+    #[cfg(windows)]
+    {
+        if strength > 8 { return false; }
+        tokio::task::spawn_blocking(move || {
+            let Ok(api) = hidapi::HidApi::new() else { return false; };
+            let mut devices = api.device_list().filter(|d| d.vendor_id() == 0x054c && matches!(d.product_id(), 0x0ce6 | 0x0df2) && d.usage_page() == 1 && d.usage() == 5);
+            let Some(info) = devices.next() else { return false; };
+            if devices.next().is_some() { return false; }
+            let Ok(device) = info.open_device(&api) else { return false; };
+            let mut input = [0u8; 128];
+            if device.read_timeout(&mut input, 150).ok() != Some(64) || input[0] != 1 { return false; }
+            let mut output = [0u8; 48];
+            output[0] = 2;
+            output[1] = 0x0c;
+            for offset in [11usize, 22usize] {
+                output[offset] = if strength == 0 { 0x05 } else { 0x01 };
+                output[offset + 1] = 32;
+                output[offset + 2] = (strength * 24) as u8;
+            }
+            device.write(&output).ok() == Some(output.len())
+        }).await.unwrap_or(false)
+    }
+    #[cfg(not(windows))]
+    { let _ = strength; false }
+}
