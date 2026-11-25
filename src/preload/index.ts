@@ -348,6 +348,7 @@ contextBridge.exposeInMainWorld("electron", {
   translateKrystaNews: (title: string, content: string) =>
     ipcRenderer.invoke("krysta:news-translate", title, content),
   krystaGameWatchHistory: () => ipcRenderer.invoke("krysta:game-watch-history"),
+  getKrystaSteamCatalogue: () => ipcRenderer.invoke("krysta:steam-catalogue"),
   getKrystaGameNews: (id: string, title: string) =>
     ipcRenderer.invoke("krysta:game-news", id, title),
   scanUbisoft: () => ipcRenderer.invoke("krysta:ubisoft-scan"),
