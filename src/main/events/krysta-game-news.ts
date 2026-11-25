@@ -216,3 +216,57 @@ ipcMain.handle(
     return task;
   }
 );
+
+
+// Independent Steam storefront catalogue; only requested by the visible catalogue.
+import { hasTrackedGamesRunning, onTrackedGamesRunningChange } from "@main/services/game-running-state";
+type SteamCatalogueEntry = { id: string; title: string; image: string };
+type SteamCatalogueSnapshot = { newReleases: SteamCatalogueEntry[]; upcoming: SteamCatalogueEntry[]; checkedAt: number };
+let catalogueRequest: Promise<SteamCatalogueSnapshot | null> | null = null;
+const catalogueFile = () => path.join(app.getPath("userData"), "steam-catalogue-cache.json");
+function steamEntries(section: unknown): SteamCatalogueEntry[] {
+  const items = (section as { items?: unknown } | null)?.items;
+  if (!Array.isArray(items)) return [];
+  const result = new Map<string, SteamCatalogueEntry>();
+  for (const item of items) {
+    const id = String(item?.id ?? "");
+    if (!/^\d{1,10}$/.test(id) || typeof item?.name !== "string" ||
+      (item.type !== undefined && item.type !== 0)) continue;
+    result.set(id, { id, title: item.name.slice(0, 250),
+      image: "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/" + id + "/header.jpg" });
+  }
+  return [...result.values()].slice(0, 30);
+}
+async function steamCatalogue(): Promise<SteamCatalogueSnapshot | null> {
+  if (hasTrackedGamesRunning()) return null;
+  if (catalogueRequest) return catalogueRequest;
+  const controller = new AbortController();
+  const unsubscribe = onTrackedGamesRunningChange(() => {
+    if (hasTrackedGamesRunning()) controller.abort();
+  });
+  catalogueRequest = (async () => {
+    let cached: SteamCatalogueSnapshot | null = null;
+    try {
+      const value = JSON.parse(await fs.readFile(catalogueFile(), "utf8"));
+      if (Array.isArray(value.newReleases) && Array.isArray(value.upcoming) &&
+          typeof value.checkedAt === "number") cached = value;
+    } catch { /* cache not yet available */ }
+    if (controller.signal.aborted) return null;
+    if (cached && Date.now() - cached.checkedAt < 30 * 60_000) return cached;
+    try {
+      const response = await net.fetch("https://store.steampowered.com/api/featuredcategories/?cc=PL&l=polish", {
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
+      });
+      if (!response.ok) throw Error("Steam catalogue unavailable");
+      const data = await response.json();
+      if (!Array.isArray(data?.new_releases?.items) || !Array.isArray(data?.coming_soon?.items))
+        throw Error("Invalid Steam catalogue response");
+      const snapshot = { newReleases: steamEntries(data.new_releases), upcoming: steamEntries(data.coming_soon), checkedAt: Date.now() };
+      if (controller.signal.aborted) return null;
+      await fs.writeFile(catalogueFile(), JSON.stringify(snapshot), "utf8").catch(() => {});
+      return snapshot;
+    } catch { return controller.signal.aborted ? null : cached; }
+  })().finally(() => { unsubscribe(); catalogueRequest = null; });
+  return catalogueRequest;
+}
+ipcMain.handle("krysta:steam-catalogue", () => steamCatalogue());
