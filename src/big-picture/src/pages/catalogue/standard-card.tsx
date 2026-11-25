@@ -16,7 +16,6 @@ export function CatalogueStandardCard({
             src={game.libraryImageUrl}
             alt={game.title}
             loading="lazy"
-            decoding="async"
           />
         ) : (
           <div className="catalogue-card__image-placeholder">

@@ -1,4 +1,4 @@
-import { getCatalogueSteamTags, uniqueCatalogueGames } from "@shared";
+import { getCatalogueSteamTags } from "@shared";
 import { useTranslation } from "react-i18next";
 import type {
   CatalogueSearchPayload,
@@ -269,8 +269,6 @@ export function useCatalogueData() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [searchError, setSearchError] = useState<Error | null>(null);
   const requestIdRef = useRef(0);
-  const nextOffsetRef = useRef(0);
-  const exhaustedRef = useRef(false);
   const isFetchingSearchRef = useRef(false);
   const activeSearchKeyRef = useRef("");
   const downloadSourceIds = useMemo(
@@ -521,10 +519,20 @@ export function useCatalogueData() {
           return;
         }
 
-        if (!Array.isArray(response?.edges) || !Number.isSafeInteger(response.count) || response.count < 0) throw new Error("Invalid catalogue response");
-        nextOffsetRef.current = skip + response.edges.length;
-        exhaustedRef.current = response.edges.length === 0 || nextOffsetRef.current >= response.count;
-        setSearchData(currentData => ({count: response.count, edges: uniqueCatalogueGames([...(mode === "initial" ? [] : currentData?.edges ?? []), ...response.edges])}));
+        setSearchData((currentData) => {
+          if (mode === "initial") return response;
+
+          const currentEdges = currentData?.edges ?? [];
+          const currentIds = new Set(currentEdges.map((edge) => edge.id));
+          const nextEdges = response.edges.filter(
+            (edge) => !currentIds.has(edge.id)
+          );
+
+          return {
+            count: response.count,
+            edges: [...currentEdges, ...nextEdges],
+          };
+        });
         setSearchError(null);
       } catch (error) {
         if (
@@ -570,8 +578,6 @@ export function useCatalogueData() {
   useEffect(() => {
     requestIdRef.current += 1;
     activeSearchKeyRef.current = searchKey;
-    nextOffsetRef.current = 0;
-    exhaustedRef.current = false;
     isFetchingSearchRef.current = false;
     setSearchData(undefined);
     setSearchError(null);
@@ -590,7 +596,7 @@ export function useCatalogueData() {
   }, [fetchCataloguePage, searchKey]);
 
   const hasNextPage =
-    Boolean(searchData) && !exhaustedRef.current;
+    Boolean(searchData) && searchData!.edges.length < searchData!.count;
 
   const loadMore = useCallback(() => {
     if (
@@ -604,7 +610,7 @@ export function useCatalogueData() {
       return;
     }
 
-    void fetchCataloguePage(nextOffsetRef.current, "more");
+    void fetchCataloguePage(searchData.edges.length, "more");
   }, [
     fetchCataloguePage,
     hasNextPage,

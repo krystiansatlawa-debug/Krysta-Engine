@@ -16,7 +16,7 @@ import { CatalogueWishlistProvider } from "./catalogue-wishlist";
 import "./catalogue-discover.scss";
 
 export function CatalogueLayout() {
-  const { t, i18n } = useTranslation(["home", "sidebar"]);
+  const { t } = useTranslation(["home", "sidebar"]);
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const isSearch = Boolean(useMatch("/catalogue/search"));
@@ -63,7 +63,6 @@ export function CatalogueLayout() {
                   >
                     {t("catalogue_new")}
                   </button>
-                  <button type="button" onClick={() => browse({genres:["Free to Play"]})}>{i18n.language.startsWith("pl")?"Darmowe gry / Free to Play":"Free to play"}</button>
                   <NavLink onClick={closeMenu} to="/catalogue/top">
                     {t("catalogue_top")}
                   </NavLink>

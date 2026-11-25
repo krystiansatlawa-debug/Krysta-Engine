@@ -22,7 +22,7 @@ export function HowLongToBeatSection({
 
   const getDuration = (duration: string) => {
     const [value, unit] = duration.split(" ");
-    return durationTranslation[unit] ? `${value} ${t(durationTranslation[unit])}` : duration;
+    return `${value} ${t(durationTranslation[unit])}`;
   };
 
   if ((!howLongToBeatData || howLongToBeatData.length === 0) && !isLoading)
@@ -31,7 +31,6 @@ export function HowLongToBeatSection({
   return (
     <SkeletonTheme baseColor="#1c1c1c" highlightColor="#444">
       <SidebarSection title="HowLongToBeat">
-        <small>{t("estimated_playtime", { defaultValue: "Estimated community playtime" })}</small>
         <ul className="how-long-to-beat__categories-list">
           {howLongToBeatData
             ? howLongToBeatData.map((category) => (

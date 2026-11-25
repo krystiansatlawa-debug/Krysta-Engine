@@ -6,21 +6,20 @@ import { SidebarSection } from "../sidebar-section/sidebar-section";
 import "./game-language-section.scss";
 
 export function GameLanguageSection() {
-  const { t, i18n } = useTranslation("game_details");
-  const pl = i18n.language.startsWith("pl");
+  const { t } = useTranslation("game_details");
   const { shopDetails } = useContext(gameDetailsContext);
 
   const languages = useMemo(() => {
     const supportedLanguages = shopDetails?.supported_languages;
     if (!supportedLanguages) return [];
 
-    const languagesString = supportedLanguages.split(/<br\s*\/?\s*>/i)[0];
+    const languagesString = supportedLanguages.split("<br>")[0];
     const languageArray = languagesString?.split(",") || [];
 
     return languageArray.map((lang) => ({
-      language: lang.replace(/<[^>]*>/g, "").replaceAll("*", "").trim(),
+      language: lang.replace("<strong>*</strong>", "").trim(),
       hasAudio: lang.includes("*"),
-    })).filter(lang => lang.language.length > 0);
+    }));
   }, [shopDetails?.supported_languages]);
 
   if (languages.length === 0) {
@@ -29,14 +28,13 @@ export function GameLanguageSection() {
 
   return (
     <SidebarSection title={t("language")}>
-      {languages.some(l => /^(polish|polski)$/i.test(l.language)) && <p>{languages.some(l => /^(polish|polski)$/i.test(l.language) && l.hasAudio) ? (pl ? "Polski: pełne audio według danych sklepu" : "Polish: full audio listed") : (pl ? "Polski: język dostępny, brak oznaczenia pełnego audio" : "Polish listed, full audio not indicated")}</p>}
       <div className="game-language-section">
         <div className="game-language-section__header">
           <div className="game-language-section__header-item">
             <span>{t("language")}</span>
           </div>
           <div className="game-language-section__header-item game-language-section__header-item--center">
-            <span>{pl ? "Dostępny" : "Listed"}</span>
+            <span>{t("caption")}</span>
           </div>
           <div className="game-language-section__header-item game-language-section__header-item--center">
             <span>{t("audio")}</span>

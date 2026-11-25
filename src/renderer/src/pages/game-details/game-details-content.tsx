@@ -650,7 +650,6 @@ export function GameDetailsContent() {
               />
             )}
             <DescriptionHeader />
-            {detailTab === "description" && shopDetails?.dlc?.length ? <section className="krysta-game-extra"><h2>{document.documentElement.lang.startsWith("pl") ? "Dodatki DLC" : "Downloadable content"}</h2><p>{document.documentElement.lang.startsWith("pl") ? "Dodatki zgłoszone w metadanych gry" : "Add-ons listed in game metadata"}: {shopDetails.dlc.length}</p></section> : null}
             {detailTab === "description" && !hasNSFWContentBlocked && (
               <GallerySlider key={`${shop}:${objectId}`} />
             )}
@@ -696,7 +695,7 @@ export function GameDetailsContent() {
               </button>
             )}
 
-            {detailTab === "description" && shop && objectId && (
+            {shop && objectId && (
               <SimilarGames
                 objectId={catalogueGame.objectId}
                 shop={catalogueGame.shop}

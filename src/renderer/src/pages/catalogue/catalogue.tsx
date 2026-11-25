@@ -4,7 +4,6 @@ import { CatalogueStoreSearch } from "./catalogue-store-search";
 import type {
   CatalogueSearchPayload,
   CatalogueSearchResult,
-  ShopDetailsWithAssets,
   DownloadSource,
 } from "@types";
 
@@ -29,7 +28,7 @@ import "./catalogue.scss";
 
 import { Button } from "@renderer/components/button/button";
 import { SelectField } from "@renderer/components/select-field/select-field";
-import { clearFilters, setFilters, setMode, setPage } from "@renderer/features";
+import { setFilters, setMode, setPage } from "@renderer/features";
 import { useCatalogue } from "@renderer/hooks/use-catalogue";
 import { useLaunchboxFilters } from "@renderer/hooks/use-launchbox-filters";
 import { debounce } from "lodash-es";
@@ -223,40 +222,6 @@ export default function Catalogue() {
   };
 
   const { t, i18n } = useTranslation("catalogue");
-  const pl = i18n.language.startsWith("pl");
-  const [savedFilters, setSavedFilters] = useState<{name:string; mode:"modern"|"classics"; filters:CatalogueSearchPayload}[]>(() => {
-    try { const value = JSON.parse(localStorage.getItem("krysta-filter-presets") ?? "[]"); return Array.isArray(value) ? value.filter(p => p && typeof p.name === "string" && (p.mode === "modern" || p.mode === "classics") && p.filters && Array.isArray(p.filters.tags) && Array.isArray(p.filters.genres)).slice(0,12) : []; } catch { return []; }
-  });
-  const [presetName, setPresetName] = useState("");
-  useEffect(() => { try { localStorage.setItem("krysta-filter-presets", JSON.stringify(savedFilters)); } catch {} }, [savedFilters]);
-  const [polishOnly, setPolishOnly] = useState(false);
-  const [requirementsOnly, setRequirementsOnly] = useState(false);
-  const [detailsByKey, setDetailsByKey] = useState<Record<string, ShopDetailsWithAssets | null>>({});
-  const [checkingDetails, setCheckingDetails] = useState(false);
-  const detailFilter = mode === "modern" && (polishOnly || requirementsOnly);
-  useEffect(() => {
-    setDetailsByKey({});
-    if (!detailFilter) { setCheckingDetails(false); return; }
-    let active = true;
-    setCheckingDetails(true);
-    const load = async () => {
-      for (let i=0; i<results.length && active; i+=4) {
-        const batch = await Promise.all(results.slice(i,i+4).map(async game => {
-          const details = await window.electron.getGameShopDetails(game.objectId, game.shop, "en").catch(() => null);
-          return [game.id, details] as const;
-        }));
-        if (active) setDetailsByKey(prev => ({...prev,...Object.fromEntries(batch)}));
-      }
-    };
-    void load().finally(() => { if (active) setCheckingDetails(false); });
-    return () => { active = false; };
-  }, [results, detailFilter]);
-  const visibleResults = detailFilter ? results.filter(game => {
-    const details = detailsByKey[game.id];
-    if (!details) return false;
-    const languages = (details.supported_languages ?? "").replace(/<[^>]*>/g, " ");
-    return (!polishOnly || /\\bPolish\\b|polski/i.test(languages)) && (!requirementsOnly || Boolean(details.pc_requirements?.minimum?.trim()));
-  }) : results;
   const shouldShowProtonFeatures = window.electron.platform === "linux";
 
   const debouncedSearch = useRef(
@@ -875,8 +840,7 @@ export default function Catalogue() {
               </Button>
             </div>
           )}
-          {detailFilter && <p role="status">{checkingDetails ? (pl ? "Sprawdzanie danych gier…" : "Checking game details…") : (pl ? "Wyniki na bieżącej stronie: " : "Matches on current page: ") + visibleResults.length}</p>}
-          {!showSkeleton && !searchFailed && !detailFilter && (
+          {!showSkeleton && !searchFailed && (
             <p className="catalogue__result-count" role="status">
               {t("result_count", { resultCount: formatNumber(itemsCount) })}
             </p>
@@ -907,12 +871,12 @@ export default function Catalogue() {
                   />
                 ))}
               </SkeletonTheme>
-            ) : visibleResults.length === 0 ? (
+            ) : results.length === 0 ? (
               <p className="catalogue__notice" role="status">
                 {t("store_no_results")}
               </p>
             ) : mode === "classics" ? (
-              visibleResults.map((game) => (
+              results.map((game) => (
                 <GameItemClassics
                   key={game.id}
                   game={game}
@@ -943,17 +907,6 @@ export default function Catalogue() {
           aria-label={t("store_filters")}
         >
           <div className="catalogue__filters-sections">
-            <section style={{display:"grid",gap:8}}>
-              <strong>{pl ? "Zapisane filtry" : "Saved filters"}</strong>
-              <input value={presetName} maxLength={40} onChange={event => setPresetName(event.target.value)} placeholder={pl ? "Nazwa zestawu" : "Preset name"} />
-              <Button theme="outline" size="small" disabled={!presetName.trim()} onClick={() => { const name=presetName.trim(); setSavedFilters(prev => [{name,mode,filters},...prev.filter(p=>p.name!==name)].slice(0,12)); setPresetName(""); }}>{pl ? "Zapisz filtry" : "Save filters"}</Button>
-              {savedFilters.map(preset => <div key={preset.name} style={{display:"flex",gap:6}}><Button theme="outline" size="small" onClick={() => {dispatch(setMode(preset.mode));dispatch(clearFilters());dispatch(setFilters(preset.filters));setPolishOnly(false);setRequirementsOnly(false);}}>{preset.name}</Button><Button theme="outline" size="small" onClick={()=>setSavedFilters(prev=>prev.filter(p=>p.name!==preset.name))}>{pl ? "Usuń" : "Remove"}</Button></div>)}
-            </section>
-            {mode === "modern" && <section style={{display:"grid",gap:8}}>
-              <strong>{pl ? "Dodatkowe filtry (bieżąca strona)" : "Extra filters (current page)"}</strong>
-              <label><input type="checkbox" checked={polishOnly} onChange={event=>setPolishOnly(event.target.checked)} /> {pl ? "Język polski" : "Polish language"}</label>
-              <label><input type="checkbox" checked={requirementsOnly} onChange={event=>setRequirementsOnly(event.target.checked)} /> {pl ? "Podane wymagania PC" : "PC requirements available"}</label>
-            </section>}
             {mode === "classics" && isRecompilationsEnabled && (
               <RecompilationFilterToggle
                 checked={filters.recompilation === "has"}
