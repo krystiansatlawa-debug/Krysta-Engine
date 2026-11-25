@@ -123,7 +123,7 @@ async function latestKrysta(): Promise<Release | null> {
       (!beta && (d.prerelease || /-beta\./.test(d.tag_name)))
     )
       continue;
-    if (!/^Krysta Launcher\b/i.test(String(d.name))) continue;
+    if (!/^Krysta (?:Launcher|Engine)\b/i.test(String(d.name))) continue;
     const name =
       "krysta-launcher-" + d.tag_name.replace(/^v/, "") + "-setup.exe";
     if (!Array.isArray(d.assets) || !d.assets.some((a: any) => a.name === name))
@@ -552,7 +552,9 @@ void app.whenReady().then(() => {
         void syncStatus().catch(() => {});
         return check();
       })
-      .catch(() => {});
+      .catch((error: unknown) => {
+        if (!downloading && !ready) status = { phase: "error", version: "", received: 0, total: 0, error: String(error) };
+      });
   };
   const unsubscribe = onTrackedGamesRunningChange(() => {
     if (hasTrackedGamesRunning()) {
@@ -562,8 +564,8 @@ void app.whenReady().then(() => {
       if (checkAfterGame) tick();
     }
   });
-  const first = setTimeout(tick, 30000),
-    timer = setInterval(tick, 60 * 60 * 1000);
+  const first = setTimeout(tick, 5000),
+    timer = setInterval(tick, 15 * 60 * 1000);
   app.once("before-quit", () => {
     unsubscribe();
     clearTimeout(first);
