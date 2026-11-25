@@ -653,6 +653,11 @@ declare global {
       title: string,
       content: string
     ) => Promise<{ title: string; content: string } | null>;
+    getKrystaSteamCatalogue: () => Promise<{
+      newReleases: { id: string; title: string; image: string }[];
+      upcoming: { id: string; title: string; image: string }[];
+      checkedAt: number;
+    } | null>;
     getKrystaGameNews: (
       id: string,
       title: string
