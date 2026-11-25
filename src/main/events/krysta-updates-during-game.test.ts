@@ -55,7 +55,7 @@ async function fixture(t: TestContext, blockFirstDownload = false) {
     if (address.startsWith("https://api.github.com/"))
       return Response.json([
         {
-          name: "Krysta Launcher 1.0.3",
+          name: "Krysta Engine 1.0.3 - Release",
           tag_name: tag,
           assets: [
             { name, digest, size: bytes.length, browser_download_url: url },
