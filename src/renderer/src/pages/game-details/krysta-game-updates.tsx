@@ -132,6 +132,19 @@ function parseContent(contents: string) {
     .trim();
   return { image, content };
 }
+
+// Extract concrete source passages, never invent changes not present in the post.
+function newsHighlights(content: string) {
+  const lines = content.split(/\n+/).flatMap((line) =>
+    line.split(/(?<=[.!?])\s+(?=[A-ZĄĆĘŁŃÓŚŹŻ])/u)
+  ).map((line) => line.replace(/^\s*[•*–-]\s*/, "").trim())
+    .filter((line) => line.length >= 20 && line.length <= 350 &&
+      !/^(hello|hi |hey |dear |witaj|cześć|thanks for|thank you|stay tuned)/i.test(line));
+  const score = (line: string) =>
+    /\b(added|introduc\w*|new|now|fixed|fixes|improved|updated|removed|changed|support|feature|dodano|dodaj\w*|now\w*|napraw\w*|popraw\w*|wprowadz\w*|umożliw\w*|zmien\w*)\b/i.test(line) ? 1 : 0;
+  return [...new Set(lines)].sort((a, b) => score(b) - score(a)).slice(0, 3);
+}
+
 export function KrystaGameUpdates({
   appId,
   title,
@@ -191,6 +204,7 @@ export function KrystaGameUpdates({
     };
   }, [pl, selected]);
   const [filter, setFilter] = useState<"patch" | "news" | "all">("patch");
+  const [previews, setPreviews] = useState<Record<string, { title: string; content: string }>>({});
   const filtered = items.filter(
     (item) => filter === "all" || item.category === filter
   );
@@ -223,6 +237,26 @@ export function KrystaGameUpdates({
       active = false;
     };
   }, [appId, title, retry]);
+  useEffect(() => {
+    setPreviews({});
+  }, [appId, title]);
+  useEffect(() => {
+    if (!pl || loading || expanded) return;
+    let active = true;
+    const load = async () => {
+      for (const item of items.filter((entry) => filter === "all" || entry.category === filter).slice(0, 5)) {
+        if (!active) return;
+        const content = parsedItems.get(item.id)?.content ?? "";
+        const highlights = newsHighlights(content).join("\n") || content.slice(0, 650);
+        try {
+          const result = await window.electron.translateKrystaNews(item.title, highlights);
+          if (active && result) setPreviews((current) => ({ ...current, [item.id]: result }));
+        } catch { /* original text remains visible */ }
+      }
+    };
+    void load();
+    return () => { active = false; };
+  }, [pl, loading, expanded, items, filter, parsedItems]);
   return (
     <section className="krysta-updates">
       <header className="krysta-updates__header">
@@ -300,6 +334,9 @@ export function KrystaGameUpdates({
           const { image, content } =
             parsedItems.get(item.id) ?? parseContent(item.contents);
           const preview = content.replace(/\s+/g, " ").trim();
+          const local = pl ? previews[item.id] : undefined;
+          const highlights = local ? local.content.split(/\n+/).filter(Boolean).slice(0, 3) : newsHighlights(content);
+          const isPreview = /\b(preview|upcoming|roadmap|coming soon|sneak peek)\b/i.test(item.title);
           const isPatch = item.category === "patch";
           return (
             <article key={item.id} className="krysta-updates__article">
@@ -326,7 +363,7 @@ export function KrystaGameUpdates({
                 />
                 <div className="krysta-updates__copy">
                   <small>
-                    {isPatch
+                    {isPreview ? (pl ? "ZAPOWIEDŹ" : "UPCOMING") : isPatch
                       ? pl
                         ? "AKTUALIZACJA / LISTA ZMIAN"
                         : "UPDATE / PATCH NOTES"
@@ -337,12 +374,21 @@ export function KrystaGameUpdates({
                   <strong>
                     {pl && !original && translated?.id === item.id
                       ? translated.title
-                      : item.title}
+                      : local?.title ?? item.title}
                   </strong>
-                  <p>
-                    {preview.slice(0, 240)}
-                    {preview.length > 240 ? "…" : ""}
-                  </p>
+                  <span className="krysta-updates__highlights-label">
+                    {isPreview ? (pl ? "Co zapowiedziano" : "What is planned") : (pl ? "Najważniejsze informacje" : "Key details")}
+                    {pl && !local ? " · EN" : ""}
+                  </span>
+                  {highlights.length ? (
+                    <span className="krysta-updates__highlights">
+                      {highlights.map((line, index) => (
+                        <span key={index}>{line}</span>
+                      ))}
+                    </span>
+                  ) : (
+                    <p>{preview.slice(0, 240)}{preview.length > 240 ? "…" : ""}</p>
+                  )}
                 </div>
                 <span aria-hidden="true">
                   {expanded === item.id ? "−" : "+"}
