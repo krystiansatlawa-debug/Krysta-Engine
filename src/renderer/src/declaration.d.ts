@@ -1693,6 +1693,7 @@ declare global {
     getDownloadSourcesSinceValue: () => Promise<string | null>;
 
     /* Hardware */
+    getKrystaHardware: () => Promise<{ ramBytes: number; cpu: string; logicalCores: number }>;
     getDiskFreeSpace: (path: string) => Promise<DiskUsage | null>;
     checkFolderWritePermission: (path: string) => Promise<boolean>;
     getNetworkInterfaces: () => Promise<NetworkInterface[]>;

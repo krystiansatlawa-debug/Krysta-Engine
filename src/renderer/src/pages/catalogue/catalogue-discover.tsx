@@ -10,7 +10,7 @@ import { catalogueSearchSlice } from "@renderer/features/catalogue-search";
 import { buildGameDetailsPath, ensureArray } from "@renderer/helpers";
 import { useAppDispatch, useAppSelector } from "@renderer/hooks";
 import { levelDBService } from "@renderer/services/leveldb.service";
-import { CatalogueCategory } from "@shared";
+import { CatalogueCategory, uniqueCatalogueGames } from "@shared";
 import type {
   CatalogueSearchPayload,
   CatalogueSearchResult,
@@ -21,7 +21,6 @@ import type {
   ShopDetailsWithAssets,
 } from "@types";
 
-import { uniqueCatalogueGames } from "@shared/catalogue-unique-games";
 import { CataloguePersonalization } from "./catalogue-personalization";
 import { CatalogueCategories } from "./catalogue-categories";
 import { CatalogueWishlistButton } from "./catalogue-wishlist";

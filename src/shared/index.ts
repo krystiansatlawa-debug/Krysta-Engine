@@ -37,6 +37,7 @@ export {
 } from "./should-auto-start-steam-sync";
 export * from "./steam-session";
 export * from "./steam-catalogue-tags";
+export { uniqueCatalogueGames } from "./catalogue-unique-games";
 export * from "./leaderboard-notifications";
 export * from "./window-layout";
 export * from "./review-translation";

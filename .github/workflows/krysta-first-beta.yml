@@ -1,5 +1,5 @@
 name: Krysta Release
-# Performance and catalogue release; retry after ESM test import fix.
+# Performance and catalogue release; retry after TypeScript alias and hardware declaration fixes.
 on:
   workflow_dispatch:
   push:

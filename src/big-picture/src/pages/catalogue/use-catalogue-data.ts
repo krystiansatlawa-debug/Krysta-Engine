@@ -1,5 +1,4 @@
-import { uniqueCatalogueGames } from "@shared/catalogue-unique-games";
-import { getCatalogueSteamTags } from "@shared";
+import { getCatalogueSteamTags, uniqueCatalogueGames } from "@shared";
 import { useTranslation } from "react-i18next";
 import type {
   CatalogueSearchPayload,
