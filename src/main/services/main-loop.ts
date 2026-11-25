@@ -63,7 +63,7 @@ export const startMainLoop = async () => {
     await watchProcesses();
     if (!isGameBoostBackgroundSyncPaused()) refreshQueuedStoryProgress();
   }, () => isGameBoostBackgroundSyncPaused() ? 15_000 : INTERVALS.processWatcher);
-  wrapInLoop(() => DownloadManager.watchDownloads(), () => isGameBoostBackgroundSyncPaused() ? 15_000 : INTERVALS.downloadWatcher);
+  wrapInLoop(() => DownloadManager.watchDownloads(), INTERVALS.downloadWatcher, true);
   wrapInLoop(
     () => DownloadOrchestrator.pollAwaitingDebridDownloads(),
     INTERVALS.debridReadinessWatcher,
@@ -93,5 +93,5 @@ export const startMainLoop = async () => {
           gamesPlaytime.keys()
         ),
     });
-  }, INTERVALS.powerSaveBlockerSync);
+  }, INTERVALS.powerSaveBlockerSync, true);
 };
