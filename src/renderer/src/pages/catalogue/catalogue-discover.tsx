@@ -28,11 +28,13 @@ const newest = { sortBy: "releaseDate", sortOrder: "desc" } as const;
 const shelves = [
   { id: CatalogueCategory.Hot, label: "catalogue_trending" },
   { id: "new", label: "catalogue_new" },
+  { id: "upcoming", label: "catalogue_upcoming" },
   { id: CatalogueCategory.Weekly, label: "catalogue_weekly" },
   { id: CatalogueCategory.Achievements, label: "catalogue_achievements" },
 ] as const;
 type ShelfId = (typeof shelves)[number]["id"];
-type ShelfGames = (ShopAssets | CatalogueSearchResult)[];
+type SteamShelfGame = { shop: "steam"; objectId: string; title: string; libraryImageUrl: string; steamOnly: true };
+type ShelfGames = (ShopAssets | CatalogueSearchResult | SteamShelfGame)[];
 type ShelfResults = Partial<Record<ShelfId, ShelfGames | null>>;
 
 const shelfSize = 10;
@@ -41,8 +43,6 @@ export default function CatalogueDiscover() {
   const { t, i18n } = useTranslation("home");
   const pl = i18n.language.startsWith("pl");
   const [steam, setSteam] = useState<Awaited<ReturnType<typeof window.electron.getKrystaSteamCatalogue>>>(null);
-  const [steamTab, setSteamTab] = useState<"newReleases" | "upcoming">("newReleases");
-  const [steamLoading, setSteamLoading] = useState(true);
 
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -57,7 +57,6 @@ export default function CatalogueDiscover() {
         const result = await window.electron.getKrystaSteamCatalogue();
         if (active && result) setSteam(result);
       } catch { /* Existing catalogue remains available. */ }
-      finally { if (active) setSteamLoading(false); }
     };
     void refresh();
     const timer = window.setInterval(refresh, 30 * 60_000);
@@ -87,6 +86,7 @@ export default function CatalogueDiscover() {
 
       await Promise.all(
         shelves.map(async ({ id }) => {
+          if (id === "upcoming") return;
           let games: ShelfGames | null;
           try {
             if (id === "new") {
@@ -148,7 +148,21 @@ export default function CatalogueDiscover() {
     navigate("/catalogue/search");
   };
 
-  const games = results[activeShelf];
+  const games = useMemo(() => {
+    const direct = activeShelf === "new" ? steam?.newReleases : activeShelf === "upcoming" ? steam?.upcoming : undefined;
+    if (!direct) return activeShelf === "upcoming" ? (steam ? [] : null) : results[activeShelf];
+    const existing = results[activeShelf] ?? [];
+    const byKey = new Map(existing.map(game => [`${game.shop}:${game.objectId}`, game]));
+    const merged: ShelfGames = direct.map(game => byKey.get("steam:" + game.id) ?? {
+      shop: "steam", objectId: game.id, title: game.title, libraryImageUrl: game.image, steamOnly: true,
+    });
+    const seen = new Set(merged.map(game => `${game.shop}:${game.objectId}`));
+    for (const game of existing) {
+      const key = `${game.shop}:${game.objectId}`;
+      if (!seen.has(key)) { seen.add(key); merged.push(game); }
+    }
+    return merged;
+  }, [activeShelf, results, steam]);
   const [genreArtwork, setGenreArtwork] = useState<Record<string, string>>({});
   useEffect(() => {
     let active = true;
@@ -216,7 +230,7 @@ export default function CatalogueDiscover() {
   const alternatives = useMemo(
     () =>
       (results[CatalogueCategory.Hot] ?? []).flatMap((game): TrendingGame[] =>
-        "libraryHeroImageUrl" in game
+        "libraryHeroImageUrl" in game && !("steamOnly" in game)
           ? [{ ...game, description: null, uri: buildGameDetailsPath(game) }]
           : []
       ),
@@ -229,35 +243,7 @@ export default function CatalogueDiscover() {
   return (
     <section className="catalogue-discover">
       <Hero alternatives={alternatives} />
-      <section className="catalogue-discover__shelf catalogue-store-width" aria-busy={steamLoading}>
-        <header className="catalogue-discover__heading">
-          <h2>{pl ? "Bezpośrednio ze Steam" : "Direct from Steam"}</h2>
-          <Button theme="outline" size="small" onClick={() => setAttempt((value) => value + 1)}>
-            {pl ? "Odśwież" : "Refresh"}
-          </Button>
-        </header>
-        <div className="catalogue-discover__shelf-picker">
-          <button type="button" aria-pressed={steamTab === "newReleases"} onClick={() => setSteamTab("newReleases")}>{pl ? "Najnowsze premiery" : "New releases"}</button>
-          <button type="button" aria-pressed={steamTab === "upcoming"} onClick={() => setSteamTab("upcoming")}>{pl ? "Nadchodzące gry" : "Upcoming games"}</button>
-        </div>
-        {steam ? (
-          <>
-            <small>{pl ? "Ostatnia synchronizacja: " : "Last synced: "}{new Date(steam.checkedAt).toLocaleString(i18n.language)}</small>
-            <div className="catalogue-discover__games">
-              {steam[steamTab].map((game) => (
-                <article className="catalogue-discover__game" key={game.id}>
-                  <Link to={buildGameDetailsPath({ shop: "steam", objectId: game.id })}>
-                    <img src={game.image} alt="" loading="lazy" />
-                    <span><strong>{game.title}</strong></span>
-                  </Link>
-                  <Button theme="outline" size="small" onClick={() => void window.electron.openExternal("https://store.steampowered.com/app/" + game.id)}>Steam</Button>
-                </article>
-              ))}
-              {!steam[steamTab].length && <p>{pl ? "Brak gier w odpowiedzi Steam." : "No games returned by Steam."}</p>}
-            </div>
-          </>
-        ) : <p role="status">{steamLoading ? (pl ? "Pobieranie premier…" : "Loading releases…") : (pl ? "Dane Steam niedostępne lub synchronizacja wstrzymana podczas gry." : "Steam data unavailable or paused during gameplay.")}</p>}
-      </section>
+
 
       <section
         className="catalogue-discover__shelf catalogue-store-width"
@@ -274,11 +260,12 @@ export default function CatalogueDiscover() {
                 setHoveredGame(undefined);
               }}
             >
-              {t(label)}
+              {id === "upcoming" ? (pl ? "Nadchodzące gry" : "Upcoming games") : t(label)}
             </button>
           ))}
         </div>
 
+        {(activeShelf === "new" || activeShelf === "upcoming") && steam && <small>{pl ? "Ostatnia synchronizacja Steam: " : "Steam last synced: "}{new Date(steam.checkedAt).toLocaleString(i18n.language)}</small>}
         {games === null ? (
           <div className="catalogue-discover__status" role="status">
             <p>{t("browse_load_error")}</p>
@@ -327,7 +314,9 @@ export default function CatalogueDiscover() {
                           )}
                         </span>
                       </Link>
-                      <CatalogueWishlistButton game={game} />
+                      {"steamOnly" in game ? (
+                        <Button theme="outline" size="small" onClick={() => void window.electron.openExternal("https://store.steampowered.com/app/" + game.objectId)}>Steam</Button>
+                      ) : <CatalogueWishlistButton game={game} />}
                     </article>
                   ))
                 : Array.from({ length: shelfSize }, (_, index) => (
