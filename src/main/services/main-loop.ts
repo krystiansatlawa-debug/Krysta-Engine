@@ -17,7 +17,7 @@ import { exportKrystaCloudBackup } from "./krysta-cloud-backup";
 
 const wrapInLoop = (
   fn: () => unknown,
-  interval: number,
+  interval: number | (() => number),
   deferDuringGame = false
 ) => {
   const loop = async () => {
@@ -37,7 +37,7 @@ const wrapInLoop = (
       }
 
       if (!deferDuringGame) {
-        await sleep(interval);
+        await sleep(typeof interval === "function" ? interval() : interval);
       } else if (!isGameBoostBackgroundSyncPaused()) {
         await new Promise<void>((resolve) => {
           const finish = () => {
@@ -45,7 +45,7 @@ const wrapInLoop = (
             unsubscribe();
             resolve();
           };
-          const timer = setTimeout(finish, interval);
+          const timer = setTimeout(finish, typeof interval === "function" ? interval() : interval);
           const unsubscribe = onGameBoostBackgroundSyncChange(finish);
         });
       }
@@ -61,9 +61,9 @@ export const startMainLoop = async () => {
   if (process.env.KRYSTA_BACKUP_FOLDER) wrapInLoop(() => exportKrystaCloudBackup(), 60_000, true);
   wrapInLoop(async () => {
     await watchProcesses();
-    refreshQueuedStoryProgress();
-  }, INTERVALS.processWatcher);
-  wrapInLoop(() => DownloadManager.watchDownloads(), INTERVALS.downloadWatcher);
+    if (!isGameBoostBackgroundSyncPaused()) refreshQueuedStoryProgress();
+  }, () => isGameBoostBackgroundSyncPaused() ? 15_000 : INTERVALS.processWatcher);
+  wrapInLoop(() => DownloadManager.watchDownloads(), () => isGameBoostBackgroundSyncPaused() ? 15_000 : INTERVALS.downloadWatcher);
   wrapInLoop(
     () => DownloadOrchestrator.pollAwaitingDebridDownloads(),
     INTERVALS.debridReadinessWatcher,
@@ -71,7 +71,8 @@ export const startMainLoop = async () => {
   );
   wrapInLoop(
     () => AchievementWatcherManager.watchAchievements(),
-    INTERVALS.achievementWatcher
+    INTERVALS.achievementWatcher,
+    true
   );
   wrapInLoop(
     () => DownloadManager.getSeedStatus(),
