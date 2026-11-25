@@ -29,6 +29,8 @@ function category(x: { title: string; tags?: unknown }): "patch" | "news" {
   if (tags.some((t) => /^(patchnotes|patch_notes|patch-notes|hotfix)$/.test(t)))
     return "patch";
   const title = x.title;
+  if (/\b(preview|upcoming|roadmap|coming soon|sneak peek)\b/i.test(title)) return "news";
+  if (/\b(?:update|patch|hotfix)\s*#\s*\d+\b/i.test(title)) return "patch";
   if (
     /\b(patch notes|release notes|changelog|hotfix(?:es)?|bug fixes|maintenance patch|patch\s+v?\d|(?:game |title )update\s+v?\d|version\s+v?\d+(?:\.\d+)+|update\s+v?\d+(?:\.\d+)+)\b|lista zmian|poprawki błędów|aktualizacja\s+\d/i.test(
       title
