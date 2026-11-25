@@ -21,6 +21,7 @@ import type {
 } from "@types";
 
 import { CatalogueCategories } from "./catalogue-categories";
+import { gameGenres } from "./browse-categories";
 import { CatalogueWishlistButton } from "./catalogue-wishlist";
 
 const newest = { sortBy: "releaseDate", sortOrder: "desc" } as const;
@@ -128,10 +129,70 @@ export default function CatalogueDiscover() {
   };
 
   const games = results[activeShelf];
-  const allGames = useMemo(
-    () => Object.values(results).flatMap((games) => games ?? []),
-    [results]
-  );
+  const [genreArtwork, setGenreArtwork] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let active = true;
+    const loadGenreArtwork = async () => {
+      const responses = await Promise.all(
+        gameGenres.slice(0, 8).map(async (genre) => {
+          try {
+            const response = await window.electron.hydraApi.post<{
+              edges: CatalogueSearchResult[];
+            }>("/catalogue/search", {
+              data: {
+                ...catalogueSearchSlice.getInitialState().filters,
+                genres: [genre],
+                ...newest,
+                take: 30,
+                skip: 0,
+                downloadSourceIds: [],
+              },
+              needsAuth: false,
+            });
+            return (response.edges ?? []).filter(
+              (game) => game.genres?.includes(genre) && game.libraryImageUrl
+            );
+          } catch {
+            return [];
+          }
+        })
+      );
+      const used = new Set<string>();
+      const images = new Set<string>();
+      const artwork: Record<string, string> = {};
+      gameGenres.slice(0, 8).forEach((genre, index) => {
+        const candidates = responses[index];
+        const ranked = [...candidates].sort((a, b) =>
+          Number(b.genres?.[0] === genre) - Number(a.genres?.[0] === genre)
+        );
+        const game = ranked.find((candidate) =>
+          !used.has(`${candidate.shop}:${candidate.objectId}`) &&
+          !images.has(candidate.libraryImageUrl ?? "")
+        );
+        if (game?.libraryImageUrl) {
+          used.add(`${game.shop}:${game.objectId}`);
+          images.add(game.libraryImageUrl);
+          artwork[genre] = game.libraryImageUrl;
+        }
+      });
+      if (active) setGenreArtwork(artwork);
+    };
+    void loadGenreArtwork();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadGenreArtwork();
+    }, 24 * 60 * 60 * 1000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [attempt]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") setAttempt((value) => value + 1);
+    }, 30 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const alternatives = useMemo(
     () =>
       (results[CatalogueCategory.Hot] ?? []).flatMap((game): TrendingGame[] =>
@@ -280,14 +341,7 @@ export default function CatalogueDiscover() {
           )}
         </header>
         <CatalogueCategories
-          artworkForGenre={(genre) =>
-            allGames.find(
-              (game) =>
-                "genres" in game &&
-                game.genres?.includes(genre) &&
-                game.libraryImageUrl
-            )?.libraryImageUrl
-          }
+          artworkForGenre={(genre) => genreArtwork[genre]}
           onChooseGenre={(genre) => openResults({ genres: [genre] })}
           onChooseTag={(id) => openResults({ tags: [id] })}
         />
