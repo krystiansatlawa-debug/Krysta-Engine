@@ -269,3 +269,36 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Readable source highlights without expanding the entire announcement. */
+.krysta-updates__card {
+  align-items: flex-start;
+}
+.krysta-updates__card > span:last-child {
+  align-self: center;
+}
+.krysta-updates__highlights-label {
+  color: #b9d9ec;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 5px;
+}
+.krysta-updates__highlights {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.krysta-updates__highlights > span {
+  display: block;
+  padding-left: 12px;
+  position: relative;
+}
+.krysta-updates__highlights > span::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: #92c7e7;
+}
