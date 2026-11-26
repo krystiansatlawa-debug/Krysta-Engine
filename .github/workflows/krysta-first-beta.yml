@@ -1,5 +1,5 @@
 name: Krysta Release
-# Release translation performance improvements and retired FPS monitor cleanup.
+# Retry 1.0.37 after removing obsolete PresentMon packaging hooks.
 on:
   workflow_dispatch:
   push:
