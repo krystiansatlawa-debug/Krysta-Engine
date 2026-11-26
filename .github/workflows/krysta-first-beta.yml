@@ -1,5 +1,5 @@
 name: Krysta Release
-# Release gameplay CPU optimizations, retired FPS monitor and catalogue/news fixes.
+# Retry 1.0.35 after correcting unused scan settings; retain all regression and type checks.
 on:
   workflow_dispatch:
   push:
