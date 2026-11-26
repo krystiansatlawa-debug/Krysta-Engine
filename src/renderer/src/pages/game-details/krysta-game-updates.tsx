@@ -208,6 +208,10 @@ export function KrystaGameUpdates({
   const filtered = items.filter(
     (item) => filter === "all" || item.category === filter
   );
+  useEffect(() => {
+    if (!shop || !objectId || loading || failed || filter !== "patch" || !resolved) return;
+    void window.electron.krystaGameWatchDismiss(shop, objectId).catch(() => {});
+  }, [shop, objectId, loading, failed, filter, resolved]);
   const parsedItems = useMemo(
     () => new Map(items.map((item) => [item.id, parseContent(item.contents)])),
     [items]
