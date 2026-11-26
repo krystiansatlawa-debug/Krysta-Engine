@@ -1212,7 +1212,6 @@ async function scan(manual = false) {
     }
     scanTotal = targets.length;
     for (const key of targets) {
-      const settings = await serial(readSettings);
       if (hasTrackedGamesRunning()) {
         scanInterrupted = true;
         return;
