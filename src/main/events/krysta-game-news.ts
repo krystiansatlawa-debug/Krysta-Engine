@@ -1,5 +1,7 @@
 import { app, ipcMain, net } from "electron";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+import { logger } from "@main/services/logger";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -125,17 +127,22 @@ async function localTranslate(
   title: string,
   content: string
 ): Promise<{ title: string; content: string }> {
+  if (hasTrackedGamesRunning()) throw Error("Translation paused during gameplay");
   const root = path.join(process.resourcesPath, "krysta-translate");
   const python = path.join(root, "python.exe");
   const helper = path.join(root, "krysta-translate.py");
   await fs.access(python);
   await fs.access(helper);
   const models = path.join(app.getPath("userData"), "translation-models");
+  if (hasTrackedGamesRunning()) throw Error("Translation paused during gameplay");
   return new Promise((resolve, reject) => {
+    const started = Date.now();
+    logger.info("[Performance] Local news translation started");
     const child = spawn(python, ["-I", "-X", "utf8", helper, models], {
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],
       cwd: root,
+      env: { ...process.env, OMP_NUM_THREADS: "1", MKL_NUM_THREADS: "1", OPENBLAS_NUM_THREADS: "1", NUMEXPR_NUM_THREADS: "1" },
     });
     let output = "",
       done = false;
@@ -146,6 +153,8 @@ async function localTranslate(
       if (done) return;
       done = true;
       clearTimeout(timer);
+      unsubscribe();
+      logger.info("[Performance] Local news translation finished", { durationMs: Date.now() - started, success: !error });
       if (error) reject(error);
       else resolve(result!);
     };
@@ -153,6 +162,12 @@ async function localTranslate(
       child.kill();
       finish(Error("Translation timeout"));
     }, 300000);
+    const unsubscribe = onTrackedGamesRunningChange(() => {
+      if (hasTrackedGamesRunning()) {
+        child.kill();
+        finish(Error("Translation interrupted by game start"));
+      }
+    });
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
       output += chunk;
@@ -183,6 +198,7 @@ ipcMain.handle(
   (_event, title: unknown, content: unknown) => {
     if (
       process.platform !== "win32" ||
+      hasTrackedGamesRunning() ||
       typeof title !== "string" ||
       typeof content !== "string" ||
       title.length > 1000 ||
@@ -199,7 +215,29 @@ ipcMain.handle(
       .then(async () => {
         const previous = translations.get(cacheKey);
         if (previous) return previous;
+        if (hasTrackedGamesRunning()) return null;
+        const directory = path.join(app.getPath("userData"), "news-translations");
+        const file = path.join(directory, createHash("sha256").update("en-pl-v1:" + cacheKey).digest("hex") + ".json");
+        try {
+          if ((await fs.stat(file)).size <= 1_000_000) {
+            const saved = JSON.parse(await fs.readFile(file, "utf8"));
+            if (typeof saved.title === "string" && typeof saved.content === "string") return saved as {title: string; content: string};
+          }
+        } catch { /* cache miss */ }
+        if (hasTrackedGamesRunning()) return null;
         const result = await localTranslate(title, content);
+        if (!hasTrackedGamesRunning()) {
+          try {
+            await fs.mkdir(directory, { recursive: true });
+            await fs.writeFile(file, JSON.stringify(result), "utf8");
+            const names = (await fs.readdir(directory)).filter(name => /^[a-f0-9]{64}\.json$/.test(name));
+            if (names.length > 300) {
+              const entries = await Promise.all(names.map(async name => ({ name, mtime: (await fs.stat(path.join(directory, name))).mtimeMs })));
+              entries.sort((a, b) => a.mtime - b.mtime);
+              await Promise.all(entries.slice(0, entries.length - 300).map(entry => fs.rm(path.join(directory, entry.name), { force: true })));
+            }
+          } catch { /* translation remains available even if cache cannot be written */ }
+        }
         if (translations.size >= 16)
           translations.delete(translations.keys().next().value!);
         translations.set(cacheKey, result);
