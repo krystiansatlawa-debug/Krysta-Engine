@@ -31,6 +31,8 @@ import {
   type PatchAnnouncement,
 } from "../../shared/game-update-patch-history";
 
+const PATCH_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const recentPatch = (date: number) => Number.isFinite(date) && date * 1000 <= Date.now() && date * 1000 >= Date.now() - PATCH_MAX_AGE_MS;
 type BuildChange = { from: string; to: string; detectedAt: string };
 type Watch = {
   gameTitle?: string;
@@ -65,6 +67,8 @@ type Watch = {
   error?: string;
   steamId?: string;
   pendingPatch?: string;
+  pendingPatchDate?: number;
+  patchNotificationBaseline?: boolean;
   steamBuildId?: string;
   updateState?: "required" | "not-reported" | "unknown";
   updateCheckedAt?: string;
@@ -627,8 +631,8 @@ async function perform(key: string, force = false) {
       .filter((x) => x.category === "patch")
       .sort((a, b) => b.date - a.date) ?? [];
   const latest = patches[0];
-  const newItems = snapshot.seen
-    ? patches.filter((x) => !snapshot.seen!.includes(x.id))
+  const newItems = snapshot.patchNotificationBaseline && snapshot.seen && snapshot.lastChecked
+    ? patches.filter((x) => recentPatch(x.date) && x.date * 1000 > Date.parse(snapshot.lastChecked!) && !snapshot.seen!.includes(x.id))
     : [];
   return serial(async () => {
     const all = await read(),
@@ -664,7 +668,7 @@ async function perform(key: string, force = false) {
       enabled && snapshot.enabled && !hasTrackedGamesRunning() && previous.seen
         ? newItems.find((x) => !previous.seen?.includes(x.id))
         : undefined;
-    const validPending = previous.pendingPatch && (news
+    const validPending = previous.pendingPatch && recentPatch(previous.pendingPatchDate ?? 0) && (news
       ? patches.some((post) => post.title === previous.pendingPatch)
       : category({ title: previous.pendingPatch }) === "patch");
     const next: Watch = {
@@ -673,6 +677,7 @@ async function perform(key: string, force = false) {
       pendingPatch: enabled
         ? (freshPatch?.title ?? (validPending ? previous.pendingPatch : undefined))
         : undefined,
+      pendingPatchDate: enabled ? (freshPatch?.date ?? (validPending ? previous.pendingPatchDate : undefined)) : undefined,
       ...detected,
       ...smart,
       ...recordBuild(previous, smart),
@@ -681,6 +686,7 @@ async function perform(key: string, force = false) {
       versionSource: detected.versionSource,
       ...(news
         ? {
+            patchNotificationBaseline: true,
             steamId: news.appId ?? undefined,
             lastChecked: new Date().toISOString(),
             latestTitle: latest?.title,
@@ -927,7 +933,7 @@ ipcMain.handle("krysta:game-watch-badges", () =>
     for (const w of Object.values(all)) {
       if (
         !effective(w, settings) ||
-        (!w.pendingPatch && w.updateState !== "required")
+        (!(w.pendingPatch && recentPatch(w.pendingPatchDate ?? 0)) && w.updateState !== "required")
       )
         continue;
       const game = await gamesSublevel.get(keyFor(w.shop, w.id));
@@ -950,7 +956,7 @@ ipcMain.handle("krysta:game-watch-badges", () =>
           /* retain last checked status when local state cannot be read */
         }
       }
-      if (!required && !w.pendingPatch) continue;
+      if (!required && !(w.pendingPatch && recentPatch(w.pendingPatchDate ?? 0))) continue;
       badges.push({
         shop: w.shop,
         id: w.id,
@@ -1000,7 +1006,7 @@ ipcMain.handle(
       const key = keyFor(shop, id),
         all = await read();
       if (all[key]) {
-        all[key] = { ...all[key], pendingPatch: undefined };
+        all[key] = { ...all[key], pendingPatch: undefined, pendingPatchDate: undefined };
         await write(all);
       }
     })
