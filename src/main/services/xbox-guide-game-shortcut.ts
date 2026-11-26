@@ -57,10 +57,8 @@ function reconcile() {
   if (timer) return;
   timer = setInterval(() => {
     const pressed = NativeAddon.getWindowsXboxGuidePressed();
-    if (pressed === null) {
-      stop();
-      return;
-    }
+    // A temporary native input failure must not permanently disable the shortcut.
+    if (pressed === null) return;
     void shortcut
       .sample(pressed)
       .catch((error) => logger.warn("Xbox Guide game shortcut failed", error));
@@ -72,7 +70,7 @@ export function syncXboxGuideGameShortcut(
   preferences: UserPreferences | null | undefined
 ) {
   if (process.platform !== "win32") return;
-  enabled = preferences?.xboxGuideGameShortcutEnabled === true;
+  enabled = preferences?.xboxGuideGameShortcutEnabled !== false;
   reconcile();
 }
 
