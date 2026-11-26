@@ -17,7 +17,7 @@ import {
 import { scanUbisoft, findUbisoftExecutable } from "./krysta-ubisoft";
 import { publishKrystaNotification } from "@main/services/notifications/krysta-notifications";
 import { backupBeforeGameUpdate } from "./krysta-cloud";
-import { getGameNews } from "./krysta-game-news";
+import { getGameNews, category } from "./krysta-game-news";
 import { getSteamLibraryFolders } from "@main/services/steam";
 import {
   readSteamUpdateState,
@@ -580,6 +580,7 @@ async function smartState(
   }
 }
 async function perform(key: string, force = false) {
+  if (hasTrackedGamesRunning()) return null;
   const game = await gamesSublevel.get(key);
   if (!game || game.isDeleted || game.shop === "launchbox") return null;
   const snapshot = await serial(async () => {
@@ -635,7 +636,7 @@ async function perform(key: string, force = false) {
       settings = await readSettings();
     if (!previous) return null;
     const enabled = effective(previous, settings);
-    if (enabled && snapshot.enabled) {
+    if (enabled && snapshot.enabled && !hasTrackedGamesRunning()) {
       if (
         smart.updateState === "required" &&
         previous.updateState !== "required"
@@ -660,14 +661,17 @@ async function perform(key: string, force = false) {
         );
     }
     const freshPatch =
-      enabled && snapshot.enabled && previous.seen
+      enabled && snapshot.enabled && !hasTrackedGamesRunning() && previous.seen
         ? newItems.find((x) => !previous.seen?.includes(x.id))
         : undefined;
+    const validPending = previous.pendingPatch && (news
+      ? patches.some((post) => post.title === previous.pendingPatch)
+      : category({ title: previous.pendingPatch }) === "patch");
     const next: Watch = {
       ...previous,
       enabled,
       pendingPatch: enabled
-        ? (freshPatch?.title ?? previous.pendingPatch)
+        ? (freshPatch?.title ?? (validPending ? previous.pendingPatch : undefined))
         : undefined,
       ...detected,
       ...smart,
@@ -679,14 +683,17 @@ async function perform(key: string, force = false) {
         ? {
             steamId: news.appId ?? undefined,
             lastChecked: new Date().toISOString(),
-            latestTitle: latest?.title ?? previous.latestTitle,
+            latestTitle: latest?.title,
             latestPublishedAt: latest?.date
               ? new Date(latest.date * 1000).toISOString()
-              : previous.latestPublishedAt,
+              : undefined,
             latestVersion: latest
               ? (version(latest.title) ?? undefined)
-              : previous.latestVersion,
-            patchHistory: mergePublishedPatches(previous.patchHistory, patches),
+              : undefined,
+            patchHistory: mergePublishedPatches(previous.patchHistory?.filter((post) => {
+              const current = news?.items.find((item) => item.id === post.id);
+              return current ? current.category === "patch" : category({ title: post.title }) === "patch";
+            }), patches),
             seen: [
               ...new Set([
                 ...patches.map((x) => x.id),
