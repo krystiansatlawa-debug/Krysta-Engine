@@ -71,8 +71,6 @@ jobs:
           src/main/services/cloud-save/cloud-save-game-context.test.ts
       - name: Type-check Krysta 1.0.36 Windows release
         run: yarn typecheck
-      - name: Prepare verified PresentMon
-        run: node scripts/prepare-presentmon.cjs
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
