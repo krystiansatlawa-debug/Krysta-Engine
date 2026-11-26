@@ -670,7 +670,7 @@ declare global {
         contents: string;
         url: string;
         author: string;
-        category: "patch" | "news";
+        category: "patch" | "event" | "news";
       }[];
     }>;
     scanUbisoft: () => Promise<{
