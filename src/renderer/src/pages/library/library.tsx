@@ -308,6 +308,7 @@ export default function Library() {
   const [showInstalledOnly, setShowInstalledOnly] = useState<boolean>(
     () => localStorage.getItem(LIBRARY_INSTALLED_ONLY_STORAGE_KEY) === "true"
   );
+  const [showUninstalledOnly, setShowUninstalledOnly] = useState(false);
   const [isImportingClassics, setIsImportingClassics] = useState(false);
 
   const effectiveCategory: LibraryCategory = category;
@@ -391,6 +392,7 @@ export default function Library() {
 
   const handleShowInstalledOnlyChange = useCallback((next: boolean) => {
     setShowInstalledOnly(next);
+    setShowUninstalledOnly(false);
     localStorage.setItem(LIBRARY_INSTALLED_ONLY_STORAGE_KEY, String(next));
   }, []);
 
@@ -814,6 +816,8 @@ export default function Library() {
 
     if (showInstalledOnly) {
       filtered = filtered.filter(isGameInstalled);
+    } else if (showUninstalledOnly) {
+      filtered = filtered.filter((game) => !isGameInstalled(game));
     }
 
     const queryLower = removeDiacritics(deferredSearchQuery).toLowerCase();
@@ -848,6 +852,7 @@ export default function Library() {
     hasPlatforms,
     selectedPlatforms,
     showInstalledOnly,
+    showUninstalledOnly,
   ]);
 
   useEffect(() => {
@@ -1190,6 +1195,7 @@ export default function Library() {
     selectedSources,
     selectedPlatforms,
     showInstalledOnly,
+    showUninstalledOnly,
     sortBy,
     selectedCollectionId,
     setHeaderHidden,
@@ -1211,6 +1217,7 @@ export default function Library() {
     effectiveSources.length > 0 ||
     selectedPlatforms.length > 0 ||
     showInstalledOnly ||
+    showUninstalledOnly ||
     Boolean(searchQuery.trim());
   const activeCollection =
     libraryGameViews.find(({ id }) => id === selectedCollectionId) ??
@@ -1278,6 +1285,25 @@ export default function Library() {
                   }
                 >
                   <DeviceDesktopIcon size={14} /> {t("installed_filter")}
+                </button>
+                <button
+                  type="button"
+                  className="library__filter-chip"
+                  aria-pressed={showUninstalledOnly}
+                  onClick={() => {
+                    handleShowInstalledOnlyChange(false);
+                    setShowUninstalledOnly(!showUninstalledOnly);
+                  }}
+                >
+                  <DeviceDesktopIcon size={14} /> {t("uninstalled_filter", { defaultValue: document.documentElement.lang.startsWith("pl") ? "Niezainstalowane" : "Not installed" })}
+                </button>
+                <button
+                  type="button"
+                  className="library__filter-chip"
+                  aria-pressed={selectedCollectionId === UNCATEGORIZED_COLLECTION_ID}
+                  onClick={() => handleCollectionSelect(selectedCollectionId === UNCATEGORIZED_COLLECTION_ID ? null : UNCATEGORIZED_COLLECTION_ID)}
+                >
+                  <FileDirectoryIcon size={14} /> {t("uncategorized_filter", { defaultValue: document.documentElement.lang.startsWith("pl") ? "Gry bez kategorii" : "Uncategorized games" })}
                 </button>
                 <button
                   type="button"
