@@ -606,8 +606,9 @@ async function perform(key: string, force = false) {
     return w;
   });
   if (!snapshot) return null;
-  const detected = await detectVersion(game);
-  const smart = await smartState(game);
+  // Automatic checks only read news metadata. Expensive version/provider checks
+  // are reserved for manual checks, installed games with a new patch, or opted-in updates.
+  const detected = force ? await detectVersion(game) : { installedVersion: snapshot.installedVersion, versionSource: snapshot.versionSource };
   // Provider status and Steam news are separate. Failed news requests must not
   // invalidate a confirmed update from a local launcher.
   let news: Awaited<ReturnType<typeof getGameNews>> | null = null;
@@ -630,10 +631,19 @@ async function perform(key: string, force = false) {
     news?.items
       .filter((x) => x.category === "patch")
       .sort((a, b) => b.date - a.date) ?? [];
+  if (hasTrackedGamesRunning()) return null;
   const latest = patches[0];
   const newItems = snapshot.patchNotificationBaseline && snapshot.seen && snapshot.lastChecked
     ? patches.filter((x) => recentPatch(x.date) && x.date * 1000 > Date.parse(snapshot.lastChecked!) && !snapshot.seen!.includes(x.id))
     : [];
+  const prefs = await serial(readSettings);
+  const checkProvider = force || (Boolean(game.executablePath) && (newItems.length > 0 || prefs.autoOpenSteamQueue || prefs.autoDownloadEpic || game.shop === "steam"));
+  const smart = checkProvider ? await smartState(game) : {
+    steamBuildId: snapshot.steamBuildId, updateState: snapshot.updateState,
+    updateCheckedAt: snapshot.updateCheckedAt, updateProvider: snapshot.updateProvider,
+    installedBuild: snapshot.installedBuild, installedBuildSource: snapshot.installedBuildSource,
+  };
+  if (hasTrackedGamesRunning()) return null;
   return serial(async () => {
     const all = await read(),
       previous = all[key],
@@ -802,10 +812,7 @@ ipcMain.handle(
     const key = keyFor(shop, id),
       game = await gamesSublevel.get(key);
     if (!game || game.isDeleted) throw Error("Game not in library");
-    if (
-      (await serial(readSettings)).pauseDuringPlay &&
-      hasTrackedGamesRunning()
-    )
+    if (hasTrackedGamesRunning())
       throw Error(
         "Zamknij uruchomione gry przed przejściem do aktualizacji / Close running games before opening updates"
       );
@@ -1173,10 +1180,7 @@ let scanChecked = 0,
   scanInterrupted = false;
 async function scan(manual = false) {
   if (scanning) return;
-  if (
-    (await serial(readSettings)).pauseDuringPlay &&
-    hasTrackedGamesRunning()
-  ) {
+  if (hasTrackedGamesRunning()) {
     scanInterrupted = true;
     return;
   }
@@ -1209,9 +1213,8 @@ async function scan(manual = false) {
     scanTotal = targets.length;
     for (const key of targets) {
       const settings = await serial(readSettings);
-      if (settings.pauseDuringPlay && hasTrackedGamesRunning()) {
+      if (hasTrackedGamesRunning()) {
         scanInterrupted = true;
-        lastScan = 0;
         return;
       }
       const result = await check(key, manual);
@@ -1303,12 +1306,14 @@ void app.whenReady().then(() => {
     60000
   );
   timer = setInterval(
-    () =>
+    () => {
+      if (hasTrackedGamesRunning()) return;
       void serial(readSettings)
         .then((v) => {
-          if (Date.now() - lastScan >= v.intervalHours * 3600000) void scan();
+          if (!hasTrackedGamesRunning() && Date.now() - lastScan >= v.intervalHours * 3600000) void scan();
         })
-        .catch(() => {}),
+        .catch(() => {});
+    },
     60000
   );
 });
