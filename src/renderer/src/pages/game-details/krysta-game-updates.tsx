@@ -203,7 +203,7 @@ export function KrystaGameUpdates({
       active = false;
     };
   }, [pl, selected]);
-  const [filter, setFilter] = useState<"patch" | "news" | "all">("patch");
+  const [filter, setFilter] = useState<"patch" | "event" | "news" | "all">("patch");
   const [previews, setPreviews] = useState<Record<string, { title: string; content: string }>>({});
   const filtered = items.filter(
     (item) => filter === "all" || item.category === filter
@@ -275,7 +275,7 @@ export function KrystaGameUpdates({
         className="krysta-game-tabs"
         aria-label={pl ? "Typ wpisów" : "Entry type"}
       >
-        {(["patch", "news", "all"] as const).map((type) => (
+        {(["patch", "event", "news", "all"] as const).map((type) => (
           <button
             key={type}
             type="button"
@@ -289,6 +289,8 @@ export function KrystaGameUpdates({
               ? pl
                 ? "Aktualizacje gry"
                 : "Game updates"
+              : type === "event"
+                ? (pl ? "Wydarzenia" : "Events")
               : type === "news"
                 ? pl
                   ? "Aktualności"
@@ -363,7 +365,7 @@ export function KrystaGameUpdates({
                 />
                 <div className="krysta-updates__copy">
                   <small>
-                    {isPreview ? (pl ? "ZAPOWIEDŹ" : "UPCOMING") : isPatch
+                    {item.category === "event" ? (pl ? "WYDARZENIE / PROMOCJA" : "EVENT / PROMOTION") : isPreview && !isPatch ? (pl ? "ZAPOWIEDŹ" : "UPCOMING") : isPatch
                       ? pl
                         ? "AKTUALIZACJA / LISTA ZMIAN"
                         : "UPDATE / PATCH NOTES"
@@ -377,7 +379,7 @@ export function KrystaGameUpdates({
                       : local?.title ?? item.title}
                   </strong>
                   <span className="krysta-updates__highlights-label">
-                    {isPreview ? (pl ? "Co zapowiedziano" : "What is planned") : (pl ? "Najważniejsze informacje" : "Key details")}
+                    {item.category === "event" ? (pl ? "Szczegóły wydarzenia" : "Event details") : isPatch ? (pl ? "Co zmieniono w grze" : "What changed") : isPreview ? (pl ? "Co zapowiedziano" : "What is planned") : (pl ? "Najważniejsze informacje" : "Key details")}
                     {pl && !local ? " · EN" : ""}
                   </span>
                   {highlights.length ? (
