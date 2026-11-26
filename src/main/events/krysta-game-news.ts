@@ -10,7 +10,7 @@ type News = {
   contents: string;
   url: string;
   author: string;
-  category: "patch" | "news";
+  category: "patch" | "event" | "news";
 };
 // Normalize display-title decorations only, preserving edition and sequel identities.
 export function normalizeNewsTitle(value: string) {
@@ -22,21 +22,17 @@ export function normalizeNewsTitle(value: string) {
     .replace(/[™®©]/g, "")
     .replace(/[^a-z0-9]/g, "");
 }
-function category(x: { title: string; tags?: unknown }): "patch" | "news" {
-  const tags = Array.isArray(x.tags)
-    ? x.tags.map((t) => String(t).toLowerCase())
-    : [];
-  if (tags.some((t) => /^(patchnotes|patch_notes|patch-notes|hotfix)$/.test(t)))
-    return "patch";
+export function category(x: { title: string; tags?: unknown; contents?: string }): News["category"] {
+  const tags = Array.isArray(x.tags) ? x.tags.map((t) => String(t).toLowerCase()) : [];
   const title = x.title;
-  if (/\b(preview|upcoming|roadmap|coming soon|sneak peek)\b/i.test(title)) return "news";
-  if (/\b(?:update|patch|hotfix)\s*#\s*\d+\b/i.test(title)) return "patch";
-  if (
-    /\b(patch notes|release notes|changelog|hotfix(?:es)?|bug fixes|maintenance patch|patch\s+v?\d|(?:game |title )update\s+v?\d|version\s+v?\d+(?:\.\d+)+|update\s+v?\d+(?:\.\d+)+)\b|lista zmian|poprawki błędów|aktualizacja\s+\d/i.test(
-      title
-    )
-  )
-    return "patch";
+  // Explicit event and promotional titles override generic update wording.
+  if (/\b(playtests?|closed beta|open beta|beta test|publisher sale|sale|discounts?|free weekend|giveaway|festival|fest|tournament|livestream|live stream|community event|in-game event|seasonal event|event schedule|event starts|event ends|double xp|free trial|wyprzedaż|turniej|wydarzenie|zamknięty test)\b/i.test(title))
+    return "event";
+  if (/\b(preview|upcoming|roadmap|coming soon|sneak peek|announcing|announcement|next update|planned|will release|releases on)\b/i.test(title)) return "news";
+  if (tags.some(t => /^(patchnotes|patch_notes|patch-notes|hotfix)$/.test(t))) return "patch";
+  if (/\b(?:patch notes|release notes|changelog|hotfix(?:es)?|bug fixes|maintenance patch|(?:update|patch|hotfix)\s*#\s*\d+|(?:patch|update|version)\s+v?\d+(?:\.\d+)+|patch\s+v?\d|(?:game|title)\s+update\s+v?\d|lista zmian|poprawki błędów|aktualizacja\s+\d)\b/i.test(title)) return "patch";
+  if (/\b(update|patch)\b/i.test(title) && /\b(now live|now available|released|out now|has been deployed|is live)\b/i.test(title)) return "patch";
+  if (tags.some(t => /^(event|events|sale|sales|promotion|promotional|playtest|livestream)$/.test(t))) return "event";
   return "news";
 }
 async function fetchGameNews(
