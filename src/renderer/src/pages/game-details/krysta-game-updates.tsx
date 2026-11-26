@@ -204,7 +204,6 @@ export function KrystaGameUpdates({
     };
   }, [pl, selected]);
   const [filter, setFilter] = useState<"patch" | "event" | "news" | "all">("patch");
-  const [previews, setPreviews] = useState<Record<string, { title: string; content: string }>>({});
   const filtered = items.filter(
     (item) => filter === "all" || item.category === filter
   );
@@ -241,26 +240,6 @@ export function KrystaGameUpdates({
       active = false;
     };
   }, [appId, title, retry]);
-  useEffect(() => {
-    setPreviews({});
-  }, [appId, title]);
-  useEffect(() => {
-    if (!pl || loading || expanded) return;
-    let active = true;
-    const load = async () => {
-      for (const item of items.filter((entry) => filter === "all" || entry.category === filter).slice(0, 5)) {
-        if (!active) return;
-        const content = parsedItems.get(item.id)?.content ?? "";
-        const highlights = newsHighlights(content).join("\n") || content.slice(0, 650);
-        try {
-          const result = await window.electron.translateKrystaNews(item.title, highlights);
-          if (active && result) setPreviews((current) => ({ ...current, [item.id]: result }));
-        } catch { /* original text remains visible */ }
-      }
-    };
-    void load();
-    return () => { active = false; };
-  }, [pl, loading, expanded, items, filter, parsedItems]);
   return (
     <section className="krysta-updates">
       <header className="krysta-updates__header">
@@ -340,7 +319,7 @@ export function KrystaGameUpdates({
           const { image, content } =
             parsedItems.get(item.id) ?? parseContent(item.contents);
           const preview = content.replace(/\s+/g, " ").trim();
-          const local = pl ? previews[item.id] : undefined;
+          const local = pl && !original && translated?.id === item.id ? translated : undefined;
           const highlights = local ? local.content.split(/\n+/).filter(Boolean).slice(0, 3) : newsHighlights(content);
           const isPreview = /\b(preview|upcoming|roadmap|coming soon|sneak peek)\b/i.test(item.title);
           const isPatch = item.category === "patch";
@@ -384,7 +363,7 @@ export function KrystaGameUpdates({
                   </strong>
                   <span className="krysta-updates__highlights-label">
                     {item.category === "event" ? (pl ? "Szczegóły wydarzenia" : "Event details") : isPatch ? (pl ? "Co zmieniono w grze" : "What changed") : isPreview ? (pl ? "Co zapowiedziano" : "What is planned") : (pl ? "Najważniejsze informacje" : "Key details")}
-                    {pl && !local ? " · EN" : ""}
+                    {pl && !local ? " · EN (kliknij, aby przetłumaczyć)" : ""}
                   </span>
                   {highlights.length ? (
                     <span className="krysta-updates__highlights">
