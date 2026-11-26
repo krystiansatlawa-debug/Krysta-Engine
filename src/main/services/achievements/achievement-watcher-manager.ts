@@ -1,6 +1,7 @@
 import { isTrackedGameKeyRunning } from "../game-running-state";
 import { isGameBoostBackgroundSyncPaused } from "../game-boost-background-sync";
 import { achievementSyncWorker } from "./achievement-sync-worker";
+import { hasNewFolderAchievements } from "./has-new-folder-achievements";
 import { parseAchievementFile } from "./parse-achievement-file";
 import { mergeAchievements } from "./merge-achievements";
 import fs, { readdirSync } from "node:fs";
@@ -151,10 +152,7 @@ const hasFltFolderChanged = (file: AchievementFile) => {
     const previousAchievements = fltFiles.get(file.filePath);
 
     fltFiles.set(file.filePath, currentAchievements);
-    if (
-      !previousAchievements ||
-      currentAchievements.difference(previousAchievements).size === 0
-    ) {
+    if (!hasNewFolderAchievements(previousAchievements, currentAchievements)) {
       return false;
     }
 
