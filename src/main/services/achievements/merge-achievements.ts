@@ -33,6 +33,7 @@ import { launchedGamePids } from "../launched-game-pids";
 import { Wine } from "../wine";
 
 const localSouvenirs = db.sublevel<string, { screenshotPath: string; capturedAt: number; achievementNames: string[] }>("krysta-local-souvenirs", { valueEncoding: "json" });
+const localSouvenirIndex = db.sublevel<string, string>("krysta-local-souvenir-index", { valueEncoding: "json" });
 
 const captureLocalSouvenir = async (
   game: Game,
@@ -53,9 +54,15 @@ const captureLocalSouvenir = async (
       game.title, displayName, game.objectId, id, { processId, executablePaths, gameKey }
     );
     if (existingPath) await fs.copyFile(existingPath, screenshotPath, fs.constants.COPYFILE_EXCL);
-    await localSouvenirs.put(JSON.stringify([gameKey, id]), {
+    const entryKey = JSON.stringify([gameKey, id]);
+    await localSouvenirs.put(entryKey, {
       screenshotPath, capturedAt: Date.now(), achievementNames: achievements.map(a => a.name)
     });
+    await localSouvenirIndex.batch(achievements.map(a => ({
+      type: "put" as const,
+      key: JSON.stringify([gameKey, a.name.toUpperCase()]),
+      value: entryKey,
+    })));
   } catch (error) {
     achievementsLogger.error("Krysta local souvenir capture failed", game.objectId, error);
   }
