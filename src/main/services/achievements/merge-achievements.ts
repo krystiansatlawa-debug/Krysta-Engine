@@ -30,6 +30,34 @@ import { groupedSouvenirWorker } from "./grouped-souvenir-worker";
 import { launchedGamePids } from "../launched-game-pids";
 import { Wine } from "../wine";
 
+const localSouvenirs = db.sublevel<string, { screenshotPath: string; capturedAt: number; achievementNames: string[] }>("krysta-local-souvenirs", { valueEncoding: "json" });
+
+const captureLocalSouvenir = async (
+  game: Game,
+  achievements: UnlockedAchievement[],
+  data: SteamAchievement[],
+  existingPath?: string
+) => {
+  const gameKey = levelKeys.game(game.shop, game.objectId);
+  const processId = launchedGamePids.get(gameKey);
+  const executablePaths = [game.executablePath, ...(game.trackingExecutablePaths ?? [])]
+    .filter((value): value is string => Boolean(value));
+  if (!existingPath && !processId && !executablePaths.length) return;
+  const id = randomUUID();
+  const primary = achievements[0];
+  const displayName = data.find(a => a.name.toUpperCase() === primary.name.toUpperCase())?.displayName ?? primary.name;
+  try {
+    const screenshotPath = existingPath ?? await ScreenshotService.captureGameScreenshot(
+      game.title, displayName, game.objectId, id, { processId, executablePaths, gameKey }
+    );
+    await localSouvenirs.put(JSON.stringify([gameKey, id]), {
+      screenshotPath, capturedAt: Date.now(), achievementNames: achievements.map(a => a.name)
+    });
+  } catch (error) {
+    achievementsLogger.error("Krysta local souvenir capture failed", game.objectId, error);
+  }
+};
+
 interface MergeAchievementsOptions {
   skipSouvenirCapture?: boolean;
   alwaysUpdateInterface?: boolean;
@@ -297,6 +325,9 @@ const mergeAchievementsLocally = async (
       });
   }
 
+  if (publishNotification && !options.skipSouvenirCapture && newAchievements.length) {
+    await captureLocalSouvenir(game, newAchievements, achievementsData, pendingGroupedSouvenir?.screenshotPath);
+  }
   if (pendingGroupedSouvenir) void groupedSouvenirWorker.trigger();
 
   return newAchievements.length;
