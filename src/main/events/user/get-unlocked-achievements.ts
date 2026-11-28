@@ -276,13 +276,14 @@ const getUnlockedAchievementsEvent = async (
   shop: GameShop,
   force = false
 ): Promise<UserAchievement[]> => {
+  const { attachLocalSouvenirs } = await import("./local-souvenir-presentation");
   if (force === true && shop === "steam") {
     UnlockedAchievementsCache.invalidate(shop, objectId);
     await AchievementWatcherManager.syncGameAchievementFiles(shop, objectId);
     UnlockedAchievementsCache.invalidate(shop, objectId);
-    return getUnlockedAchievements(objectId, shop, false);
+    return attachLocalSouvenirs(await getUnlockedAchievements(objectId, shop, false), shop, objectId);
   }
-  return syncAndGetUnlockedAchievements(objectId, shop);
+  return attachLocalSouvenirs(await syncAndGetUnlockedAchievements(objectId, shop), shop, objectId);
 };
 
 registerEvent("getUnlockedAchievements", getUnlockedAchievementsEvent);
